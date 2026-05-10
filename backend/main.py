@@ -47,3 +47,17 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+
+@app.get("/debug")
+def debug():
+    from db import SessionLocal
+    from models import User
+    try:
+        db = SessionLocal()
+        user_count = db.query(User).count()
+        users = [{"id": u.id, "email": u.email, "role": u.role} for u in db.query(User).limit(5).all()]
+        db.close()
+        return {"user_count": user_count, "sample_users": users, "status": "ok"}
+    except Exception as e:
+        return {"error": str(e), "status": "failed"}
