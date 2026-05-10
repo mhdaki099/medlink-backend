@@ -1,7 +1,15 @@
 import bcrypt
+
+# Monkey-patch bcrypt for passlib compatibility - must be BEFORE passlib import
+if not hasattr(bcrypt, "__about__"):
+    class MockAbout:
+        __version__ = getattr(bcrypt, "__version__", "4.0.0")
+    bcrypt.__about__ = MockAbout()
+
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import jwt
+from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -9,18 +17,16 @@ SECRET_KEY = "medlink-syria-super-secret-key-2024"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
-    except Exception:
-        return False
+    return pwd_context.verify(plain, hashed)
 
 
 def hash_password(plain: str) -> str:
-    return bcrypt.hashpw(plain.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return pwd_context.hash(plain)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

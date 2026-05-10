@@ -36,7 +36,8 @@ app.include_router(prescriptions.router, prefix="/api/prescriptions", tags=["Pre
 
 # Serve static files (doctor photos, logo, etc.)
 assets_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
-app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+if os.path.isdir(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 
 @app.get("/")
