@@ -1,0 +1,18 @@
+--- ALL USERS ---
+ID: p1, Role: patient, Name: فراس محمد الخليل, Email: ahmed@medlink.sy, PwdHint: $2b$12$sNp..., Hashed: True
+ID: p2, Role: patient, Name: سارة عبد الله نور, Email: sara@medlink.sy, PwdHint: $2b$12$BHK..., Hashed: True
+ID: p3, Role: patient, Name: محمد علي الرشيد, Email: mohammed@medlink.sy, PwdHint: $2b$12$KGQ..., Hashed: True
+ID: p4, Role: patient, Name: لينا حسن العمر, Email: lina@medlink.sy, PwdHint: $2b$12$Yku..., Hashed: True
+ID: d1, Role: doctor, Name: د. كريم نصر الله, Email: dr.karim@medlink.sy, PwdHint: $2b$12$Doq..., Hashed: True
+ID: d2, Role: doctor, Name: د. رنا سليمان, Email: dr.rana@medlink.sy, PwdHint: $2b$12$8UB..., Hashed: True
+ID: d3, Role: doctor, Name: د. فادي العلي, Email: dr.fadi@medlink.sy, PwdHint: $2b$12$F9e..., Hashed: True
+ID: d4, Role: doctor, Name: د. ماهر البيروتي, Email: dr.maher@medlink.sy, PwdHint: $2b$12$I0a..., Hashed: True
+ID: d5, Role: doctor, Name: د. هناء مراد, Email: dr.hanaa@medlink.sy, PwdHint: $2b$12$ho/..., Hashed: True
+ID: d6, Role: doctor, Name: د. طارق الصالح, Email: dr.tariq@medlink.sy, PwdHint: $2b$12$Fyp..., Hashed: True
+ID: ph1, Role: pharmacy, Name: صيدلية الشفاء, Email: pharma.nour@medlink.sy, PwdHint: $2b$12$C4B..., Hashed: True
+ID: ph2, Role: pharmacy, Name: صيدلية الأمل, Email: pharma.amal@medlink.sy, PwdHint: $2b$12$lUI..., Hashed: True
+ID: lab1, Role: lab, Name: مختبر النور الطبي, Email: lab.fadi@medlink.sy, PwdHint: $2b$12$yIn..., Hashed: True
+ID: lab2, Role: lab, Name: مختبر حلب التخصصي, Email: lab.aleppo@medlink.sy, PwdHint: $2b$12$oBT..., Hashed: True
+ID: wh1, Role: warehouse, Name: مستودع الدواء الرئيسي, Email: wh.main@medlink.sy, PwdHint: $2b$12$3n5..., Hashed: True
+ID: wh2, Role: warehouse, Name: مستودع حلب للمستلزمات الطبية, Email: wh.aleppo@medlink.sy, PwdHint: $2b$12$0jO..., Hashed: True
+ID: a1, Role: admin, Name: مدير النظام, Email: admin@medlink.sy, PwdHint: $2b$12$GzF..., Hashed: True

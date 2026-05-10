@@ -1,0 +1,3 @@
+Email: admin@medlink.sy
+Password Content: $2b$12$GzFY/sQMNvcQemgmBF9exuveG4wCVQw81dwFyzW8FhV/0k4kg3e7e
+Length: 60

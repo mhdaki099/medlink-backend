@@ -1,0 +1,27 @@
+--- DOCTORS ---
+ID: d1, Name: د. كريم نصر الله, Email: dr.karim@medlink.sy
+ID: d2, Name: د. رنا سليمان, Email: dr.rana@medlink.sy
+ID: d3, Name: د. فادي العلي, Email: dr.fadi@medlink.sy
+ID: d4, Name: د. ماهر البيروتي, Email: dr.maher@medlink.sy
+ID: d5, Name: د. هناء مراد, Email: dr.hanaa@medlink.sy
+ID: d6, Name: د. طارق الصالح, Email: dr.tariq@medlink.sy
+ID: new_e2a86834, Name: محمد الاحمد, Email: mohamadssss999@gmail.com
+ID: new_0e1bdc9d, Name: محمد داتا, Email: mohamaddatamining@gmail.com
+
+--- ALL APPOINTMENTS ---
+ID: apt1, Doc: d1, Patient: p1, Status: confirmed, Date: 2026-03-25
+ID: apt2, Doc: d2, Patient: p2, Status: pending, Date: 2026-03-26
+ID: apt3, Doc: d3, Patient: p1, Status: confirmed, Date: 2026-03-28
+ID: apt4, Doc: d4, Patient: p3, Status: completed, Date: 2026-03-24
+ID: apt5, Doc: d5, Patient: p4, Status: pending, Date: 2026-03-27
+ID: apt_793ebe19, Doc: new_e2a86834, Patient: None, Status: cancelled, Date: 2026-03-25
+ID: apt_a92ac7e7, Doc: new_0e1bdc9d, Patient: p1, Status: confirmed, Date: 2026-03-25
+ID: apt_e70e3ff6, Doc: new_e2a86834, Patient: None, Status: cancelled, Date: 2026-03-25
+ID: apt_b06ccf31, Doc: new_e2a86834, Patient: new_f4e81a5f, Status: completed, Date: 2026-03-26
+
+--- PATIENTS ---
+ID: p1, Name: فراس محمد الخليل, Email: ahmed@medlink.sy
+ID: p2, Name: سارة عبد الله نور, Email: sara@medlink.sy
+ID: p3, Name: محمد علي الرشيد, Email: mohammed@medlink.sy
+ID: p4, Name: لينا حسن العمر, Email: lina@medlink.sy
+ID: new_f4e81a5f, Name: محمد العاني, Email: mohamad.alani99@gmail.com
