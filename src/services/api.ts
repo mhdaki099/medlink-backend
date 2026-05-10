@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 /** Set EXPO_PUBLIC_API_URL (e.g. https://xxx.loca.lt/api) when the backend is tunneled for Expo Go. */
 export const BASE_URL =
     process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') ||
-    'http://localhost:8000/api';
+    'https://medlink-backend-2e7a.onrender.com/api';
 
 class ApiClient {
     private token: string | null = null;
