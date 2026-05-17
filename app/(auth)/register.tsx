@@ -45,13 +45,14 @@ export default function RegisterScreen() {
     const [localLoading, setLocalLoading] = useState(false);
 
     const [form, setForm] = useState({
-        first_name: '', last_name: '', email: '', password: '', phone: '', city: '', role: 'patient',
+        first_name: '', last_name: '', email: '', password: '', phone: '', city: '', address: '', role: 'patient',
         clinic_name: '', clinic_address: '', price_per_session: 0, available_hours: '', specialization: ''
     });
 
     const [photo, setPhoto] = useState<string | null>(null);
     const [documents, setDocuments] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
     const [cityModalVisible, setCityModalVisible] = useState(false);
+    const [specModalVisible, setSpecModalVisible] = useState(false);
     const logoAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -96,6 +97,11 @@ export default function RegisterScreen() {
 
         if (form.role === 'doctor' && (!form.clinic_name || !form.clinic_address)) {
             Alert.alert('تنبيه', 'يرجى تعبئة بيانات العيادة');
+            return;
+        }
+
+        if (form.role === 'doctor' && !form.specialization) {
+            Alert.alert('تنبيه', 'يرجى اختيار التخصص الطبي');
             return;
         }
 
@@ -287,8 +293,32 @@ export default function RegisterScreen() {
                             <MaterialCommunityIcons name="chevron-down" size={20} color="#9CA3AF" />
                         </TouchableOpacity>
 
+                        {/* Address field (Req #11) */}
+                        <View style={styles.inputWrapper}>
+                            <MaterialCommunityIcons name="home-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="العنوان التفصيلي"
+                                placeholderTextColor="#9CA3AF"
+                                value={form.address}
+                                onChangeText={v => update('address', v)}
+                            />
+                        </View>
+
                         {form.role === 'doctor' && (
                             <>
+                                {/* Specialization Picker (Req #1) */}
+                                <TouchableOpacity
+                                    style={styles.inputWrapper}
+                                    activeOpacity={0.7}
+                                    onPress={() => setSpecModalVisible(true)}
+                                >
+                                    <MaterialCommunityIcons name="stethoscope" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                    <Text style={[styles.input, !form.specialization && { color: '#9CA3AF' }]}>
+                                        {form.specialization || 'التخصص الطبي *'}
+                                    </Text>
+                                    <MaterialCommunityIcons name="chevron-down" size={20} color="#9CA3AF" />
+                                </TouchableOpacity>
                                 <View style={styles.inputWrapper}>
                                     <MaterialCommunityIcons name="hospital-building" size={20} color="#9CA3AF" style={styles.inputIcon} />
                                     <TextInput
@@ -369,6 +399,42 @@ export default function RegisterScreen() {
                                 >
                                     <Text style={styles.cityItemText}>{item}</Text>
                                     {form.city === item && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+                                </TouchableOpacity>
+                            )}
+                            ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
+                        />
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Specialization Picker Modal */}
+            <Modal visible={specModalVisible} transparent={true} animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>اختر التخصص الطبي</Text>
+                            <TouchableOpacity onPress={() => setSpecModalVisible(false)} style={styles.closeBtn}>
+                                <MaterialCommunityIcons name="close" size={24} color="#111827" />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={[
+                                'قلبية', 'طب الأطفال', 'هضمية', 'الجهاز التنفسي',
+                                'جلدية وتجميل', 'عظام ومفاصل', 'طب العيون', 'بلعوم',
+                                'طب الأسنان', 'طب الأعصاب', 'طب عام', 'جراحة عامة',
+                                'نسائية وتوليد', 'طب نفسي', 'مسالك بولية'
+                            ]}
+                            keyExtractor={(item) => item}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={styles.cityItem}
+                                    onPress={() => {
+                                        update('specialization', item);
+                                        setSpecModalVisible(false);
+                                    }}
+                                >
+                                    <Text style={styles.cityItemText}>{item}</Text>
+                                    {form.specialization === item && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -12,6 +12,7 @@ const STATUS_MAP: Record<string, { label: string, color: string, icon: string }>
     'confirmed': { label: 'موعد مؤكد', color: '#10B981', icon: 'check-circle-outline' },
     'completed': { label: 'موعد مكتمل', color: '#3B82F6', icon: 'checkbox-marked-circle-outline' },
     'cancelled': { label: 'ملغي', color: '#EF4444', icon: 'close-circle-outline' },
+    'rejected': { label: 'مرفوض', color: '#EF4444', icon: 'close-circle-outline' },
 };
 
 export default function AppointmentsScreen() {
@@ -37,6 +38,33 @@ export default function AppointmentsScreen() {
     useEffect(() => {
         load();
     }, [user]);
+
+    const handleRequestReschedule = (aptId: string) => {
+        Alert.prompt ? Alert.prompt('إعادة جدولة', 'أدخل التاريخ المطلوب (YYYY-MM-DD)') :
+        Alert.alert('طلب إعادة جدولة', 'هل تريد طلب إعادة جدولة هذا الموعد؟', [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'نعم', onPress: async () => {
+                try {
+                    await api.requestReschedule(aptId, '', '');
+                    Alert.alert('تم', 'تم إرسال طلب إعادة الجدولة للطبيب');
+                    load();
+                } catch (e: any) { Alert.alert('خطأ', e.message); }
+            }},
+        ]);
+    };
+
+    const handleRequestCancel = (aptId: string) => {
+        Alert.alert('طلب إلغاء', 'هل تريد طلب إلغاء هذا الموعد؟', [
+            { text: 'لا', style: 'cancel' },
+            { text: 'نعم', style: 'destructive', onPress: async () => {
+                try {
+                    await api.requestCancelAppointment(aptId);
+                    Alert.alert('تم', 'تم إرسال طلب الإلغاء للطبيب');
+                    load();
+                } catch (e: any) { Alert.alert('خطأ', e.message); }
+            }},
+        ]);
+    };
 
     const renderAppointment = ({ item }: { item: any }) => {
         const status = STATUS_MAP[item.status] || { label: item.status, color: '#6B7280', icon: 'help-circle-outline' };
@@ -76,14 +104,40 @@ export default function AppointmentsScreen() {
                     </View>
                 )}
 
+                {item.rejection_note && (
+                    <View style={[styles.notesBox, { backgroundColor: '#FEF2F2' }]}>
+                        <Text style={[styles.notesText, { color: '#EF4444' }]}>سبب الرفض: {item.rejection_note}</Text>
+                    </View>
+                )}
+
+                {item.reschedule_requested && (
+                    <View style={[styles.notesBox, { backgroundColor: '#FEF3C7' }]}>
+                        <Text style={[styles.notesText, { color: '#D97706' }]}>إعادة جدولة معلقة ✈️</Text>
+                    </View>
+                )}
+
+                {item.cancel_requested && (
+                    <View style={[styles.notesBox, { backgroundColor: '#FEF2F2' }]}>
+                        <Text style={[styles.notesText, { color: '#DC2626' }]}>إلغاء معلق ❌</Text>
+                    </View>
+                )}
+
                 <View style={styles.cardFooter}>
                     <View style={styles.priceTag}>
                         <Text style={styles.priceVal}>{item.price?.toLocaleString()} ل.س</Text>
                     </View>
-                    <TouchableOpacity style={styles.detailsBtn}>
-                        <Text style={styles.detailsBtnText}>التفاصيل</Text>
-                        <Ionicons name="chevron-back" size={16} color="#1E88E5" />
-                    </TouchableOpacity>
+                    {(item.status === 'pending' || item.status === 'confirmed') && (
+                        <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleRequestReschedule(item.id)}>
+                                <MaterialCommunityIcons name="calendar-edit" size={14} color="#D97706" />
+                                <Text style={[styles.detailsBtnText, { color: '#D97706' }]}>إعادة جدولة</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => handleRequestCancel(item.id)}>
+                                <MaterialCommunityIcons name="close-circle-outline" size={14} color="#EF4444" />
+                                <Text style={[styles.detailsBtnText, { color: '#EF4444' }]}>إلغاء</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </TouchableOpacity>
         );

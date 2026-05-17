@@ -88,6 +88,9 @@ class Medicine(Base):
     image = Column(String, nullable=True)
     alternatives = Column(JSON, nullable=True)
     requires_prescription = Column(Boolean, default=False)
+    active_ingredients = Column(Text, nullable=True)
+    usage_info = Column(Text, nullable=True)
+    side_effects = Column(Text, nullable=True)
 
 
 class LabTest(Base):
@@ -127,6 +130,11 @@ class Appointment(Base):
     price = Column(Float)
     record_access_granted = Column(Boolean, default=False)
     created_at = Column(String)
+    rejection_note = Column(Text, nullable=True)
+    reschedule_requested = Column(Boolean, default=False)
+    cancel_requested = Column(Boolean, default=False)
+    requested_date = Column(String, nullable=True)
+    requested_time = Column(String, nullable=True)
 
 
 class Order(Base):
@@ -191,6 +199,7 @@ class MedicalRecord(Base):
     date = Column(String)
     shared_with = Column(JSON, nullable=True)
     created_at = Column(String)
+    record_owner = Column(String, nullable=True, default="self")  # self, child, father, mother, wife
 
 
 class AuditLog(Base):

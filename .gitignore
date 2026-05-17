@@ -10,3 +10,10 @@ backend/backend_stderr.log
 backend/backend_stdout.log
 node_modules/
 .expo/
+
+# Debug artifacts — should never be committed
+db_all_users.txt
+db_diagnostics.txt
+pwd_debug.txt
+api_test_output.json
+*.log

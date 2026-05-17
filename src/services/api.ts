@@ -200,11 +200,18 @@ class ApiClient {
         return this.get<any[]>(`/appointments${q ? '?' + q : ''}`);
     }
     createAppointment(data: any) { return this.post<any>('/appointments', data); }
-    async updateAppointmentStatus(id: string, status: string, date?: string, time?: string) {
-        return this.put(`/appointments/${id}/status`, { status, date, time });
+    async updateAppointmentStatus(id: string, status: string, date?: string, time?: string, rejection_note?: string) {
+        return this.put(`/appointments/${id}/status`, { status, date, time, rejection_note });
     }
     toggleRecordAccess(id: string, granted: boolean) {
         return this.put<any>(`/appointments/${id}/access`, { granted });
+    }
+    // Req #3: Reschedule & Cancel requests
+    requestReschedule(id: string, date: string, time: string) {
+        return this.put<any>(`/appointments/${id}/request-reschedule`, { date, time });
+    }
+    requestCancelAppointment(id: string) {
+        return this.put<any>(`/appointments/${id}/request-cancel`, {});
     }
 
     // Prescriptions
@@ -227,9 +234,12 @@ class ApiClient {
     }
 
     // ── Records & Lab Results ─────────────────────────────────────────────────
-    getMedicalRecords(patientId?: string) {
-        const q = patientId ? `?patient_id=${patientId}` : '';
-        return this.get<any[]>(`/records${q}`);
+    getMedicalRecords(patientId?: string, recordOwner?: string) {
+        const params = new URLSearchParams();
+        if (patientId) params.set('patient_id', patientId);
+        if (recordOwner) params.set('record_owner', recordOwner);
+        const q = params.toString();
+        return this.get<any[]>(`/records${q ? '?' + q : ''}`);
     }
     uploadRecord(data: any) { return this.post<any>('/records', data); }
     updateRecordSharing(id: string, sharedWith: string[]) {
@@ -264,6 +274,21 @@ class ApiClient {
     }
     updateHistoryRequestStatus(requestId: string, status: string) { return this.put<any>(`/history-requests/${requestId}/status?status=${status}`, {}); }
     updatePatient(id: string, data: any) { return this.put<any>(`/patients/${id}`, data); }
+
+    // Req #5: My Doctors
+    getMyDoctors(patientId: string) {
+        return this.get<any[]>(`/doctors/my-doctors?patient_id=${patientId}`);
+    }
+
+    // Req #13: Medicine details
+    getMedicineDetails(id: string) {
+        return this.get<any>(`/pharmacies/medicines/${id}/details`);
+    }
+
+    // Mark notification as read
+    markNotificationRead(id: string) {
+        return this.put<any>(`/patients/notifications/${id}/read`, {});
+    }
 
     // ── Admin ─────────────────────────────────────────────────────────────────
     getAdminDashboard() { return this.get<any>('/admin/dashboard'); }

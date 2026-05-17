@@ -1,141 +1,149 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 
-const LAB_PHOTOS = [
-    'https://images.unsplash.com/photo-1579154204601-01588f351e67?w=400',
-    'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400'
-];
+const { width } = Dimensions.get('window');
 
-export default function LabsScreen() {
+const STATUS_MAP: Record<string, { label: string; color: string; icon: string }> = {
+    booked: { label: 'محجوز', color: '#F59E0B', icon: 'clock-outline' },
+    completed: { label: 'مكتمل', color: '#10B981', icon: 'check-circle-outline' },
+    cancelled: { label: 'ملغي', color: '#EF4444', icon: 'close-circle-outline' },
+};
+
+export default function PatientLabsScreen() {
     const router = useRouter();
-    const [labs, setLabs] = useState<any[]>([]);
+    const { user } = useAuth();
+    const [results, setResults] = useState<any[]>([]);
+    const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
+    const [tab, setTab] = useState<'results' | 'bookings'>('results');
 
-    const load = async () => {
+    useEffect(() => { loadData(); }, []);
+
+    const loadData = async () => {
+        if (!user?.id) return;
         try {
-            const data = await api.getLabs();
-            setLabs(data);
-        } catch (e) {
-            console.warn(e);
-        } finally { setLoading(false); setRefreshing(false); }
+            const [r, b] = await Promise.all([
+                api.getLabResults(user.id),
+                api.getLabBookingsByPatient(user.id),
+            ]);
+            setResults(r || []);
+            setBookings(b || []);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
     };
 
-    useEffect(() => { load(); }, []);
+    const renderResult = ({ item, index }: any) => (
+        <Animated.View entering={FadeInDown.delay(index * 80)} style={styles.card}>
+            <View style={styles.cardHeader}>
+                <View style={[styles.statusBadge, { backgroundColor: '#10B98120' }]}>
+                    <Text style={[styles.statusText, { color: '#10B981' }]}>مكتمل</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={styles.cardTitle}>{item.test?.name || 'تحليل'}</Text>
+                    <Text style={styles.cardSub}>{item.lab?.name || ''}</Text>
+                </View>
+                <View style={styles.iconCircle}>
+                    <MaterialCommunityIcons name="flask" size={22} color="#1E88E5" />
+                </View>
+            </View>
+            <View style={styles.cardFooter}>
+                <Text style={styles.dateText}>{item.date || item.created_at?.split('T')[0]}</Text>
+                <TouchableOpacity style={styles.viewBtn}>
+                    <Text style={styles.viewBtnText}>عرض النتيجة</Text>
+                    <Ionicons name="chevron-back" size={16} color="#1E88E5" />
+                </TouchableOpacity>
+            </View>
+        </Animated.View>
+    );
+
+    const renderBooking = ({ item, index }: any) => {
+        const s = STATUS_MAP[item.status] || STATUS_MAP.booked;
+        return (
+            <Animated.View entering={FadeInDown.delay(index * 80)} style={styles.card}>
+                <View style={styles.cardHeader}>
+                    <View style={[styles.statusBadge, { backgroundColor: s.color + '20' }]}>
+                        <Text style={[styles.statusText, { color: s.color }]}>{s.label}</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                        <Text style={styles.cardTitle}>{item.test?.name || 'تحليل'}</Text>
+                        <Text style={styles.cardSub}>{item.lab?.name || ''}</Text>
+                    </View>
+                    <View style={styles.iconCircle}>
+                        <MaterialCommunityIcons name={s.icon as any} size={22} color={s.color} />
+                    </View>
+                </View>
+                <View style={styles.cardFooter}>
+                    <Text style={styles.dateText}>{item.date} - {item.time}</Text>
+                </View>
+            </Animated.View>
+        );
+    };
+
+    if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#1E88E5" /></View>;
 
     return (
         <View style={styles.container}>
-            <LinearGradient
-                colors={['#1E88E5', '#43A047']}
-                style={styles.header}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-            >
-                <Text style={styles.headerTitle}>المختبرات الطبية</Text>
+            <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="chevron-forward" size={28} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>نتائج المختبر</Text>
+                <View style={{ width: 28 }} />
             </LinearGradient>
 
-            <ScrollView
-                style={styles.list}
-                showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-            >
-                {loading ? (
-                    <ActivityIndicator color="#1E88E5" style={{ marginTop: 40 }} size="large" />
-                ) : labs.length === 0 ? (
+            <View style={styles.tabs}>
+                <TouchableOpacity style={[styles.tab, tab === 'results' && styles.tabActive]} onPress={() => setTab('results')}>
+                    <Text style={[styles.tabText, tab === 'results' && styles.tabTextActive]}>النتائج ({results.length})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tab, tab === 'bookings' && styles.tabActive]} onPress={() => setTab('bookings')}>
+                    <Text style={[styles.tabText, tab === 'bookings' && styles.tabTextActive]}>الحجوزات ({bookings.length})</Text>
+                </TouchableOpacity>
+            </View>
+
+            <FlatList
+                data={tab === 'results' ? results : bookings}
+                renderItem={tab === 'results' ? renderResult : renderBooking}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+                ListEmptyComponent={
                     <View style={styles.empty}>
                         <MaterialCommunityIcons name="flask-empty-outline" size={60} color="#D1D5DB" />
-                        <Text style={styles.emptyText}>لم يتم العثور على مختبرات</Text>
+                        <Text style={styles.emptyText}>{tab === 'results' ? 'لا توجد نتائج بعد' : 'لا توجد حجوزات'}</Text>
                     </View>
-                ) : (
-                    labs.map((lab, idx) => (
-                        <TouchableOpacity
-                            key={lab.id}
-                            style={styles.labCard}
-                            activeOpacity={0.9}
-                            onPress={() => router.push(`/(patient)/labs/${lab.id}` as any)}
-                        >
-                            <Image
-                                source={{ uri: LAB_PHOTOS[idx % LAB_PHOTOS.length] }}
-                                style={styles.labPhoto}
-                            />
-                            <View style={styles.labInfo}>
-                                <Text style={styles.labName}>{lab.name}</Text>
-                                <View style={styles.metaRow}>
-                                    <View style={styles.metaItem}>
-                                        <Text style={styles.metaText}>{lab.address || lab.city}</Text>
-                                        <Ionicons name="location-outline" size={14} color="#6B7280" />
-                                    </View>
-                                </View>
-                                <View style={styles.metaRow}>
-                                    <View style={styles.metaItem}>
-                                        <Text style={styles.metaText}>{lab.open_hours || '08:00 - 20:00'}</Text>
-                                        <Ionicons name="time-outline" size={14} color="#6B7280" />
-                                    </View>
-                                </View>
-                                <TouchableOpacity style={styles.orderBtn}>
-                                    <LinearGradient
-                                        colors={['#1E88E5', '#43A047']}
-                                        style={styles.orderGradient}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 0 }}
-                                    >
-                                        <Text style={styles.orderBtnText}>عرض التحاليل</Text>
-                                        <Ionicons name="flask-outline" size={18} color="#FFF" />
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            </View>
-                        </TouchableOpacity>
-                    ))
-                )}
-                <View style={{ height: 100 }} />
-            </ScrollView>
+                }
+            />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFBFF' },
-    header: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingBottom: 25,
-        alignItems: 'center',
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-    },
-    headerTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#fff' },
-    list: { flex: 1, paddingHorizontal: 16, paddingTop: 20 },
-    empty: { alignItems: 'center', marginTop: 60, gap: 10 },
-    emptyText: { fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
-    labCard: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        overflow: 'hidden',
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-    },
-    labPhoto: { width: '100%', height: 150 },
-    labInfo: { padding: 15 },
-    labName: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'right', marginBottom: 10 },
-    metaRow: { gap: 6, marginBottom: 8 },
-    metaItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-    metaText: { fontSize: 13, color: '#6B7280', fontFamily: 'Cairo_400Regular', textAlign: 'right' },
-    orderBtn: { height: 44, borderRadius: 12, overflow: 'hidden', marginTop: 10 },
-    orderGradient: {
-        width: '100%',
-        height: '100%',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: 10
-    },
-    orderBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Cairo_700Bold' },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    header: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 60 : 45, paddingBottom: 16, paddingHorizontal: 20 },
+    backBtn: { padding: 4 },
+    headerTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#FFF' },
+    tabs: { flexDirection: 'row-reverse', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
+    tab: { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' },
+    tabActive: { backgroundColor: '#1E88E5' },
+    tabText: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#6B7280' },
+    tabTextActive: { color: '#FFF' },
+    card: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+    cardHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+    iconCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#EBF5FF', justifyContent: 'center', alignItems: 'center' },
+    cardTitle: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#111827' },
+    cardSub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#6B7280' },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+    statusText: { fontSize: 12, fontFamily: 'Cairo_700Bold' },
+    cardFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+    dateText: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
+    viewBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
+    viewBtnText: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
+    empty: { alignItems: 'center', marginTop: 80, gap: 12 },
+    emptyText: { fontSize: 16, fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
 });

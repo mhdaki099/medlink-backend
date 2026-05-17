@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     statsGrid: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
         gap: 12,
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
         marginVertical: 40,
     },
     barsArea: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         justifyContent: 'space-between',
         alignItems: 'flex-end',
         height: 150,

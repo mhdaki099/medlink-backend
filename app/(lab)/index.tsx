@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Modal, TextInput, Platform } from 'react-native';
 import { Colors, BorderRadius, Shadow } from '../../src/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
@@ -58,11 +61,20 @@ export default function LabDashboard() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={logout} style={styles.logoutBtn}><Text style={styles.logoutText}>خروج 🚪</Text></TouchableOpacity>
-                <Text style={styles.headerTitle}>{user?.name || 'المختبر'} 🧪</Text>
-                <Text style={styles.statsBar}>📅 {bookings.length} حجز إجمالي | ⏳ {pending} بانتظار</Text>
-            </View>
+            <LinearGradient colors={['#7C3AED', '#2563EB']} style={styles.header} start={{x:0,y:0}} end={{x:1,y:1}}>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+                        <MaterialCommunityIcons name="logout" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                    <View style={{flex:1, alignItems:'flex-end'}}>
+                        <Text style={styles.headerTitle}>{user?.name || 'المختبر'}</Text>
+                        <Text style={styles.statsBar}>📅 {bookings.length} حجز إجمالي | ⏳ {pending} بانتظار</Text>
+                    </View>
+                    <View style={styles.headerIcon}>
+                        <MaterialCommunityIcons name="flask" size={28} color="#FFF" />
+                    </View>
+                </View>
+            </LinearGradient>
 
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
@@ -136,42 +148,44 @@ export default function LabDashboard() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background },
-    header: { backgroundColor: Colors.lab, paddingTop: 52, paddingBottom: 16, paddingHorizontal: 16 },
-    logoutBtn: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10 },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    header: { paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 20, paddingHorizontal: 20 },
+    headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+    headerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    logoutBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12 },
     logoutText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-    headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff', textAlign: 'right' },
-    statsBar: { fontSize: 12, color: 'rgba(255,255,255,0.8)', textAlign: 'right', marginTop: 4 },
-    list: { flex: 1, paddingHorizontal: 14, paddingTop: 10 },
-    empty: { alignItems: 'center', marginTop: 60 },
-    emptyIcon: { fontSize: 48, marginBottom: 12 },
-    emptyText: { fontSize: 15, color: Colors.textSecondary },
-    bkCard: { backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 14, marginBottom: 10, ...Shadow.small },
-    bkTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    patientName: { fontSize: 15, fontWeight: '800', color: Colors.text },
-    statusBadge: { borderRadius: BorderRadius.sm, paddingHorizontal: 8, paddingVertical: 3 },
-    statusText: { fontSize: 11, fontWeight: '700' },
-    testName: { fontSize: 13, color: Colors.lab, fontWeight: '600', textAlign: 'right', marginBottom: 4 },
-    bkDate: { fontSize: 12, color: Colors.textSecondary, textAlign: 'right', marginBottom: 4 },
-    prep: { fontSize: 12, color: Colors.warning, textAlign: 'right', marginBottom: 8 },
-    bkActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
-    processBtn: { flex: 1, backgroundColor: Colors.warning + '18', borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    processBtnText: { color: Colors.warning, fontWeight: '700', fontSize: 12 },
-    resultBtn: { flex: 1, backgroundColor: Colors.lab, borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    resultBtnFull: { backgroundColor: Colors.lab, borderRadius: BorderRadius.full, padding: 10, alignItems: 'center', marginTop: 6 },
-    resultBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    headerTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#FFF' },
+    statsBar: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+    list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+    empty: { alignItems: 'center', marginTop: 60, gap: 12 },
+    emptyIcon: { fontSize: 48, marginBottom: 4 },
+    emptyText: { fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
+    bkCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+    bkTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    patientName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#111827' },
+    statusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+    statusText: { fontSize: 12, fontFamily: 'Cairo_700Bold' },
+    testName: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: '#7C3AED', textAlign: 'right', marginBottom: 4 },
+    bkDate: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'right', marginBottom: 4 },
+    prep: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#D97706', textAlign: 'right', marginBottom: 8 },
+    bkActions: { flexDirection: 'row-reverse', gap: 8, marginTop: 8 },
+    processBtn: { flex: 1, backgroundColor: '#FEF3C7', borderRadius: 14, padding: 12, alignItems: 'center' },
+    processBtnText: { color: '#D97706', fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    resultBtn: { flex: 1, backgroundColor: '#7C3AED', borderRadius: 14, padding: 12, alignItems: 'center' },
+    resultBtnFull: { backgroundColor: '#7C3AED', borderRadius: 14, padding: 12, alignItems: 'center', marginTop: 8 },
+    resultBtnText: { color: '#fff', fontFamily: 'Cairo_700Bold', fontSize: 13 },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modal: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '85%' },
-    modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.text, textAlign: 'center', marginBottom: 6 },
-    modalSub: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
-    valueInputRow: { flexDirection: 'row', gap: 6, marginBottom: 6, marginTop: 8 },
-    input: { backgroundColor: Colors.background, borderRadius: BorderRadius.md, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, color: Colors.text },
-    addRowBtn: { backgroundColor: Colors.lab + '15', borderRadius: BorderRadius.full, padding: 10, alignItems: 'center', marginTop: 6 },
-    addRowBtnText: { color: Colors.lab, fontWeight: '700', fontSize: 13 },
-    fieldLabel: { fontSize: 13, fontWeight: '600', color: Colors.text, textAlign: 'right', marginBottom: 5, marginTop: 12 },
-    modalBtns: { flexDirection: 'row', gap: 10, marginTop: 16 },
-    cancelBtn: { flex: 1, borderRadius: BorderRadius.full, paddingVertical: 12, alignItems: 'center', borderWidth: 1.5, borderColor: Colors.border },
-    cancelBtnText: { color: Colors.textSecondary, fontWeight: '600' },
-    saveBtn: { flex: 1, backgroundColor: Colors.lab, borderRadius: BorderRadius.full, paddingVertical: 12, alignItems: 'center' },
-    saveBtnText: { color: '#fff', fontWeight: '700' },
+    modalTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'center', marginBottom: 6 },
+    modalSub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'center', marginBottom: 4 },
+    valueInputRow: { flexDirection: 'row-reverse', gap: 6, marginBottom: 6, marginTop: 8 },
+    input: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB', paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#111827' },
+    addRowBtn: { backgroundColor: '#7C3AED15', borderRadius: 14, padding: 10, alignItems: 'center', marginTop: 6 },
+    addRowBtnText: { color: '#7C3AED', fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    fieldLabel: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#111827', textAlign: 'right', marginBottom: 5, marginTop: 12 },
+    modalBtns: { flexDirection: 'row-reverse', gap: 10, marginTop: 16 },
+    cancelBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#E5E7EB' },
+    cancelBtnText: { color: '#6B7280', fontFamily: 'Cairo_600SemiBold' },
+    saveBtn: { flex: 1, backgroundColor: '#7C3AED', borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
+    saveBtnText: { color: '#fff', fontFamily: 'Cairo_700Bold' },
 });

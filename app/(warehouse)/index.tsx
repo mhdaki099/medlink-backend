@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { Colors, BorderRadius, Shadow } from '../../src/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
@@ -43,11 +45,20 @@ export default function WarehouseDashboard() {
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={logout} style={styles.logoutBtn}><Text style={styles.logoutText}>خروج 🚪</Text></TouchableOpacity>
-                <Text style={styles.headerTitle}>{user?.name || 'المستودع'} 🏭</Text>
-                <Text style={styles.headerSub}>{user?.city}</Text>
-            </View>
+            <LinearGradient colors={['#EA580C', '#DC2626']} style={styles.header} start={{x:0,y:0}} end={{x:1,y:1}}>
+                <View style={styles.headerRow}>
+                    <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+                        <MaterialCommunityIcons name="logout" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                    <View style={{flex:1, alignItems:'flex-end'}}>
+                        <Text style={styles.headerTitle}>{user?.name || 'المستودع'}</Text>
+                        <Text style={styles.headerSub}>{user?.city}</Text>
+                    </View>
+                    <View style={styles.headerIcon}>
+                        <MaterialCommunityIcons name="warehouse" size={28} color="#FFF" />
+                    </View>
+                </View>
+            </LinearGradient>
 
             {/* Stats */}
             <View style={styles.statsRow}>
@@ -109,36 +120,38 @@ export default function WarehouseDashboard() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background },
-    header: { backgroundColor: Colors.warehouse, paddingTop: 52, paddingBottom: 24, paddingHorizontal: 16 },
-    logoutBtn: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10 },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    header: { paddingTop: Platform.OS === 'ios' ? 60 : 44, paddingBottom: 24, paddingHorizontal: 20 },
+    headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+    headerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    logoutBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12 },
     logoutText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-    headerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', textAlign: 'right' },
-    headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'right', marginTop: 4 },
-    statsRow: { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 14, gap: 8 },
-    statCard: { flex: 1, backgroundColor: Colors.white, borderRadius: BorderRadius.md, padding: 10, alignItems: 'center', borderTopWidth: 3, ...Shadow.small },
-    statVal: { fontSize: 18, fontWeight: '800' },
-    statLabel: { fontSize: 9, color: Colors.textSecondary, marginTop: 2, textAlign: 'center' },
-    alertBox: { marginHorizontal: 14, backgroundColor: Colors.warning + '18', borderRadius: BorderRadius.md, padding: 12, marginBottom: 4 },
-    alertText: { color: Colors.warning, fontWeight: '600', fontSize: 13, textAlign: 'right' },
-    section: { paddingHorizontal: 14, paddingBottom: 10 },
-    sectionTitle: { fontSize: 17, fontWeight: '700', color: Colors.text, textAlign: 'right', marginBottom: 10, marginTop: 10 },
-    empty: { alignItems: 'center', marginTop: 30 },
-    emptyIcon: { fontSize: 40, marginBottom: 8 },
-    emptyText: { fontSize: 14, color: Colors.textSecondary },
-    orderCard: { backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 14, marginBottom: 10, ...Shadow.small },
-    orderTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    pharmacyName: { fontSize: 15, fontWeight: '800', color: Colors.text },
-    statusBadge: { borderRadius: BorderRadius.sm, paddingHorizontal: 8, paddingVertical: 3 },
-    statusText: { fontSize: 11, fontWeight: '700' },
-    orderDate: { fontSize: 12, color: Colors.textMuted, textAlign: 'right', marginBottom: 6 },
-    orderItem: { fontSize: 12, color: Colors.textSecondary, textAlign: 'right', marginBottom: 2 },
-    orderTotal: { fontSize: 14, fontWeight: '800', color: Colors.warehouse, textAlign: 'right', marginBottom: 8, marginTop: 4 },
-    orderActions: { flexDirection: 'row', gap: 8 },
-    rejectBtn: { flex: 1, backgroundColor: Colors.danger + '15', borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    rejectText: { color: Colors.danger, fontWeight: '700', fontSize: 12 },
-    acceptBtn: { flex: 2, backgroundColor: Colors.warehouse, borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    acceptText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-    deliveredBtn: { backgroundColor: Colors.confirmed + '15', borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    deliveredText: { color: Colors.confirmed, fontWeight: '700', fontSize: 12 },
+    headerTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#FFF' },
+    headerSub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+    statsRow: { flexDirection: 'row-reverse', paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
+    statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 12, alignItems: 'center', borderTopWidth: 3, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+    statVal: { fontSize: 20, fontFamily: 'Cairo_700Bold' },
+    statLabel: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#6B7280', marginTop: 2, textAlign: 'center' },
+    alertBox: { marginHorizontal: 16, backgroundColor: '#FEF3C7', borderRadius: 14, padding: 12, marginBottom: 4 },
+    alertText: { color: '#D97706', fontFamily: 'Cairo_600SemiBold', fontSize: 13, textAlign: 'right' },
+    section: { paddingHorizontal: 16, paddingBottom: 10 },
+    sectionTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'right', marginBottom: 12, marginTop: 10 },
+    empty: { alignItems: 'center', marginTop: 30, gap: 8 },
+    emptyIcon: { fontSize: 40, marginBottom: 4 },
+    emptyText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
+    orderCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+    orderTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    pharmacyName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#111827' },
+    statusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+    statusText: { fontSize: 12, fontFamily: 'Cairo_700Bold' },
+    orderDate: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#9CA3AF', textAlign: 'right', marginBottom: 6 },
+    orderItem: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'right', marginBottom: 2 },
+    orderTotal: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#EA580C', textAlign: 'right', marginBottom: 8, marginTop: 4 },
+    orderActions: { flexDirection: 'row-reverse', gap: 8 },
+    rejectBtn: { flex: 1, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 12, alignItems: 'center' },
+    rejectText: { color: '#EF4444', fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    acceptBtn: { flex: 2, backgroundColor: '#EA580C', borderRadius: 14, padding: 12, alignItems: 'center' },
+    acceptText: { color: '#fff', fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    deliveredBtn: { backgroundColor: '#D1FAE5', borderRadius: 14, padding: 12, alignItems: 'center' },
+    deliveredText: { color: '#10B981', fontFamily: 'Cairo_700Bold', fontSize: 13 },
 });

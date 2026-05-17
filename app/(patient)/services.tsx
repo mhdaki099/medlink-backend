@@ -14,15 +14,15 @@ const { width, height } = Dimensions.get('window');
 const SERVICES = [
     {
         id: 'doctors',
-        title: 'أطباء',
-        sub: 'حجز مواعيد واستشارات طارئة',
+        title: 'أطبائي',
+        sub: 'أطبائي المعالجين وحجز مواعيد',
         icon: 'stethoscope',
         route: '/(patient)/doctors',
         delay: 300
     },
     {
         id: 'medicines',
-        title: 'أدوية',
+        title: 'أدويتي',
         sub: 'طلب أدوية ووصفات إلكترونية',
         icon: 'pill',
         route: '/(patient)/pharmacies',
@@ -39,10 +39,18 @@ const SERVICES = [
     {
         id: 'records',
         title: 'سجل طبي',
-        sub: 'نتائج التحاليل والملفات الطبية',
+        sub: 'الملفات الطبية لك ولعائلتك',
         icon: 'folder-heart-outline',
         route: '/(patient)/records',
         delay: 750
+    },
+    {
+        id: 'labs',
+        title: 'نتائج المختبر',
+        sub: 'تحاليل ونتائج مخبرية',
+        icon: 'flask-outline',
+        route: '/(patient)/labs',
+        delay: 900
     }
 ];
 

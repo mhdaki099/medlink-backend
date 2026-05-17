@@ -11,10 +11,20 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-def get_db():
-    # Ensure tables are created
-    from models import User # Import models to register them with Base
+
+def init_db():
+    """Create all tables once at application startup. Call from main.py lifespan."""
+    from models import (  # noqa: F401 – import triggers table registration
+        User, MedicalHistoryRequest, RegistrationRequest, Medicine, LabTest,
+        WarehouseInventory, Appointment, Order, WarehouseOrder, LabBooking,
+        LabResult, MedicalRecord, AuditLog, Review, Prescription, Payment,
+        Favorite, FavoriteMedicine, CartItem, PatientNote, Notification,
+    )
     Base.metadata.create_all(bind=engine)
+
+
+def get_db():
+    """Yield a database session for request-scoped dependency injection."""
     db = SessionLocal()
     try:
         yield db

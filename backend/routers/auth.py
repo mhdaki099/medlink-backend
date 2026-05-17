@@ -1,17 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-import sys
 import os
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
-
-# Add the backend directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
 
 from db import get_db
 from models import User, RegistrationRequest
-from auth_utils import create_access_token, verify_password, hash_password
+from auth_utils import create_access_token, verify_password, hash_password, get_current_user
+from utils.helpers import model_to_dict
 
 router = APIRouter()
 
@@ -29,6 +26,7 @@ class RegisterRequest(BaseModel):
     role: str
     phone: str = ""
     city: str = ""
+    address: str = ""
     photo: str = ""
     clinic_name: str = ""
     clinic_address: str = ""
@@ -44,8 +42,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(req.password, user.password):
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="الحساب معطّل. تواصل مع الإدارة.")
+
     # Exclude password from response
-    user_data = {c.name: getattr(user, c.name) for c in user.__table__.columns if c.name != "password"}
+    user_data = model_to_dict(user, ["password"])
     
     token = create_access_token({"sub": user.id, "role": user.role, "email": user.email})
     return {"access_token": token, "token_type": "bearer", "user": user_data}
@@ -66,6 +67,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         if db.query(User).filter(User.phone == req.phone).first():
             raise HTTPException(status_code=400, detail="رقم الهاتف مستخدم مسبقاً")
     
+    # Validate doctor registration requires specialization
+    if req.role == 'doctor' and not req.specialization:
+        raise HTTPException(status_code=400, detail="يرجى اختيار التخصص الطبي")
+    
     # If Patient, create immediately
     if req.role == 'patient':
         new_id = f"p_{uuid.uuid4().hex[:8]}"
@@ -78,26 +83,27 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             password=hash_password(req.password),
             phone=req.phone,
             city=req.city,
+            address=req.address,
             is_active=True,
             verified=False,
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
         
-        user_data = {c.name: getattr(new_user, c.name) for c in new_user.__table__.columns if c.name != "password"}
+        user_data = model_to_dict(new_user, ["password"])
         token = create_access_token({"sub": new_id, "role": req.role, "email": req.email})
         return {"access_token": token, "token_type": "bearer", "user": user_data}
     
-    # Otherwise, create registration request
+    # Otherwise, create registration request (doctor, pharmacy, lab, warehouse)
     request_id = f"req_{uuid.uuid4().hex[:8]}"
     pending_request = RegistrationRequest(
         id=request_id,
         role=req.role,
         email=req.email,
         data=req.dict(),
-        created_at=datetime.utcnow().isoformat()
+        created_at=datetime.now(timezone.utc).isoformat()
     )
     db.add(pending_request)
     db.commit()
@@ -112,6 +118,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 async def upload_file(
     file: UploadFile = File(...),
     type: str = "document", # 'photo' or 'document'
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     from utils.image_utils import save_upload_file, remove_white_background
@@ -131,6 +138,9 @@ async def upload_file(
 
 
 @router.get("/me")
-def me(db: Session = Depends(get_db)):
-    # Dependency stub
-    return {}
+def me(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return the authenticated user's full profile."""
+    user = db.query(User).filter(User.id == current_user["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    return model_to_dict(user, ["password"])

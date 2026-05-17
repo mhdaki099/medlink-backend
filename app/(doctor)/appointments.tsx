@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, ActivityIndicator, 
-    RefreshControl, TouchableOpacity, Alert, Platform, Image 
+    RefreshControl, TouchableOpacity, Alert, Platform, Image, Modal, FlatList 
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +18,14 @@ export default function DoctorAppointments() {
     const [filter, setFilter] = useState<string>('all');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [rejectModal, setRejectModal] = useState<{visible: boolean, aptId: string}>({visible: false, aptId: ''});
+
+    const REJECTION_REASONS = [
+        'الحالة تحتاج فحص عند اختصاص آخر',
+        'تحويل إلى طبيب آخر',
+        'الموعد محجوز مسبقاً',
+        'العيادة مغلقة في هذا اليوم',
+    ];
 
     const loadData = async () => {
         if (!user?.id) {
@@ -40,14 +48,23 @@ export default function DoctorAppointments() {
 
     useEffect(() => { loadData(); }, [filter, user]);
 
-    const handleStatusUpdate = async (id: string, newStatus: string) => {
+    const handleStatusUpdate = async (id: string, newStatus: string, rejectionNote?: string) => {
         try {
-            await api.put(`/appointments/${id}/status`, { status: newStatus });
+            await api.updateAppointmentStatus(id, newStatus, undefined, undefined, rejectionNote);
             Alert.alert('✅ تم', `تم ${newStatus === 'confirmed' ? 'تأكيد' : 'إلغاء'}${newStatus === 'completed' ? ' إكمال' : ''} الموعد بنجاح`);
             loadData();
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
         }
+    };
+
+    const handleReject = (aptId: string) => {
+        setRejectModal({ visible: true, aptId });
+    };
+
+    const submitRejection = (reason: string) => {
+        setRejectModal({ visible: false, aptId: '' });
+        handleStatusUpdate(rejectModal.aptId, 'rejected', reason);
     };
 
     const handleRequestHistory = async (patientId: string) => {
@@ -153,13 +170,27 @@ export default function DoctorAppointments() {
                             {/* Debug: <Text style={{fontSize: 8}}>{apt.id}</Text> */}
 
 
+                            {/* Reschedule/Cancel request indicators */}
+                            {apt.reschedule_requested && (
+                                <View style={[styles.dateTimePill, { backgroundColor: '#FEF3C7' }]}>
+                                    <MaterialCommunityIcons name="calendar-edit" size={14} color="#D97706" />
+                                    <Text style={[styles.dateText, { color: '#D97706' }]}>طلب إعادة جدولة</Text>
+                                </View>
+                            )}
+                            {apt.cancel_requested && (
+                                <View style={[styles.dateTimePill, { backgroundColor: '#FEF2F2' }]}>
+                                    <MaterialCommunityIcons name="close-circle-outline" size={14} color="#EF4444" />
+                                    <Text style={[styles.dateText, { color: '#EF4444' }]}>طلب إلغاء</Text>
+                                </View>
+                            )}
+
                             {apt.status === 'pending' && (
                                 <View style={styles.actions}>
                                     <TouchableOpacity 
                                         style={[styles.actionBtn, styles.cancelBtn]}
-                                        onPress={() => handleStatusUpdate(apt.id, 'cancelled')}
+                                        onPress={() => handleReject(apt.id)}
                                     >
-                                        <Text style={styles.cancelBtnText}>إلغاء</Text>
+                                        <Text style={styles.cancelBtnText}>رفض</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity 
                                         style={[styles.actionBtn, styles.confirmBtn]}
@@ -190,6 +221,31 @@ export default function DoctorAppointments() {
                     ))
                 )}
             </ScrollView>
+
+            {/* Rejection Reasons Modal (Req #15) */}
+            <Modal visible={rejectModal.visible} transparent animationType="slide">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '60%' }}>
+                        <Text style={{ fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'center', marginBottom: 16 }}>سبب الرفض</Text>
+                        {REJECTION_REASONS.map((reason, i) => (
+                            <TouchableOpacity 
+                                key={i} 
+                                style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}
+                                onPress={() => submitRejection(reason)}
+                            >
+                                <MaterialCommunityIcons name="circle-outline" size={18} color="#6B7280" />
+                                <Text style={{ fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#374151' }}>{reason}</Text>
+                            </TouchableOpacity>
+                        ))}
+                        <TouchableOpacity 
+                            style={{ marginTop: 12, paddingVertical: 12, backgroundColor: '#F3F4F6', borderRadius: 12, alignItems: 'center' }}
+                            onPress={() => setRejectModal({ visible: false, aptId: '' })}
+                        >
+                            <Text style={{ fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#6B7280' }}>إلغاء</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

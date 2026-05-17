@@ -124,10 +124,36 @@ export default function PharmaciesScreen() {
     const cartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
-    const handleCheckout = () => {
-        alert("سيتم إتمام طلبك لاحقاً عند تفعيل الدفع الإلكتروني");
-        // Reset slider
-        sliderPos.value = withSpring(0);
+    const handleCheckout = async () => {
+        try {
+            // Group cart items by pharmacy
+            const grouped: Record<string, any[]> = {};
+            for (const item of cart) {
+                const pid = item.pharmacy_id || 'unknown';
+                if (!grouped[pid]) grouped[pid] = [];
+                grouped[pid].push(item);
+            }
+            // Create order per pharmacy
+            for (const [pharmacyId, items] of Object.entries(grouped)) {
+                const total = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
+                await api.createOrder({
+                    patient_id: patientId,
+                    pharmacy_id: pharmacyId,
+                    items: items.map((i: any) => ({ medicine_id: i.id, qty: i.quantity, price: i.price })),
+                    total,
+                    delivery_address: '',
+                });
+            }
+            // Clear cart
+            for (const item of cart) {
+                await api.removeFromCart(item.id, patientId);
+            }
+            setCart([]);
+            setShowCart(false);
+            alert('تم إرسال طلبك بنجاح! سيتم مراجعته من الصيدلية ✅');
+        } catch (e: any) {
+            alert('خطأ في إرسال الطلب: ' + (e.message || ''));
+        }
     };
 
     const sliderKnobStyle = useAnimatedStyle(() => ({
@@ -328,34 +354,14 @@ export default function PharmaciesScreen() {
                                         <Text style={styles.totalLabel}>الإجمالي</Text>
                                     </View>
                                     
-                                    {/* Slide to Checkout Button (Right to Left for Arabic) */}
-                                    <View style={styles.sliderWrapper}>
-                                        <View style={styles.sliderTrack}>
-                                            <Text style={styles.sliderText}>لاحقاً مو هلأ لانو مافي دفع الكتروني</Text>
-                                        </View>
-                                        
-                                        <PanGestureHandler
-                                            onGestureEvent={(event) => {
-                                                const x = event.nativeEvent.translationX;
-                                                // Slider moves right-to-left, so we cap it between -(SLIDER_WIDTH - KNOB_SIZE) and 0
-                                                if (x <= 0 && x >= -(SLIDER_WIDTH - KNOB_SIZE)) {
-                                                    sliderPos.value = x;
-                                                }
-                                            }}
-                                            onEnded={(event) => {
-                                                if (event.nativeEvent.translationX < -(SLIDER_WIDTH - KNOB_SIZE) * 0.7) {
-                                                    sliderPos.value = withSpring(-(SLIDER_WIDTH - KNOB_SIZE));
-                                                    runOnJS(handleCheckout)();
-                                                } else {
-                                                    sliderPos.value = withSpring(0);
-                                                }
-                                            }}
-                                        >
-                                            <Animated.View style={[styles.sliderKnob, sliderKnobStyle]}>
-                                                <Ionicons name="chevron-back" size={24} color="#FFF" />
-                                            </Animated.View>
-                                        </PanGestureHandler>
-                                    </View>
+                                    {/* Submit Order Button (Req #10 - replaces broken slider) */}
+                                    <TouchableOpacity
+                                        style={styles.submitOrderBtn}
+                                        onPress={handleCheckout}
+                                    >
+                                        <Ionicons name="checkmark-circle" size={22} color="#FFF" />
+                                        <Text style={styles.submitOrderText}>إرسال الطلب</Text>
+                                    </TouchableOpacity>
                                 </View>
                             )}
                         </Animated.View>
@@ -715,6 +721,21 @@ const styles = StyleSheet.create({
         right: 4, 
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    submitOrderBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#43A047',
+        borderRadius: 30,
+        height: 56,
+        gap: 8,
+        marginTop: 8,
+    },
+    submitOrderText: {
+        fontSize: 16,
+        fontFamily: 'Cairo_700Bold',
+        color: '#FFF',
     },
 
     emptyCart: {

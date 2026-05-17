@@ -1,26 +1,43 @@
 """
 MedLink Backend - Main Application Entry Point
 """
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from routers import auth, patients, doctors, pharmacies, labs, warehouses, admin, appointments, orders, records, history_requests, prescriptions
-import os
+from db import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown lifecycle."""
+    init_db()  # Create tables once at startup
+    yield
+
 
 app = FastAPI(
     title="MedLink API",
     description="Healthcare Super App - Syria",
     version="1.0.0",
+    lifespan=lifespan,
 )
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# In production set ALLOWED_ORIGINS env var, e.g. "https://myapp.com,https://admin.myapp.com"
+_origins_env = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [o.strip() for o in _origins_env.split(",") if o.strip()] if _origins_env else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=bool(_origins_env),  # Only allow credentials when origins are explicit
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(patients.router, prefix="/api/patients", tags=["Patients"])
 app.include_router(doctors.router, prefix="/api/doctors", tags=["Doctors"])
@@ -34,7 +51,7 @@ app.include_router(records.router, prefix="/api/records", tags=["Medical Records
 app.include_router(history_requests.router, prefix="/api/history-requests", tags=["Medical History Requests"])
 app.include_router(prescriptions.router, prefix="/api/prescriptions", tags=["Prescriptions"])
 
-# Serve static files (doctor photos, logo, etc.)
+# ── Static files ──────────────────────────────────────────────────────────────
 assets_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
 if os.path.isdir(assets_path):
     app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
@@ -47,18 +64,13 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
-
-
-@app.get("/debug")
-def debug():
+    """Lightweight health-check — verifies the DB is reachable."""
+    from sqlalchemy import text
     from db import SessionLocal
-    from models import User
     try:
         db = SessionLocal()
-        user_count = db.query(User).count()
-        users = [{"id": u.id, "email": u.email, "role": u.role} for u in db.query(User).limit(5).all()]
+        db.execute(text("SELECT 1"))
         db.close()
-        return {"user_count": user_count, "sample_users": users, "status": "ok"}
+        return {"status": "healthy"}
     except Exception as e:
-        return {"error": str(e), "status": "failed"}
+        return {"status": "unhealthy", "error": str(e)}
