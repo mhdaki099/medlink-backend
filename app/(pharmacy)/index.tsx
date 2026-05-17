@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Image } from 'react-native';
-import { Colors, BorderRadius, Shadow } from '../../src/theme';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Platform, Dimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+
+const { width } = Dimensions.get('window');
+const C = {
+    primary: '#E67E22', primaryDark: '#D35400', accent: '#F39C12', success: '#27AE60',
+    danger: '#E74C3C', blue: '#2980B9', bg: '#F5F6FA', white: '#FFFFFF',
+    text: '#1A1A2E', textSec: '#636E72', textMuted: '#B2BEC3', border: '#E8ECF0',
+};
 
 export default function PharmacyDashboard() {
     const { user, logout } = useAuth();
@@ -30,7 +38,6 @@ export default function PharmacyDashboard() {
         try {
             await api.updateOrderStatus(id, status);
             load();
-            Alert.alert('✅ تم', `تم تحديث حالة الطلب`);
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
@@ -39,31 +46,47 @@ export default function PharmacyDashboard() {
         processing: orders.filter((o: any) => o.status === 'processing').length,
         delivered: orders.filter((o: any) => o.status === 'delivered').length,
     };
-
     const inStock = medicines.filter((m: any) => m.stock_status === 'in_stock').length;
-    const outStock = medicines.filter((m: any) => m.stock_status === 'out_of_stock').length;
 
-    const STATUS_COLORS: Record<string, string> = { pending: Colors.warning, processing: Colors.primary, delivered: Colors.confirmed, cancelled: Colors.danger };
-    const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'جاري', delivered: 'تم التوصيل', cancelled: 'ملغى' };
+    const STATS = [
+        { label: 'أدوية متوفرة', val: inStock, icon: 'pill', color: C.success },
+        { label: 'طلبات جديدة', val: counts.pending, icon: 'bell-ring-outline', color: C.primary },
+        { label: 'قيد التوصيل', val: counts.processing, icon: 'truck-fast-outline', color: C.blue },
+        { label: 'تم التسليم', val: counts.delivered, icon: 'check-circle-outline', color: C.success },
+    ];
+
+    const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'قيد التوصيل', delivered: 'تم التوصيل', cancelled: 'ملغى' };
+    const STATUS_COLORS: Record<string, string> = { pending: C.primary, processing: C.blue, delivered: C.success, cancelled: C.danger };
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={logout} style={styles.logoutBtn}><Text style={styles.logoutText}>خروج 🚪</Text></TouchableOpacity>
-                <Text style={styles.greeting}>{user?.name || 'الصيدلية'} 💊</Text>
-                <Text style={styles.sub}>{user?.address}</Text>
-            </View>
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
 
-            {/* Inventory Stats */}
-            <View style={styles.statsRow}>
-                {[
-                    { label: 'أدوية متوفرة', val: inStock, color: Colors.confirmed },
-                    { label: 'غير متوفر', val: outStock, color: Colors.danger },
-                    { label: 'طلبات جديدة', val: counts.pending, color: Colors.warning },
-                    { label: 'قيد التوصيل', val: counts.processing, color: Colors.primary },
-                ].map((s) => (
-                    <View key={s.label} style={[styles.statCard, { borderTopColor: s.color }]}>
+            {/* Gradient Header */}
+            <LinearGradient colors={[C.primaryDark, C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+                <View style={styles.headerBlob1} />
+                <View style={styles.headerBlob2} />
+                <View style={styles.headerTop}>
+                    <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
+                        <MaterialCommunityIcons name="logout" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                    <View style={styles.headerRight}>
+                        <View style={styles.avatarCircle}>
+                            <MaterialCommunityIcons name="store" size={28} color={C.primary} />
+                        </View>
+                    </View>
+                </View>
+                <Text style={styles.greeting}>{user?.name || 'الصيدلية'}</Text>
+                <Text style={styles.sub}>{user?.clinic_address || user?.city || 'سوريا'}</Text>
+            </LinearGradient>
+
+            {/* Stats Grid */}
+            <View style={styles.statsGrid}>
+                {STATS.map((s) => (
+                    <View key={s.label} style={styles.statCard}>
+                        <View style={[styles.statIconCircle, { backgroundColor: s.color + '15' }]}>
+                            <MaterialCommunityIcons name={s.icon as any} size={22} color={s.color} />
+                        </View>
                         <Text style={[styles.statVal, { color: s.color }]}>{s.val}</Text>
                         <Text style={styles.statLabel}>{s.label}</Text>
                     </View>
@@ -72,29 +95,54 @@ export default function PharmacyDashboard() {
 
             {/* Pending Orders */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>الطلبات الجديدة 🛒</Text>
-                {loading ? <ActivityIndicator color={Colors.pharmacy} style={{ marginTop: 20 }} /> :
+                <View style={styles.sectionHeader}>
+                    <MaterialCommunityIcons name="clipboard-list-outline" size={20} color={C.primary} />
+                    <Text style={styles.sectionTitle}>الطلبات الجديدة</Text>
+                </View>
+                {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 20 }} /> :
                     orders.filter((o: any) => o.status === 'pending').length === 0 ? (
-                        <View style={styles.empty}><Text style={styles.emptyIcon}>✅</Text><Text style={styles.emptyText}>لا توجد طلبات جديدة</Text></View>
+                        <View style={styles.empty}>
+                            <View style={styles.emptyIconCircle}>
+                                <MaterialCommunityIcons name="check-circle" size={36} color={C.success} />
+                            </View>
+                            <Text style={styles.emptyText}>لا توجد طلبات جديدة</Text>
+                        </View>
                     ) : orders.filter((o: any) => o.status === 'pending').map((ord: any) => (
                         <View key={ord.id} style={styles.orderCard}>
                             <View style={styles.orderHeader}>
-                                <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[ord.status] || Colors.primary) + '18' }]}>
-                                    <Text style={[styles.statusText, { color: STATUS_COLORS[ord.status] || Colors.primary }]}>{STATUS_LABELS[ord.status]}</Text>
+                                <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[ord.status] || C.primary) + '15' }]}>
+                                    <Text style={[styles.statusText, { color: STATUS_COLORS[ord.status] || C.primary }]}>{STATUS_LABELS[ord.status]}</Text>
                                 </View>
-                                <Text style={styles.patientName}>{ord.patient?.name || 'مريض'}</Text>
+                                <View style={styles.orderNameRow}>
+                                    <Text style={styles.patientName}>{ord.patient?.name || 'مريض'}</Text>
+                                    <MaterialCommunityIcons name="account" size={18} color={C.text} style={{ marginLeft: 4 }} />
+                                </View>
                             </View>
-                            <Text style={styles.orderDate}>📅 {ord.created_at?.split('T')[0]}</Text>
-                            <Text style={styles.orderAddress}>📍 {ord.delivery_address}</Text>
-                            <Text style={styles.orderItems}>{(ord.items || []).length} أصناف</Text>
-                            <Text style={styles.orderTotal}>المجموع: {(ord.total || 0).toLocaleString()} ل.س</Text>
-                            <View style={styles.orderActions}>
-                                <TouchableOpacity style={styles.rejectBtn} onPress={() => updateOrderStatus(ord.id, 'cancelled')}>
-                                    <Text style={styles.rejectBtnText}>رفض ✗</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.acceptBtn} onPress={() => updateOrderStatus(ord.id, 'processing')}>
-                                    <Text style={styles.acceptBtnText}>قبول وبدء التوصيل ✓</Text>
-                                </TouchableOpacity>
+                            {ord.patient?.phone && (
+                                <View style={styles.infoRow}>
+                                    <Text style={styles.infoText}>{ord.patient.phone}</Text>
+                                    <MaterialCommunityIcons name="phone" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
+                                </View>
+                            )}
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoText}>{ord.delivery_address || 'بدون عنوان'}</Text>
+                                <MaterialCommunityIcons name="map-marker" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
+                            </View>
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoText}>{(ord.items || []).length} أصناف</Text>
+                                <MaterialCommunityIcons name="package-variant" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
+                            </View>
+                            <View style={styles.orderFooter}>
+                                <Text style={styles.orderTotal}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                                <View style={styles.orderActions}>
+                                    <TouchableOpacity style={styles.rejectBtn} onPress={() => updateOrderStatus(ord.id, 'cancelled')}>
+                                        <MaterialCommunityIcons name="close" size={18} color={C.danger} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.acceptBtn} onPress={() => updateOrderStatus(ord.id, 'processing')}>
+                                        <MaterialCommunityIcons name="check" size={16} color="#FFF" />
+                                        <Text style={styles.acceptBtnText}>قبول</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
                     ))}
@@ -103,60 +151,73 @@ export default function PharmacyDashboard() {
             {/* Processing Orders */}
             {orders.filter((o: any) => o.status === 'processing').length > 0 && (
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>قيد التوصيل 🚗</Text>
+                    <View style={styles.sectionHeader}>
+                        <MaterialCommunityIcons name="truck-delivery-outline" size={20} color={C.blue} />
+                        <Text style={styles.sectionTitle}>قيد التوصيل</Text>
+                    </View>
                     {orders.filter((o: any) => o.status === 'processing').map((ord: any) => (
                         <View key={ord.id} style={styles.orderCard}>
                             <View style={styles.orderHeader}>
-                                <View style={[styles.statusBadge, { backgroundColor: Colors.primary + '18' }]}>
-                                    <Text style={[styles.statusText, { color: Colors.primary }]}>جاري التوصيل</Text>
+                                <View style={[styles.statusBadge, { backgroundColor: C.blue + '15' }]}>
+                                    <Text style={[styles.statusText, { color: C.blue }]}>جاري التوصيل</Text>
                                 </View>
                                 <Text style={styles.patientName}>{ord.patient?.name || 'مريض'}</Text>
                             </View>
-                            <Text style={styles.orderAddress}>📍 {ord.delivery_address}</Text>
-                            <Text style={styles.orderTotal}>المجموع: {(ord.total || 0).toLocaleString()} ل.س</Text>
-                            <TouchableOpacity style={styles.deliveredBtn} onPress={() => updateOrderStatus(ord.id, 'delivered')}>
-                                <Text style={styles.deliveredBtnText}>✅ تم التوصيل</Text>
-                            </TouchableOpacity>
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoText}>{ord.delivery_address || 'بدون عنوان'}</Text>
+                                <MaterialCommunityIcons name="map-marker" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
+                            </View>
+                            <View style={styles.orderFooter}>
+                                <Text style={styles.orderTotal}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                                <TouchableOpacity style={styles.deliveredBtn} onPress={() => updateOrderStatus(ord.id, 'delivered')}>
+                                    <MaterialCommunityIcons name="check-all" size={16} color={C.success} />
+                                    <Text style={styles.deliveredBtnText}>تم التوصيل</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     ))}
                 </View>
             )}
-
-            <View style={{ height: 20 }} />
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background },
-    header: { backgroundColor: Colors.pharmacy, paddingTop: 52, paddingBottom: 24, paddingHorizontal: 16 },
-    logoutBtn: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10 },
-    logoutText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-    greeting: { fontSize: 22, fontWeight: '800', color: '#fff', textAlign: 'right' },
-    sub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'right', marginTop: 4 },
-    statsRow: { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 14, gap: 8 },
-    statCard: { flex: 1, backgroundColor: Colors.white, borderRadius: BorderRadius.md, padding: 10, alignItems: 'center', borderTopWidth: 3, ...Shadow.small },
-    statVal: { fontSize: 20, fontWeight: '800' },
-    statLabel: { fontSize: 10, color: Colors.textSecondary, marginTop: 2, textAlign: 'center' },
-    section: { paddingHorizontal: 14, paddingBottom: 10 },
-    sectionTitle: { fontSize: 17, fontWeight: '700', color: Colors.text, textAlign: 'right', marginBottom: 10 },
-    empty: { alignItems: 'center', marginTop: 20, marginBottom: 10, backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 20, ...Shadow.small },
-    emptyIcon: { fontSize: 32, marginBottom: 8 },
-    emptyText: { fontSize: 14, color: Colors.textSecondary },
-    orderCard: { backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: 14, marginBottom: 10, ...Shadow.small },
-    orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    patientName: { fontSize: 15, fontWeight: '800', color: Colors.text },
-    statusBadge: { borderRadius: BorderRadius.sm, paddingHorizontal: 8, paddingVertical: 3 },
-    statusText: { fontSize: 11, fontWeight: '700' },
-    orderDate: { fontSize: 12, color: Colors.textMuted, textAlign: 'right', marginBottom: 2 },
-    orderAddress: { fontSize: 12, color: Colors.textSecondary, textAlign: 'right', marginBottom: 2 },
-    orderItems: { fontSize: 12, color: Colors.textSecondary, textAlign: 'right', marginBottom: 2 },
-    orderTotal: { fontSize: 14, fontWeight: '800', color: Colors.pharmacy, textAlign: 'right', marginBottom: 8 },
+    container: { flex: 1, backgroundColor: C.bg },
+    header: { paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 28, paddingHorizontal: 20, overflow: 'hidden' },
+    headerBlob1: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.08)', top: -60, right: -40 },
+    headerBlob2: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.06)', bottom: -30, left: -20 },
+    headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    headerRight: { flexDirection: 'row', alignItems: 'center' },
+    avatarCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+    logoutBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+    greeting: { fontSize: 24, fontFamily: 'Cairo_700Bold', color: '#FFF', textAlign: 'right' },
+    sub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.8)', textAlign: 'right', marginTop: 2 },
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, marginTop: -16, gap: 8 },
+    statCard: { width: (width - 40) / 2, backgroundColor: C.white, borderRadius: 16, padding: 14, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+    statIconCircle: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    statVal: { fontSize: 24, fontFamily: 'Cairo_700Bold' },
+    statLabel: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: C.textSec, marginTop: 2 },
+    section: { paddingHorizontal: 16, marginTop: 20 },
+    sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 12 },
+    sectionTitle: { fontSize: 17, fontFamily: 'Cairo_700Bold', color: C.text },
+    empty: { alignItems: 'center', paddingVertical: 28, backgroundColor: C.white, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
+    emptyIconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.success + '12', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    emptyText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: C.textSec },
+    orderCard: { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+    orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    orderNameRow: { flexDirection: 'row', alignItems: 'center' },
+    patientName: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: C.text },
+    statusBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+    statusText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
+    infoRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 4 },
+    infoText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec },
+    orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
+    orderTotal: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.primary },
     orderActions: { flexDirection: 'row', gap: 8 },
-    rejectBtn: { flex: 1, backgroundColor: Colors.danger + '18', borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    rejectBtnText: { color: Colors.danger, fontWeight: '700', fontSize: 13 },
-    acceptBtn: { flex: 2, backgroundColor: Colors.pharmacy, borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    acceptBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-    deliveredBtn: { backgroundColor: Colors.confirmed + '18', borderRadius: BorderRadius.full, padding: 10, alignItems: 'center' },
-    deliveredBtnText: { color: Colors.confirmed, fontWeight: '700', fontSize: 13 },
+    rejectBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: C.danger + '12', justifyContent: 'center', alignItems: 'center' },
+    acceptBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 },
+    acceptBtnText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
+    deliveredBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.success + '12', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
+    deliveredBtnText: { color: C.success, fontSize: 13, fontFamily: 'Cairo_700Bold' },
 });

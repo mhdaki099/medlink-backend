@@ -70,10 +70,7 @@ export default function DoctorAppointments() {
     const handleRequestHistory = async (patientId: string) => {
         if (!user?.id) return;
         try {
-            await api.post('/patients/history-request', {
-                doctor_id: user.id,
-                patient_id: patientId
-            });
+            await api.requestMedicalHistory(patientId, user.id);
             Alert.alert('✅ تم الارسال', 'تم إرسال طلب الوصول للسجل الطبي للمريض بنجاح');
         } catch (e: any) {
             Alert.alert('خطأ', e.message || 'فشل إرسال الطلب');

@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../src/services/api';
+import { useAuth } from '../../src/contexts/AuthContext';
 import Animated, { 
     FadeInUp, FadeInRight, FadeInDown, FadeOutDown, 
     useAnimatedStyle, withSpring, useSharedValue, withTiming, runOnJS
@@ -24,6 +25,7 @@ const KNOB_SIZE = 50;
 
 export default function PharmaciesScreen() {
     const router = useRouter();
+    const { user } = useAuth();
     const [medicines, setMedicines] = useState<any[]>([]);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
     const [cart, setCart] = useState<any[]>([]);
@@ -35,7 +37,7 @@ export default function PharmaciesScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [showCart, setShowCart] = useState(false);
     
-    const patientId = "p1"; // Mock patient ID for now
+    const patientId = user?.id || "guest"; // Use real user ID
 
     // Slider Shared Values
     const sliderPos = useSharedValue(0);

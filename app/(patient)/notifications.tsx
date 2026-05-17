@@ -9,6 +9,14 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 
+const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
+    prescription: { icon: 'pill', color: '#1E88E5', bg: '#E0F2FE' },
+    appointment: { icon: 'calendar-check', color: '#43A047', bg: '#F0FDF4' },
+    lab_result: { icon: 'flask-outline', color: '#8E24AA', bg: '#F3E8FF' },
+    order: { icon: 'package-variant', color: '#E67E22', bg: '#FEF3C7' },
+    default: { icon: 'bell-outline', color: '#1E88E5', bg: '#EFF6FF' },
+};
+
 export default function Notifications() {
     const { user } = useAuth();
     const router = useRouter();
@@ -29,23 +37,35 @@ export default function Notifications() {
 
     useEffect(() => { loadNotifs(); }, [user]);
 
-    const renderItem = ({ item }: { item: any }) => (
-        <View style={[styles.card, !item.is_read && styles.unreadCard]}>
-            <View style={[styles.iconBox, { backgroundColor: item.type === 'prescription' ? '#E0F2FE' : '#F0FDF4' }]}>
-                <MaterialCommunityIcons 
-                    name={item.type === 'prescription' ? 'pill' : 'bell-outline'} 
-                    size={22} 
-                    color={item.type === 'prescription' ? '#0284C7' : '#16A34A'} 
-                />
-            </View>
-            <View style={styles.info}>
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.msg}>{item.message}</Text>
-                <Text style={styles.time}>{item.created_at.split('T')[0]}</Text>
-            </View>
-            {!item.is_read && <View style={styles.dot} />}
-        </View>
-    );
+    const markRead = async (id: string) => {
+        try {
+            await api.markNotificationRead(id);
+            setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+        } catch (e) { console.warn(e); }
+    };
+
+    const unreadCount = notifs.filter(n => !n.is_read).length;
+
+    const renderItem = ({ item }: { item: any }) => {
+        const cfg = TYPE_CONFIG[item.type] || TYPE_CONFIG.default;
+        return (
+            <TouchableOpacity 
+                style={[styles.card, !item.is_read && styles.unreadCard]} 
+                onPress={() => !item.is_read && markRead(item.id)}
+                activeOpacity={0.85}
+            >
+                <View style={[styles.iconBox, { backgroundColor: cfg.bg }]}>
+                    <MaterialCommunityIcons name={cfg.icon as any} size={22} color={cfg.color} />
+                </View>
+                <View style={styles.info}>
+                    <Text style={styles.title}>{item.title}</Text>
+                    <Text style={styles.msg} numberOfLines={2}>{item.message}</Text>
+                    <Text style={styles.time}>{item.created_at?.split('T')[0]}</Text>
+                </View>
+                {!item.is_read && <View style={[styles.dot, { backgroundColor: cfg.color }]} />}
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <View style={styles.container}>
@@ -54,7 +74,12 @@ export default function Notifications() {
                     <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                         <Ionicons name="chevron-forward" size={24} color="#FFF" />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>التنبيهات</Text>
+                    <View style={{ alignItems: 'center' }}>
+                        <Text style={styles.headerTitle}>التنبيهات</Text>
+                        {unreadCount > 0 && (
+                            <Text style={styles.headerSub}>{unreadCount} غير مقروء</Text>
+                        )}
+                    </View>
                     <View style={{ width: 40 }} />
                 </View>
             </LinearGradient>
@@ -67,6 +92,8 @@ export default function Notifications() {
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
                     contentContainerStyle={styles.list}
+                    onRefresh={loadNotifs}
+                    refreshing={loading}
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             <MaterialCommunityIcons name="bell-off-outline" size={60} color="#E2E8F0" />
@@ -84,16 +111,17 @@ const styles = StyleSheet.create({
     header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 30, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
     headerRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
     headerTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#FFF' },
+    headerSub: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.85)', marginTop: 2 },
     backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-    list: { padding: 20 },
+    list: { padding: 20, paddingBottom: 100 },
     card: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, marginBottom: 12, flexDirection: 'row-reverse', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-    unreadCard: { borderWidth: 1, borderColor: '#E0F2FE', backgroundColor: '#F8FBFF' },
-    iconBox: { width: 45, height: 45, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
+    unreadCard: { borderWidth: 1.5, borderColor: '#BFDBFE', backgroundColor: '#F8FBFF' },
+    iconBox: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
     info: { flex: 1, alignItems: 'flex-end' },
     title: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
-    msg: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#64748B', marginTop: 4, textAlign: 'right' },
+    msg: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#64748B', marginTop: 4, textAlign: 'right', lineHeight: 18 },
     time: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#94A3B8', marginTop: 8 },
-    dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1E88E5', marginRight: 10 },
+    dot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
     empty: { alignItems: 'center', marginTop: 100 },
     emptyTxt: { fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginTop: 15 }
 });
