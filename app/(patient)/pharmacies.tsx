@@ -245,6 +245,7 @@ export default function PharmaciesScreen() {
                                     <TouchableOpacity
                                         style={styles.medCard}
                                         activeOpacity={1}
+                                        onPress={() => router.push(`/(patient)/medicines/${med.id}` as any)}
                                     >
                                         <View style={styles.cardTop}>
                                             <View style={styles.imageContainer}>

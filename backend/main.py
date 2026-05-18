@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from routers import auth, patients, doctors, pharmacies, labs, warehouses, admin, appointments, orders, records, history_requests, prescriptions
+from routers import drugs
 from db import init_db
 
 
@@ -50,6 +51,7 @@ app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
 app.include_router(records.router, prefix="/api/records", tags=["Medical Records"])
 app.include_router(history_requests.router, prefix="/api/history-requests", tags=["Medical History Requests"])
 app.include_router(prescriptions.router, prefix="/api/prescriptions", tags=["Prescriptions"])
+app.include_router(drugs.router, prefix="/api/drugs", tags=["Drug Catalog"])
 
 # ── Static files ──────────────────────────────────────────────────────────────
 assets_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))

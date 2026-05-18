@@ -34,10 +34,12 @@ export default function DoctorProfile() {
         price_per_session: user?.price_per_session || 0,
         experience_years: user?.experience_years || 0,
         phone: user?.phone || '',
+        available_hours: user?.available_hours || '',
+        working_hours: user?.working_hours || { morning: '', evening: '', off_days: [], slots: [] },
     });
 
-    // Secretary State
-    const [secData, setSecData] = useState({ name: '', email: '', password: '', phone: '' });
+    const [showWorkingHours, setShowWorkingHours] = useState(false);
+    const [analytics, setAnalytics] = useState<any>(null);
 
     const loadSecretaries = async () => {
         if (!user?.id) return;
@@ -52,8 +54,14 @@ export default function DoctorProfile() {
         }
     };
 
+    // Secretary State
+    const [secData, setSecData] = useState({ name: '', email: '', password: '', phone: '' });
+
     React.useEffect(() => {
         loadSecretaries();
+        if (user?.id) {
+            api.getDoctorAnalytics(user.id).then(setAnalytics).catch(() => {});
+        }
     }, [user?.id]);
 
 
@@ -188,6 +196,45 @@ export default function DoctorProfile() {
                         </View>
                     ))}
 
+                    {/* Working Hours Card */}
+                    {renderInfoCard('ساعات العمل', 'clock-time-four-outline', (
+                        <View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>الفترة الصباحية</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={profile.working_hours?.morning || ''}
+                                    onChangeText={(t) => setProfile({ ...profile, working_hours: { ...profile.working_hours, morning: t } })}
+                                    placeholder="09:00 - 13:00"
+                                    textAlign="right"
+                                />
+                            </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>الفترة المسائية</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={profile.working_hours?.evening || ''}
+                                    onChangeText={(t) => setProfile({ ...profile, working_hours: { ...profile.working_hours, evening: t } })}
+                                    placeholder="17:00 - 21:00"
+                                    textAlign="right"
+                                />
+                            </View>
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>المواعيد المتاحة (مفصولة بفاصلة)</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    value={(profile.working_hours?.slots || []).join(', ')}
+                                    onChangeText={(t) => setProfile({ ...profile, working_hours: { ...profile.working_hours, slots: t.split(',').map((s: string) => s.trim()).filter(Boolean) } })}
+                                    placeholder="09:00 AM, 09:30 AM, 10:00 AM"
+                                    textAlign="right"
+                                />
+                            </View>
+                            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile}>
+                                <Text style={styles.saveBtnTxt}>حفظ ساعات العمل</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+
                     {/* Secretary Management */}
                     {renderInfoCard('إدارة السكرتارية', 'account-tie', (
                         <View style={styles.secPlaceholder}>
@@ -218,16 +265,20 @@ export default function DoctorProfile() {
                     {/* Stats Summary */}
                     <View style={styles.statsRow}>
                         <View style={styles.miniStat}>
-                            <Text style={styles.miniVal}>{user.rating}</Text>
+                            <Text style={styles.miniVal}>{analytics?.overall_rating || user.rating || '—'}</Text>
                             <Text style={styles.miniLab}>التقييم</Text>
                         </View>
                         <View style={styles.miniStat}>
-                            <Text style={styles.miniVal}>{user.total_reviews}</Text>
+                            <Text style={styles.miniVal}>{analytics?.total_reviews || user.total_reviews || 0}</Text>
                             <Text style={styles.miniLab}>مراجعة</Text>
                         </View>
                         <View style={styles.miniStat}>
-                            <Text style={styles.miniVal}>24/7</Text>
-                            <Text style={styles.miniLab}>الطوارئ</Text>
+                            <Text style={styles.miniVal}>{analytics?.favorites_count || 0}</Text>
+                            <Text style={styles.miniLab}>مفضلة</Text>
+                        </View>
+                        <View style={styles.miniStat}>
+                            <Text style={styles.miniVal}>{analytics?.monthly_bookings || 0}</Text>
+                            <Text style={styles.miniLab}>هذا الشهر</Text>
                         </View>
                     </View>
                 </View>

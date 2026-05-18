@@ -243,6 +243,16 @@ export default function DoctorAppointments() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Manual Appointment FAB */}
+            <TouchableOpacity
+                style={styles.fab}
+                onPress={() => router.push('/(doctor)/new-appointment' as any)}
+            >
+                <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.fabGrad}>
+                    <MaterialCommunityIcons name="calendar-plus" size={26} color="#FFF" />
+                </LinearGradient>
+            </TouchableOpacity>
         </View>
     );
 }
@@ -279,4 +289,6 @@ const styles = StyleSheet.create({
     cancelBtnText: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#64748B' },
     empty: { alignItems: 'center', marginTop: 100 },
     emptyText: { fontSize: 15, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginTop: 15 },
+    fab: { position: 'absolute', bottom: 100, left: 20, zIndex: 100 },
+    fabGrad: { width: 58, height: 58, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#1E88E5', shadowOpacity: 0.4, shadowRadius: 10 },
 });

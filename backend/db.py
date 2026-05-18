@@ -19,7 +19,7 @@ def init_db():
         WarehouseInventory, Appointment, Order, WarehouseOrder, LabBooking,
         LabResult, MedicalRecord, AuditLog, Review, Prescription, Payment,
         Favorite, FavoriteMedicine, CartItem, PatientNote, Notification,
-        FamilyLink, ServiceBooking,
+        FamilyLink, ServiceBooking, DrugCatalog,
     )
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
@@ -31,23 +31,46 @@ def ensure_sqlite_columns():
         "users": {
             "drug_allergies": "JSON",
             "working_hours": "JSON",
+            "home_service_fee": "FLOAT DEFAULT 0",
+            "has_home_service": "BOOLEAN DEFAULT 0",
+            "address": "TEXT",
         },
         "medicines": {
             "strength": "VARCHAR",
             "barcode": "VARCHAR",
             "warnings": "TEXT",
+            "active_ingredients": "TEXT",
+            "usage_info": "TEXT",
+            "side_effects": "TEXT",
+            "dosage": "VARCHAR",
         },
         "warehouse_inventory": {
             "strength": "VARCHAR",
             "barcode": "VARCHAR",
         },
+        "appointments": {
+            "rejection_note": "TEXT",
+            "reschedule_requested": "BOOLEAN DEFAULT 0",
+            "cancel_requested": "BOOLEAN DEFAULT 0",
+            "requested_date": "TEXT",
+            "requested_time": "TEXT",
+        },
+        "medical_records": {
+            "record_owner": "TEXT DEFAULT 'self'",
+        },
     }
     with engine.begin() as conn:
         for table, columns in migrations.items():
-            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            try:
+                existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            except Exception:
+                continue
             for column, ddl_type in columns.items():
                 if column not in existing:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
+                    except Exception:
+                        pass
 
 
 def get_db():

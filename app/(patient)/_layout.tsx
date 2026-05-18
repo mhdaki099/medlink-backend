@@ -158,6 +158,8 @@ export default function PatientLayout() {
       <Tabs.Screen name="records" options={{ href: null }} />
       <Tabs.Screen name="appointments" options={{ href: null }} />
       <Tabs.Screen name="history" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="radiology" options={{ href: null }} />
     </Tabs>
   );
 }

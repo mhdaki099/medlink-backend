@@ -139,6 +139,7 @@ def approve_registration(request_id: str, current_user: dict = Depends(require_r
         role=req.role, name=f"{data.get('first_name', '')} {data.get('last_name', '')}".strip(),
         email=req.email, password=hash_password(data.get("password", "123456")),
         phone=data.get('phone', ''), city=data.get('city', ''), photo=data.get('photo', ''),
+        address=data.get('address', ''),
         clinic_name=data.get('clinic_name') if req.role == 'doctor' else None,
         clinic_address=data.get('clinic_address') if req.role == 'doctor' else None,
         price_per_session=data.get('price_per_session') if req.role == 'doctor' else data.get('home_service_fee'),
@@ -147,6 +148,8 @@ def approve_registration(request_id: str, current_user: dict = Depends(require_r
         working_hours=data.get('working_hours') if req.role == 'doctor' else None,
         specialization=data.get('specialization') if req.role == 'doctor' else None,
         open_hours=data.get('open_hours') if req.role in ('pharmacy', 'lab', 'radiology', 'warehouse') else None,
+        home_service_fee=float(data.get('home_service_fee', 0) or 0) if req.role in ('lab', 'radiology') else None,
+        has_home_service=bool(data.get('has_home_service', False)) if req.role in ('lab', 'radiology') else False,
         services=data.get('services') if req.role in ('lab', 'radiology') else None,
         is_active=True, verified=True, created_at=datetime.now(timezone.utc).isoformat()
     )

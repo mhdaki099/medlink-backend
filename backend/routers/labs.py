@@ -22,6 +22,32 @@ def list_radiology_centers(db: Session = Depends(get_db)):
     return [model_to_dict(c, ["password"]) for c in centers]
 
 
+@router.get("/service-bookings")
+def list_service_bookings(
+    patient_id: str = None,
+    provider_id: str = None,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from fastapi import Query as Q
+    query = db.query(ServiceBooking)
+    if patient_id:
+        query = query.filter(ServiceBooking.patient_id == patient_id)
+    if provider_id:
+        query = query.filter(ServiceBooking.provider_id == provider_id)
+    results = []
+    for b in query.order_by(ServiceBooking.created_at.desc()).all():
+        bdict = model_to_dict(b)
+        patient = db.query(User).filter(User.id == b.patient_id).first()
+        provider = db.query(User).filter(User.id == b.provider_id).first()
+        if patient:
+            bdict["patient"] = model_to_dict(patient, ["password"])
+        if provider:
+            bdict["provider"] = model_to_dict(provider, ["password"])
+        results.append(bdict)
+    return results
+
+
 @router.post("/service-bookings")
 def create_service_booking(data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     provider_role = data.get("provider_role", "lab")

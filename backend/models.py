@@ -48,6 +48,8 @@ class User(Base):
     # Pharmacy / Lab / Warehouse specific
     license_no = Column(String, nullable=True)
     open_hours = Column(String, nullable=True)
+    home_service_fee = Column(Float, nullable=True, default=0)
+    has_home_service = Column(Boolean, default=False)
 
     # General / Corporate
     services = Column(JSON, nullable=True) # List of services offered
@@ -317,3 +319,20 @@ class Notification(Base):
     type = Column(String) # e.g. "prescription", "appointment"
     is_read = Column(Boolean, default=False)
     created_at = Column(String)
+
+
+class DrugCatalog(Base):
+    __tablename__ = "drug_catalog"
+    id = Column(String, primary_key=True, index=True)
+    trade_name = Column(String, index=True)
+    trade_name_en = Column(String, nullable=True)
+    active_ingredient = Column(String, nullable=True)
+    strength = Column(String, nullable=True)
+    dosage_form = Column(String, nullable=True)  # tablet, syrup, injection, etc.
+    manufacturer = Column(String, nullable=True)
+    barcode = Column(String, nullable=True)
+    category = Column(String, nullable=True)
+    usage_info = Column(Text, nullable=True)
+    side_effects = Column(Text, nullable=True)
+    warnings = Column(Text, nullable=True)
+    requires_prescription = Column(Boolean, default=False)

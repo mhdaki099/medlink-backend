@@ -51,6 +51,14 @@ const SERVICES = [
         icon: 'flask-outline',
         route: '/(patient)/labs',
         delay: 900
+    },
+    {
+        id: 'radiology',
+        title: 'مراكز الأشعة',
+        sub: 'حجز أشعة ورنين مغناطيسي',
+        icon: 'radiology-box-outline',
+        route: '/(patient)/radiology',
+        delay: 1050
     }
 ];
 

@@ -329,6 +329,21 @@ class ApiClient {
         return this.put<any>(`/patients/notifications/${id}/read`, {});
     }
 
+    // ── Drug Catalog ──────────────────────────────────────────────────────────
+    searchDrugs(q: string) {
+        return this.get<any[]>(`/drugs/search?q=${encodeURIComponent(q)}`);
+    }
+    getDrugCategories() { return this.get<string[]>('/drugs/categories'); }
+    getDrug(id: string) { return this.get<any>(`/drugs/${id}`); }
+
+    // ── Lab/Radiology Service Bookings ────────────────────────────────────────
+    getServiceBookings(params: { patient_id?: string; provider_id?: string } = {}) {
+        const q = new URLSearchParams(params as any).toString();
+        return this.get<any[]>(`/labs/service-bookings${q ? '?' + q : ''}`);
+    }
+    createServiceBooking(data: any) { return this.post<any>('/labs/service-bookings', data); }
+    getRadiologyCenters() { return this.get<any[]>('/labs/radiology'); }
+
     // ── Admin ─────────────────────────────────────────────────────────────────
     getAdminDashboard() { return this.get<any>('/admin/dashboard'); }
     getAllUsers(role?: string) {

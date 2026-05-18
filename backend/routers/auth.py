@@ -38,6 +38,7 @@ class RegisterRequest(BaseModel):
     drug_allergies: list[str] = []
     open_hours: str = ""
     home_service_fee: float = 0.0
+    has_home_service: bool = False
     documents: list[str] = []
 
 

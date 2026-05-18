@@ -48,7 +48,8 @@ export default function RegisterScreen() {
     const [form, setForm] = useState({
         first_name: '', last_name: '', email: '', password: '', phone: '', city: '', address: '', role: 'patient',
         clinic_name: '', clinic_address: '', price_per_session: 0, experience_years: 0,
-        available_hours: '', specialization: '', open_hours: '', drug_allergies_text: ''
+        available_hours: '', specialization: '', open_hours: '', drug_allergies_text: '',
+        home_service_fee: 0, has_home_service: false,
     });
 
     const [photo, setPhoto] = useState<string | null>(null);
@@ -401,6 +402,22 @@ export default function RegisterScreen() {
                                     onChangeText={v => update('open_hours', v)}
                                 />
                             </View>
+                        )}
+
+                        {['lab', 'radiology'].includes(form.role) && (
+                            <>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialCommunityIcons name="home-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="رسوم الخدمة المنزلية (0 إذا غير متاحة)"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={(form as any).home_service_fee?.toString() || '0'}
+                                        onChangeText={v => update('home_service_fee', parseFloat(v) || 0)}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+                            </>
                         )}
 
                         <TouchableOpacity

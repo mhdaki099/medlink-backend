@@ -16,18 +16,21 @@ export default function PharmacyDashboard() {
     const { user, logout } = useAuth();
     const [orders, setOrders] = useState<any[]>([]);
     const [medicines, setMedicines] = useState<any[]>([]);
+    const [analytics, setAnalytics] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
     const load = async () => {
         if (!user?.id) return;
         try {
-            const [ords, meds] = await Promise.all([
+            const [ords, meds, anal] = await Promise.all([
                 api.getOrders({ pharmacy_id: user.id }),
                 api.getPharmacyMedicines(user.id),
+                api.getPharmacyAnalytics(user.id).catch(() => null),
             ]);
             setOrders(ords);
             setMedicines(meds);
+            setAnalytics(anal);
         } catch (e) { console.warn(e); }
         finally { setLoading(false); setRefreshing(false); }
     };
@@ -53,6 +56,10 @@ export default function PharmacyDashboard() {
         { label: 'طلبات جديدة', val: counts.pending, icon: 'bell-ring-outline', color: C.primary },
         { label: 'قيد التجهيز', val: counts.processing, icon: 'package-variant', color: C.blue },
         { label: 'تم التسليم', val: counts.delivered, icon: 'check-circle-outline', color: C.success },
+        { label: 'المفضلة', val: analytics?.favorites_count || 0, icon: 'heart-outline', color: '#E91E63' },
+        { label: 'هذا الشهر', val: analytics?.monthly_bookings || 0, icon: 'calendar-month', color: C.blue },
+        { label: 'التقييم', val: analytics?.overall_rating || '—', icon: 'star-outline', color: '#F59E0B' },
+        { label: 'العملاء', val: analytics?.active_customers || 0, icon: 'account-group-outline', color: C.accent },
     ];
 
     const STATUS_LABELS: Record<string, string> = { pending: 'جديد', pending_confirmation: 'جديد', processing: 'قيد التجهيز', preparing: 'قيد التجهيز', delivered: 'تم التسليم', cancelled: 'ملغى' };
