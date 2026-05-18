@@ -30,6 +30,7 @@ const ROLES = [
     { id: 'doctor', label: 'طبيب', icon: 'stethoscope' },
     { id: 'pharmacy', label: 'صيدلية', icon: 'pill' },
     { id: 'lab', label: 'مختبر', icon: 'flask-outline' },
+    { id: 'radiology', label: 'مركز أشعة', icon: 'radiology-box-outline' },
     { id: 'warehouse', label: 'مستودع', icon: 'truck-fast-outline' },
 ] as const;
 
@@ -46,7 +47,8 @@ export default function RegisterScreen() {
 
     const [form, setForm] = useState({
         first_name: '', last_name: '', email: '', password: '', phone: '', city: '', address: '', role: 'patient',
-        clinic_name: '', clinic_address: '', price_per_session: 0, available_hours: '', specialization: ''
+        clinic_name: '', clinic_address: '', price_per_session: 0, experience_years: 0,
+        available_hours: '', specialization: '', open_hours: '', drug_allergies_text: ''
     });
 
     const [photo, setPhoto] = useState<string | null>(null);
@@ -100,8 +102,8 @@ export default function RegisterScreen() {
             return;
         }
 
-        if (form.role === 'doctor' && !form.specialization) {
-            Alert.alert('تنبيه', 'يرجى اختيار التخصص الطبي');
+        if (form.role === 'doctor' && (!form.specialization || !form.available_hours || !form.price_per_session)) {
+            Alert.alert('تنبيه', 'يرجى إدخال التخصص، ساعات العمل، وسعر الكشفية');
             return;
         }
 
@@ -126,6 +128,7 @@ export default function RegisterScreen() {
             // 3. Register with full data
             const payload = {
                 ...form,
+                drug_allergies: form.drug_allergies_text.split(',').map((x: string) => x.trim()).filter(Boolean),
                 photo: photoUrl,
                 documents: documentUrls
             };
@@ -350,7 +353,54 @@ export default function RegisterScreen() {
                                         keyboardType="numeric"
                                     />
                                 </View>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialCommunityIcons name="briefcase-clock-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="سنوات الخبرة"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={form.experience_years.toString()}
+                                        onChangeText={v => update('experience_years', parseInt(v) || 0)}
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+                                <View style={styles.inputWrapper}>
+                                    <MaterialCommunityIcons name="clock-time-four-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="ساعات العمل مثال: 09:00 AM, 10:00 AM"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={form.available_hours}
+                                        onChangeText={v => update('available_hours', v)}
+                                    />
+                                </View>
                             </>
+                        )}
+
+                        {form.role === 'patient' && (
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="حساسية الأدوية (اختياري)"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={form.drug_allergies_text}
+                                    onChangeText={v => update('drug_allergies_text', v)}
+                                />
+                            </View>
+                        )}
+
+                        {['pharmacy', 'lab', 'radiology', 'warehouse'].includes(form.role) && (
+                            <View style={styles.inputWrapper}>
+                                <MaterialCommunityIcons name="clock-outline" size={20} color="#9CA3AF" style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="ساعات العمل"
+                                    placeholderTextColor="#9CA3AF"
+                                    value={form.open_hours}
+                                    onChangeText={v => update('open_hours', v)}
+                                />
+                            </View>
                         )}
 
                         <TouchableOpacity

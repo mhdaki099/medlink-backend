@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 import uuid
+from datetime import datetime, timezone
 
 from db import get_db
-from models import User, LabTest, LabBooking, LabResult
+from models import User, LabTest, LabBooking, LabResult, ServiceBooking, Notification
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict
 
@@ -13,6 +14,42 @@ router = APIRouter()
 def list_labs(db: Session = Depends(get_db)):
     labs = db.query(User).filter(User.role == "lab").all()
     return [model_to_dict(l, ["password"]) for l in labs]
+
+
+@router.get("/radiology")
+def list_radiology_centers(db: Session = Depends(get_db)):
+    centers = db.query(User).filter(User.role == "radiology").all()
+    return [model_to_dict(c, ["password"]) for c in centers]
+
+
+@router.post("/service-bookings")
+def create_service_booking(data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    provider_role = data.get("provider_role", "lab")
+    if provider_role not in {"lab", "radiology"}:
+        raise HTTPException(400, "نوع الخدمة غير مدعوم")
+    visit_type = data.get("visit_type", "visit_center")
+    if visit_type not in {"visit_center", "home_service"}:
+        raise HTTPException(400, "نوع الزيارة غير صحيح")
+    now = datetime.now(timezone.utc).isoformat()
+    booking = ServiceBooking(
+        id=f"sb_{uuid.uuid4().hex[:8]}",
+        patient_id=data.get("patient_id"),
+        provider_id=data.get("provider_id"),
+        provider_role=provider_role,
+        service_id=data.get("service_id"),
+        service_name=data.get("service_name"),
+        date=data.get("date"),
+        time=data.get("time"),
+        visit_type=visit_type,
+        home_service_fee=float(data.get("home_service_fee", 0) or 0),
+        status="booked",
+        created_at=now,
+    )
+    db.add(booking)
+    db.add(Notification(id=f"ntf_{uuid.uuid4().hex[:8]}", user_id=booking.provider_id, title="حجز خدمة جديد", message=f"تم إنشاء حجز {booking.service_name or ''} بتاريخ {booking.date} الساعة {booking.time}", type="service_booking", created_at=now))
+    db.commit()
+    db.refresh(booking)
+    return model_to_dict(booking)
 
 @router.get("/tests/all")
 def all_tests(db: Session = Depends(get_db)):

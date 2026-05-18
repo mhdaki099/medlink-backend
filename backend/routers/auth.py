@@ -31,8 +31,13 @@ class RegisterRequest(BaseModel):
     clinic_name: str = ""
     clinic_address: str = ""
     price_per_session: float = 0.0
+    experience_years: int = 0
     available_hours: str = ""
+    working_hours: dict | None = None
     specialization: str = ""
+    drug_allergies: list[str] = []
+    open_hours: str = ""
+    home_service_fee: float = 0.0
     documents: list[str] = []
 
 
@@ -54,6 +59,15 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    role_aliases = {
+        "laboratory": "lab",
+        "radiology_center": "radiology",
+        "radiology center": "radiology",
+    }
+    req.role = role_aliases.get(req.role, req.role)
+    if req.role not in {"patient", "doctor", "pharmacy", "lab", "radiology", "warehouse"}:
+        raise HTTPException(status_code=400, detail="نوع الحساب غير مدعوم")
+
     # Check email in users
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="البريد الإلكتروني مستخدم مسبقاً")
@@ -67,9 +81,14 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         if db.query(User).filter(User.phone == req.phone).first():
             raise HTTPException(status_code=400, detail="رقم الهاتف مستخدم مسبقاً")
     
-    # Validate doctor registration requires specialization
-    if req.role == 'doctor' and not req.specialization:
-        raise HTTPException(status_code=400, detail="يرجى اختيار التخصص الطبي")
+    # Validate doctor registration requires the medical profile fields shown in the UI.
+    if req.role == 'doctor':
+        if not req.specialization:
+            raise HTTPException(status_code=400, detail="يرجى اختيار التخصص الطبي")
+        if req.price_per_session <= 0:
+            raise HTTPException(status_code=400, detail="يرجى إدخال كشفية الاستشارة")
+        if not (req.available_hours or req.working_hours):
+            raise HTTPException(status_code=400, detail="يرجى إدخال ساعات العمل")
     
     # If Patient, create immediately
     if req.role == 'patient':
@@ -84,6 +103,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             phone=req.phone,
             city=req.city,
             address=req.address,
+            drug_allergies=req.drug_allergies,
             is_active=True,
             verified=False,
             created_at=datetime.now(timezone.utc).isoformat()

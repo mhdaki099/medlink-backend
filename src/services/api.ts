@@ -142,6 +142,7 @@ class ApiClient {
     // ── Pharmacies & Medicines ───────────────────────────────────────────────
     getPharmacies() { return this.get<any[]>('/pharmacies'); }
     getPharmacy(id: string) { return this.get<any>(`/pharmacies/${id}`); }
+    getPharmacyAnalytics(id: string) { return this.get<any>(`/pharmacies/${id}/analytics`); }
     getPharmacyMedicines(id: string, category?: string) {
         const q = category ? `?category=${encodeURIComponent(category)}` : '';
         return this.get<any[]>(`/pharmacies/${id}/medicines${q}`);
@@ -153,6 +154,19 @@ class ApiClient {
     addMedicine(data: any) { return this.post<any>('/pharmacies/medicines', data); }
     updateMedicine(id: string, data: any) { return this.put<any>(`/pharmacies/medicines/${id}`, data); }
     deleteMedicine(id: string) { return this.delete<any>(`/pharmacies/medicines/${id}`); }
+    async uploadMedicineExcel(pharmacyId: string, asset: { uri: string; name?: string }) {
+        const formData = new FormData();
+        formData.append('file', {
+            uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''),
+            name: asset.name || 'medicines.xlsx',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        } as any);
+        const headers: Record<string, string> = { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true', 'ngrok-skip-browser-warning': 'true' };
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const res = await fetch(`${BASE_URL}/pharmacies/medicines/upload-excel?pharmacy_id=${pharmacyId}`, { method: 'POST', headers, body: formData });
+        if (!res.ok) throw new Error(await res.text() || 'Upload failed');
+        return res.json();
+    }
 
     toggleMedicineFavorite(id: string, patientId: string) {
         return this.post<{ is_favorite: boolean }>(`/pharmacies/medicines/${id}/favorite?patient_id=${patientId}`, {});
@@ -188,6 +202,21 @@ class ApiClient {
     // ── Warehouses ───────────────────────────────────────────────────────────
     getWarehouses() { return this.get<any[]>('/warehouses'); }
     getWarehouseInventory(id: string) { return this.get<any[]>(`/warehouses/${id}/inventory`); }
+    addWarehouseInventory(id: string, data: any) { return this.post<any>(`/warehouses/${id}/inventory`, data); }
+    updateWarehouseInventoryItem(id: string, data: any) { return this.put<any>(`/warehouses/inventory/${id}`, data); }
+    async uploadWarehouseExcel(warehouseId: string, asset: { uri: string; name?: string }) {
+        const formData = new FormData();
+        formData.append('file', {
+            uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''),
+            name: asset.name || 'inventory.xlsx',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        } as any);
+        const headers: Record<string, string> = { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true', 'ngrok-skip-browser-warning': 'true' };
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const res = await fetch(`${BASE_URL}/warehouses/${warehouseId}/inventory/upload-excel`, { method: 'POST', headers, body: formData });
+        if (!res.ok) throw new Error(await res.text() || 'Upload failed');
+        return res.json();
+    }
     getWarehouseOrders(id: string) { return this.get<any[]>(`/warehouses/${id}/orders`); }
     updateWarehouseOrderStatus(id: string, status: string, deliveryTime?: string) {
         return this.put<any>(`/warehouses/orders/${id}/status`, { status, delivery_time: deliveryTime });
@@ -200,6 +229,7 @@ class ApiClient {
         return this.get<any[]>(`/appointments${q ? '?' + q : ''}`);
     }
     createAppointment(data: any) { return this.post<any>('/appointments', data); }
+    createManualAppointment(data: any) { return this.post<any>('/appointments/manual', data); }
     async updateAppointmentStatus(id: string, status: string, date?: string, time?: string, rejection_note?: string) {
         return this.put(`/appointments/${id}/status`, { status, date, time, rejection_note });
     }
@@ -268,6 +298,15 @@ class ApiClient {
     }
     getPatientHistoryRequests(patientId: string) {
         return this.get<any[]>(`/history-requests/patient/${patientId}`);
+    }
+    getFamilyLinks(patientId: string) {
+        return this.get<any[]>(`/patients/${patientId}/family`);
+    }
+    addFamilyLink(patientId: string, data: any) {
+        return this.post<any>(`/patients/${patientId}/family`, data);
+    }
+    updateFamilyConsent(linkId: string, status: 'approved' | 'rejected') {
+        return this.put<any>(`/patients/family/${linkId}/consent`, { status });
     }
     getDoctorHistoryRequests(doctorId: string) {
         return this.get<any[]>(`/history-requests/doctor/${doctorId}`);

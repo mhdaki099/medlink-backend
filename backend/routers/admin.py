@@ -16,7 +16,7 @@ def get_dashboard(current_user: dict = Depends(require_role("admin")), db: Sessi
     patients_count = db.query(User).filter(User.role == "patient").count()
     doctors_count = db.query(User).filter(User.role == "doctor").count()
     pharmacies_count = db.query(User).filter(User.role == "pharmacy").count()
-    labs_count = db.query(User).filter(User.role == "lab").count()
+    labs_count = db.query(User).filter(User.role.in_(["lab", "radiology"])).count()
     warehouses_count = db.query(User).filter(User.role == "warehouse").count()
     total_users = db.query(User).count()
     total_apts = db.query(Appointment).count()
@@ -141,9 +141,13 @@ def approve_registration(request_id: str, current_user: dict = Depends(require_r
         phone=data.get('phone', ''), city=data.get('city', ''), photo=data.get('photo', ''),
         clinic_name=data.get('clinic_name') if req.role == 'doctor' else None,
         clinic_address=data.get('clinic_address') if req.role == 'doctor' else None,
-        price_per_session=data.get('price_per_session') if req.role == 'doctor' else None,
+        price_per_session=data.get('price_per_session') if req.role == 'doctor' else data.get('home_service_fee'),
+        experience_years=data.get('experience_years') if req.role == 'doctor' else None,
         available_hours=data.get('available_hours') if req.role == 'doctor' else None,
+        working_hours=data.get('working_hours') if req.role == 'doctor' else None,
         specialization=data.get('specialization') if req.role == 'doctor' else None,
+        open_hours=data.get('open_hours') if req.role in ('pharmacy', 'lab', 'radiology', 'warehouse') else None,
+        services=data.get('services') if req.role in ('lab', 'radiology') else None,
         is_active=True, verified=True, created_at=datetime.now(timezone.utc).isoformat()
     )
     db.add(new_user)

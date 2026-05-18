@@ -22,9 +22,9 @@ export const Colors = {
   // Role colors
   patient: '#1E88E5',
   doctor: '#43A047',
-  pharmacy: '#FF9500',
+  pharmacy: '#1E88E5',
   lab: '#AF52DE',
-  warehouse: '#FF6B35',
+  warehouse: '#43A047',
   admin: '#0D1B2A',
 
   // Status

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Alert, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Alert, Dimensions, ActivityIndicator, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -16,10 +16,14 @@ export default function PatientProfile() {
     const [lastName, setLastName] = useState(splitName.slice(1).join(' ') || '');
     const [email, setEmail] = useState(user?.email || '');
     const [phone, setPhone] = useState(user?.phone || '');
+    const [drugAllergies, setDrugAllergies] = useState((user?.drug_allergies || []).join(', '));
     
     const [isSaving, setIsSaving] = useState(false);
     const [requests, setRequests] = useState<any[]>([]);
     const [loadingReqs, setLoadingReqs] = useState(false);
+    const [familyLinks, setFamilyLinks] = useState<any[]>([]);
+    const [showFamilyModal, setShowFamilyModal] = useState(false);
+    const [familyForm, setFamilyForm] = useState({ name: '', phone: '', relation: 'child' });
 
     const loadRequests = async () => {
         if (!user?.id) return;
@@ -34,7 +38,23 @@ export default function PatientProfile() {
         }
     };
 
-    useEffect(() => { loadRequests(); }, [user]);
+    const loadFamily = async () => {
+        if (!user?.id) return;
+        try { setFamilyLinks(await api.getFamilyLinks(user.id)); }
+        catch (e) { console.warn(e); }
+    };
+
+    useEffect(() => { loadRequests(); loadFamily(); }, [user]);
+
+    const addFamily = async () => {
+        if (!user?.id || !familyForm.name) return Alert.alert('تنبيه', 'اسم فرد العائلة مطلوب');
+        try {
+            await api.addFamilyLink(user.id, familyForm);
+            setShowFamilyModal(false);
+            setFamilyForm({ name: '', phone: '', relation: 'child' });
+            loadFamily();
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
 
     const handleRequestStatus = async (requestId: string, status: 'approved' | 'rejected') => {
         try {
@@ -54,7 +74,8 @@ export default function PatientProfile() {
             const updated = await api.updatePatient(user.id, {
                 name: fullName,
                 email: email,
-                phone: phone
+                phone: phone,
+                drug_allergies: drugAllergies.split(',').map((x: string) => x.trim()).filter(Boolean)
             });
             
             // Update local state in AuthContext
@@ -168,6 +189,20 @@ export default function PatientProfile() {
                         </View>
                     </View>
 
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>حساسية الأدوية</Text>
+                        <View style={styles.inputWrapper}>
+                            <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#94A3B8" />
+                            <TextInput
+                                style={styles.input}
+                                value={drugAllergies}
+                                onChangeText={setDrugAllergies}
+                                placeholder="مثال: Penicillin, Ibuprofen"
+                                textAlign="right"
+                            />
+                        </View>
+                    </View>
+
                     <TouchableOpacity 
                         style={styles.saveBtn} 
                         onPress={handleSave}
@@ -191,6 +226,26 @@ export default function PatientProfile() {
                 </View>
 
                 {/* Medical History Requests Section */}
+                <View style={[styles.formContainer, { marginTop: 20 }]}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialCommunityIcons name="account-group" size={22} color="#1E88E5" />
+                        <Text style={styles.sectionTitle}>ربط أفراد العائلة</Text>
+                    </View>
+                    {familyLinks.map(link => (
+                        <View key={link.id} style={styles.requestCard}>
+                            <View style={styles.requestInfo}>
+                                <Text style={styles.doctorName}>{link.name}</Text>
+                                <Text style={styles.requestDate}>{link.relation} - {link.consent_status}</Text>
+                            </View>
+                        </View>
+                    ))}
+                    <TouchableOpacity style={styles.saveBtn} onPress={() => setShowFamilyModal(true)}>
+                        <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.saveBtnGradient}>
+                            <Text style={styles.saveBtnText}>إضافة فرد عائلة</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+
                 <View style={[styles.formContainer, { marginTop: 20 }]}>
                     <View style={styles.sectionHeader}>
                         <MaterialCommunityIcons name="shield-account" size={22} color="#1E88E5" />
@@ -230,6 +285,28 @@ export default function PatientProfile() {
                 
                 <View style={{ height: 120 }} />
             </ScrollView>
+            <Modal visible={showFamilyModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.familyModal}>
+                        <Text style={styles.sectionTitle}>إضافة فرد عائلة</Text>
+                        <TextInput style={styles.familyInput} placeholder="الاسم" value={familyForm.name} onChangeText={v => setFamilyForm(f => ({ ...f, name: v }))} textAlign="right" />
+                        <TextInput style={styles.familyInput} placeholder="رقم الهاتف أو الحساب" value={familyForm.phone} onChangeText={v => setFamilyForm(f => ({ ...f, phone: v }))} textAlign="right" />
+                        <View style={styles.relationRow}>
+                            {[
+                                ['child', 'طفل'], ['father', 'أب'], ['mother', 'أم'], ['spouse', 'زوج/زوجة'], ['elderly', 'كبير سن']
+                            ].map(([key, label]) => (
+                                <TouchableOpacity key={key} style={[styles.relationChip, familyForm.relation === key && styles.relationChipActive]} onPress={() => setFamilyForm(f => ({ ...f, relation: key }))}>
+                                    <Text style={[styles.relationText, familyForm.relation === key && { color: '#FFF' }]}>{label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <View style={styles.requestActions}>
+                            <TouchableOpacity style={[styles.miniActionBtn, { backgroundColor: '#F3F4F6' }]} onPress={() => setShowFamilyModal(false)}><Text style={styles.miniActionText}>إلغاء</Text></TouchableOpacity>
+                            <TouchableOpacity style={[styles.miniActionBtn, { backgroundColor: '#DCFCE7' }]} onPress={addFamily}><Text style={[styles.miniActionText, { color: '#166534' }]}>حفظ</Text></TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -430,5 +507,12 @@ const styles = StyleSheet.create({
     miniActionText: {
         fontFamily: 'Cairo_700Bold',
         fontSize: 12,
-    }
+    },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+    familyModal: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 10 },
+    familyInput: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', height: 48, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular' },
+    relationRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+    relationChip: { borderRadius: 12, borderWidth: 1, borderColor: '#DCE8F5', paddingHorizontal: 10, paddingVertical: 6 },
+    relationChipActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
+    relationText: { fontFamily: 'Cairo_700Bold', fontSize: 12, color: '#4A6080' },
 });

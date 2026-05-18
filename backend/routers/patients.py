@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from db import get_db
-from models import User, Appointment, Order, LabBooking, LabTest, MedicalRecord, Notification, MedicalHistoryRequest
+from models import User, Appointment, Order, LabBooking, LabTest, MedicalRecord, Notification, MedicalHistoryRequest, FamilyLink
 from auth_utils import get_current_user
 from utils.helpers import model_to_dict, safe_update
 import uuid
@@ -46,6 +46,59 @@ def mark_notification_read(notification_id: str, current_user: dict = Depends(ge
     notif.is_read = True
     db.commit()
     return {"message": "تم التحديث"}
+
+
+@router.get("/{patient_id}/family")
+def list_family_links(patient_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user["role"] == "patient" and current_user["sub"] != patient_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    links = db.query(FamilyLink).filter(FamilyLink.main_patient_id == patient_id).all()
+    return [model_to_dict(link) for link in links]
+
+
+@router.post("/{patient_id}/family")
+def add_family_link(patient_id: str, data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user["role"] == "patient" and current_user["sub"] != patient_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    relation = data.get("relation")
+    if relation not in {"child", "father", "mother", "spouse", "elderly"}:
+        raise HTTPException(400, "صلة القرابة غير مدعومة")
+    now = datetime.now(timezone.utc).isoformat()
+    link = FamilyLink(
+        id=f"fam_{uuid.uuid4().hex[:8]}",
+        main_patient_id=patient_id,
+        linked_patient_id=data.get("linked_patient_id"),
+        relation=relation,
+        name=data.get("name", ""),
+        phone=data.get("phone", ""),
+        consent_status="approved" if relation == "child" else "pending",
+        created_at=now,
+    )
+    db.add(link)
+    if link.linked_patient_id:
+        db.add(Notification(id=f"ntf_{uuid.uuid4().hex[:8]}", user_id=link.linked_patient_id, title="طلب ربط حساب عائلي", message="يوجد طلب لربط سجلك الطبي بحساب عائلي.", type="family_link", created_at=now))
+    db.commit()
+    db.refresh(link)
+    return model_to_dict(link)
+
+
+@router.put("/family/{link_id}/consent")
+def update_family_consent(link_id: str, data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    link = db.query(FamilyLink).filter(FamilyLink.id == link_id).first()
+    if not link:
+        raise HTTPException(404, "الرابط غير موجود")
+    allowed_users = {link.main_patient_id}
+    if link.linked_patient_id:
+        allowed_users.add(link.linked_patient_id)
+    if current_user["role"] == "patient" and current_user["sub"] not in allowed_users:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    status = data.get("status")
+    if status not in {"approved", "rejected"}:
+        raise HTTPException(400, "حالة الموافقة غير صحيحة")
+    link.consent_status = status
+    db.commit()
+    db.refresh(link)
+    return model_to_dict(link)
 
 @router.post("/history-request")
 def create_history_request(data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):

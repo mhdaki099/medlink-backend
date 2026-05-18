@@ -13,6 +13,9 @@ const STATUS_MAP: Record<string, { label: string, color: string, icon: string }>
     'completed': { label: 'موعد مكتمل', color: '#3B82F6', icon: 'checkbox-marked-circle-outline' },
     'cancelled': { label: 'ملغي', color: '#EF4444', icon: 'close-circle-outline' },
     'rejected': { label: 'مرفوض', color: '#EF4444', icon: 'close-circle-outline' },
+    'reschedule_requested': { label: 'طلب إعادة جدولة', color: '#D97706', icon: 'calendar-edit' },
+    'cancellation_requested': { label: 'طلب إلغاء', color: '#EF4444', icon: 'close-circle-outline' },
+    'patient_confirmation_pending': { label: 'بانتظار موافقتك', color: '#7C3AED', icon: 'account-clock-outline' },
 };
 
 export default function AppointmentsScreen() {
@@ -40,7 +43,6 @@ export default function AppointmentsScreen() {
     }, [user]);
 
     const handleRequestReschedule = (aptId: string) => {
-        Alert.prompt ? Alert.prompt('إعادة جدولة', 'أدخل التاريخ المطلوب (YYYY-MM-DD)') :
         Alert.alert('طلب إعادة جدولة', 'هل تريد طلب إعادة جدولة هذا الموعد؟', [
             { text: 'إلغاء', style: 'cancel' },
             { text: 'نعم', onPress: async () => {
@@ -126,6 +128,18 @@ export default function AppointmentsScreen() {
                     <View style={styles.priceTag}>
                         <Text style={styles.priceVal}>{item.price?.toLocaleString()} ل.س</Text>
                     </View>
+                    {item.status === 'patient_confirmation_pending' && (
+                        <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#DCFCE7' }]} onPress={async () => { await api.updateAppointmentStatus(item.id, 'confirmed'); load(); }}>
+                                <MaterialCommunityIcons name="check" size={14} color="#16A34A" />
+                                <Text style={[styles.detailsBtnText, { color: '#16A34A' }]}>قبول</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={async () => { await api.updateAppointmentStatus(item.id, 'rejected', undefined, undefined, 'رفض المريض الموعد المقترح'); load(); }}>
+                                <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
+                                <Text style={[styles.detailsBtnText, { color: '#EF4444' }]}>رفض</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                     {(item.status === 'pending' || item.status === 'confirmed') && (
                         <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
                             <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleRequestReschedule(item.id)}>

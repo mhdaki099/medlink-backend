@@ -4,9 +4,9 @@ import { Platform, View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const COLORS = {
-    primary: '#E65100',
-    primaryDark: '#BF360C',
-    accent: '#FF8A65',
+    primary: '#1E88E5',
+    primaryDark: '#1565C0',
+    accent: '#43A047',
     bg: '#FFFFFF',
     muted: '#9CA3AF',
 };
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#E65100',
+        shadowColor: '#1E88E5',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

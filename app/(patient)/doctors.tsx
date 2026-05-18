@@ -17,6 +17,7 @@ export default function DoctorsScreen() {
     const { spec } = useLocalSearchParams();
     
     const [doctors, setDoctors] = useState<any[]>([]);
+    const [myDoctors, setMyDoctors] = useState<any[]>([]);
     const [filtered, setFiltered] = useState<any[]>([]);
     const [selectedSpec, setSelectedSpec] = useState(spec ? (spec as string) : 'all');
     const [search, setSearch] = useState('');
@@ -30,21 +31,23 @@ export default function DoctorsScreen() {
 
     const loadData = async (s?: string) => {
         try {
-            const [docs, specs, apts] = await Promise.all([
+            const [docs, specs, apts, mine] = await Promise.all([
                 api.getDoctors(s === 'all' ? undefined : s),
                 api.getSpecializations(),
-                user?.id ? api.getAppointments({ patient_id: user.id }) : Promise.resolve([])
+                user?.id ? api.getAppointments({ patient_id: user.id }) : Promise.resolve([]),
+                user?.id ? api.getMyDoctors(user.id).catch(() => []) : Promise.resolve([])
             ]);
             
             setDoctors(docs);
             setFiltered(docs);
+            setMyDoctors(mine || []);
             
             const allCat = { id: 'all', name: 'الكل', icon: 'apps', name_en: 'all' };
             setCategories([allCat, ...specs]);
             
             // Find next upcoming appointment
             if (apts && apts.length > 0) {
-                const upcoming = apts.find((a: any) => a.status === 'approved' || a.status === 'pending');
+                const upcoming = apts.find((a: any) => ['confirmed', 'pending', 'patient_confirmation_pending'].includes(a.status));
                 if (upcoming) {
                     // Fetch doctor details for this appointment to get photo and name
                     const docDetails = await api.getDoctor(upcoming.doctor_id).catch(() => null);
@@ -81,7 +84,7 @@ export default function DoctorsScreen() {
         ));
     }, [search, doctors]);
 
-    const getPhotoUrl = (path: string) => {
+    const getPhotoUrl = (path?: string) => {
         if (!path) return 'https://i.pravatar.cc/300';
         if (path.startsWith('http')) return path;
         return `${BASE_URL.replace(/\/api$/, '')}${path}`;
@@ -210,6 +213,26 @@ export default function DoctorsScreen() {
                     </View>
                 )}
 
+                {myDoctors.length > 0 && (
+                    <View style={styles.sectionContainer}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>My Doctors</Text>
+                        </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12, flexDirection: 'row-reverse' }}>
+                            {myDoctors.map((doctor: any) => (
+                                <TouchableOpacity key={doctor.id} style={styles.myDoctorCard} onPress={() => router.push(`/(patient)/doctors/${doctor.id}` as any)}>
+                                    <Text style={styles.myDoctorName} numberOfLines={1}>{doctor.name}</Text>
+                                    <Text style={styles.myDoctorMeta}>{doctor.specialization || 'Doctor'}</Text>
+                                    <Text style={styles.myDoctorMeta}>Last: {doctor.last_appointment_date || '-'}</Text>
+                                    <View style={styles.rebookBtn}>
+                                        <Text style={styles.rebookText}>Rebook</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+
                 {/* 3. Categories / Specializations */}
                 <View style={[styles.sectionContainer, { marginTop: upcomingAppointment ? 10 : 20 }]}>
                     <View style={styles.sectionHeader}>
@@ -319,6 +342,11 @@ const styles = StyleSheet.create({
     detailsBtnText: { color: '#FFF', fontFamily: 'Cairo_700Bold', fontSize: 14 },
     
     upcomingOverlayImg: { position: 'absolute', top: -15, right: 10, width: 110, height: 160, zIndex: 1, borderTopRightRadius: 24, borderTopLeftRadius: 24 }, // Extruding photo
+    myDoctorCard: { width: 180, backgroundColor: '#FFF', borderRadius: 18, padding: 14, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, alignItems: 'flex-end' },
+    myDoctorName: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'right' },
+    myDoctorMeta: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'right' },
+    rebookBtn: { marginTop: 10, backgroundColor: '#1E88E5', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'stretch', alignItems: 'center' },
+    rebookText: { color: '#FFF', fontSize: 12, fontFamily: 'Cairo_700Bold' },
     
     /* 3. Categories */
     chipBox: { backgroundColor: '#FFF', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 5, elevation: 1 },

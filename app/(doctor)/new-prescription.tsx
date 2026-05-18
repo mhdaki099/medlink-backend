@@ -23,6 +23,7 @@ export default function NewPrescription() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [search, setSearch] = useState('');
+    const [medicineCatalog, setMedicineCatalog] = useState<any[]>([]);
 
     useEffect(() => {
         api.getPatients()
@@ -35,6 +36,7 @@ export default function NewPrescription() {
                 }
             })
             .finally(() => setLoading(false));
+        api.getAllMedicines().then(setMedicineCatalog).catch(() => setMedicineCatalog([]));
     }, [patientId]);
 
     const filteredPatients = patients.filter(p => 
@@ -50,7 +52,7 @@ export default function NewPrescription() {
 
     const handleSave = async () => {
         if (!selectedPatient) return Alert.alert('تنبيه', 'يرجى اختيار مريض');
-        if (meds.some(m => !m.name)) return Alert.alert('تنبيه', 'يرجى إدخال اسم الدواء');
+        if (meds.some(m => !m.name)) return Alert.alert('تنبيه', 'يرجى اختيار الدواء من القائمة');
 
         setSubmitting(true);
         try {
@@ -129,12 +131,23 @@ export default function NewPrescription() {
                     </View>
 
                     {meds.map((m, idx) => (
-                        <Animated.View key={idx} entering={FadeInRight.delay(idx * 100)} style={styles.medRow}>
+                        <Animated.View key={idx} entering={FadeInRight.delay(idx * 100)} style={styles.medBlock}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row-reverse', paddingBottom: 8 }}>
+                                {medicineCatalog.slice(0, 12).map((med: any) => (
+                                    <TouchableOpacity key={`${idx}-${med.id}`} style={[styles.medChoice, m.name === med.name && styles.medChoiceActive]} onPress={() => {
+                                        updateMed(idx, 'name', med.name);
+                                        updateMed(idx, 'dosage', med.strength || med.dosage || '');
+                                    }}>
+                                        <Text style={[styles.medChoiceText, m.name === med.name && styles.medChoiceTextActive]}>{med.name}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                            <View style={styles.medRow}>
                             <TextInput 
                                 style={[styles.input, { flex: 2 }]} 
-                                placeholder="اسم الدواء (مثلاً: بنادول)" 
+                                placeholder="اختر الدواء من القائمة"
                                 value={m.name}
-                                onChangeText={(t) => updateMed(idx, 'name', t)}
+                                editable={false}
                                 textAlign="right"
                             />
                             <TextInput 
@@ -151,6 +164,7 @@ export default function NewPrescription() {
                                 onChangeText={(t) => updateMed(idx, 'freq', t)}
                                 textAlign="right"
                             />
+                            </View>
                         </Animated.View>
                     ))}
                 </View>
@@ -207,6 +221,11 @@ const styles = StyleSheet.create({
     selectedPatientBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F0FDF4', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#DCFCE7' },
     selectedPName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#166534' },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+    medBlock: { marginBottom: 12 },
+    medChoice: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, paddingVertical: 6 },
+    medChoiceActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
+    medChoiceText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#475569' },
+    medChoiceTextActive: { color: '#FFF' },
     medRow: { flexDirection: 'row-reverse', marginBottom: 10 },
     input: { backgroundColor: '#F8FAFC', height: 48, borderRadius: 15, paddingHorizontal: 15, fontFamily: 'Cairo_400Regular', borderWidth: 1, borderColor: '#F1F5F9' },
     saveBtn: { backgroundColor: '#1E88E5', height: 55, borderRadius: 20, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },

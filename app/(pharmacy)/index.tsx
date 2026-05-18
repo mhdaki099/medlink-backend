@@ -7,7 +7,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 const C = {
-    primary: '#E67E22', primaryDark: '#D35400', accent: '#F39C12', success: '#27AE60',
+    primary: '#1E88E5', primaryDark: '#1565C0', accent: '#43A047', success: '#27AE60',
     danger: '#E74C3C', blue: '#2980B9', bg: '#F5F6FA', white: '#FFFFFF',
     text: '#1A1A2E', textSec: '#636E72', textMuted: '#B2BEC3', border: '#E8ECF0',
 };
@@ -42,8 +42,8 @@ export default function PharmacyDashboard() {
     };
 
     const counts = {
-        pending: orders.filter((o: any) => o.status === 'pending').length,
-        processing: orders.filter((o: any) => o.status === 'processing').length,
+        pending: orders.filter((o: any) => ['pending', 'pending_confirmation'].includes(o.status)).length,
+        processing: orders.filter((o: any) => ['processing', 'preparing'].includes(o.status)).length,
         delivered: orders.filter((o: any) => o.status === 'delivered').length,
     };
     const inStock = medicines.filter((m: any) => m.stock_status === 'in_stock').length;
@@ -51,12 +51,12 @@ export default function PharmacyDashboard() {
     const STATS = [
         { label: 'أدوية متوفرة', val: inStock, icon: 'pill', color: C.success },
         { label: 'طلبات جديدة', val: counts.pending, icon: 'bell-ring-outline', color: C.primary },
-        { label: 'قيد التوصيل', val: counts.processing, icon: 'truck-fast-outline', color: C.blue },
+        { label: 'قيد التجهيز', val: counts.processing, icon: 'package-variant', color: C.blue },
         { label: 'تم التسليم', val: counts.delivered, icon: 'check-circle-outline', color: C.success },
     ];
 
-    const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'قيد التوصيل', delivered: 'تم التوصيل', cancelled: 'ملغى' };
-    const STATUS_COLORS: Record<string, string> = { pending: C.primary, processing: C.blue, delivered: C.success, cancelled: C.danger };
+    const STATUS_LABELS: Record<string, string> = { pending: 'جديد', pending_confirmation: 'جديد', processing: 'قيد التجهيز', preparing: 'قيد التجهيز', delivered: 'تم التسليم', cancelled: 'ملغى' };
+    const STATUS_COLORS: Record<string, string> = { pending: C.primary, pending_confirmation: C.primary, processing: C.blue, preparing: C.blue, delivered: C.success, cancelled: C.danger };
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}
@@ -100,14 +100,14 @@ export default function PharmacyDashboard() {
                     <Text style={styles.sectionTitle}>الطلبات الجديدة</Text>
                 </View>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 20 }} /> :
-                    orders.filter((o: any) => o.status === 'pending').length === 0 ? (
+                    orders.filter((o: any) => ['pending', 'pending_confirmation'].includes(o.status)).length === 0 ? (
                         <View style={styles.empty}>
                             <View style={styles.emptyIconCircle}>
                                 <MaterialCommunityIcons name="check-circle" size={36} color={C.success} />
                             </View>
                             <Text style={styles.emptyText}>لا توجد طلبات جديدة</Text>
                         </View>
-                    ) : orders.filter((o: any) => o.status === 'pending').map((ord: any) => (
+                    ) : orders.filter((o: any) => ['pending', 'pending_confirmation'].includes(o.status)).map((ord: any) => (
                         <View key={ord.id} style={styles.orderCard}>
                             <View style={styles.orderHeader}>
                                 <View style={[styles.statusBadge, { backgroundColor: (STATUS_COLORS[ord.status] || C.primary) + '15' }]}>
@@ -138,7 +138,7 @@ export default function PharmacyDashboard() {
                                     <TouchableOpacity style={styles.rejectBtn} onPress={() => updateOrderStatus(ord.id, 'cancelled')}>
                                         <MaterialCommunityIcons name="close" size={18} color={C.danger} />
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={styles.acceptBtn} onPress={() => updateOrderStatus(ord.id, 'processing')}>
+                                    <TouchableOpacity style={styles.acceptBtn} onPress={() => updateOrderStatus(ord.id, 'preparing')}>
                                         <MaterialCommunityIcons name="check" size={16} color="#FFF" />
                                         <Text style={styles.acceptBtnText}>قبول</Text>
                                     </TouchableOpacity>
@@ -149,13 +149,13 @@ export default function PharmacyDashboard() {
             </View>
 
             {/* Processing Orders */}
-            {orders.filter((o: any) => o.status === 'processing').length > 0 && (
+            {orders.filter((o: any) => ['processing', 'preparing'].includes(o.status)).length > 0 && (
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <MaterialCommunityIcons name="truck-delivery-outline" size={20} color={C.blue} />
                         <Text style={styles.sectionTitle}>قيد التوصيل</Text>
                     </View>
-                    {orders.filter((o: any) => o.status === 'processing').map((ord: any) => (
+                    {orders.filter((o: any) => ['processing', 'preparing'].includes(o.status)).map((ord: any) => (
                         <View key={ord.id} style={styles.orderCard}>
                             <View style={styles.orderHeader}>
                                 <View style={[styles.statusBadge, { backgroundColor: C.blue + '15' }]}>

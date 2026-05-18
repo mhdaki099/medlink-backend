@@ -41,7 +41,7 @@ def list_orders(patient_id: str = Query(None), pharmacy_id: str = Query(None), c
 def create_order(order: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     now = datetime.now(timezone.utc).isoformat()
     order_id = f"ord_{uuid.uuid4().hex[:8]}"
-    new_order = Order(id=order_id, patient_id=order.get("patient_id"), pharmacy_id=order.get("pharmacy_id"), items=order.get("items", []), total=order.get("total", 0), status="pending", delivery_address=order.get("delivery_address", ""), created_at=now, delivered_at=None)
+    new_order = Order(id=order_id, patient_id=order.get("patient_id"), pharmacy_id=order.get("pharmacy_id"), items=order.get("items", []), total=order.get("total", 0), status="pending_confirmation", delivery_address=order.get("delivery_address", ""), created_at=now, delivered_at=None)
     db.add(new_order)
     if new_order.patient_id:
         db.add(AuditLog(id=f"al_{uuid.uuid4().hex[:8]}", user_id=new_order.patient_id, action="order_medicine", details="طلب أدوية جديد", timestamp=now))
@@ -56,11 +56,12 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(404, "الطلب غير موجود")
-    new_status = status_update.get("status", order.status)
+    aliases = {"pending": "pending_confirmation", "processing": "preparing"}
+    new_status = aliases.get(status_update.get("status", order.status), status_update.get("status", order.status))
     order.status = new_status
     if new_status == "delivered":
         order.delivered_at = datetime.now(timezone.utc).isoformat()
-    STATUS_MSG = {"processing": "تم قبول طلبك وجاري التجهيز ✅", "delivered": "تم توصيل طلبك بنجاح 🎉", "cancelled": "تم إلغاء طلبك ❌"}
+    STATUS_MSG = {"preparing": "تم قبول طلبك وجاري التجهيز", "delivered": "تم توصيل طلبك بنجاح", "cancelled": "تم إلغاء طلبك"}
     if new_status in STATUS_MSG and order.patient_id:
         db.add(Notification(id=f"ntf_{uuid.uuid4().hex[:8]}", user_id=order.patient_id, title="تحديث الطلب", message=STATUS_MSG[new_status], type="order_update", created_at=datetime.now(timezone.utc).isoformat()))
     db.commit(); db.refresh(order)

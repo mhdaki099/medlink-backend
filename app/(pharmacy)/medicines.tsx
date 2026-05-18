@@ -8,7 +8,7 @@ import * as DocumentPicker from 'expo-document-picker';
 
 const { width } = Dimensions.get('window');
 const C = {
-    primary: '#E67E22', accent: '#F39C12', success: '#27AE60', danger: '#E74C3C',
+    primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
     warning: '#F1C40F', bg: '#F5F6FA', white: '#FFF', text: '#1A1A2E',
     textSec: '#636E72', textMuted: '#B2BEC3', border: '#E8ECF0',
 };
@@ -49,18 +49,7 @@ export default function PharmacyMedicines() {
         try {
             const result = await DocumentPicker.getDocumentAsync({ type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'] });
             if (!result.canceled && result.assets[0]) {
-                const formData = new FormData();
-                formData.append('file', {
-                    uri: result.assets[0].uri,
-                    name: result.assets[0].name || 'medicines.xlsx',
-                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                } as any);
-                const { BASE_URL } = require('../../src/services/api');
-                const res = await fetch(`${BASE_URL}/pharmacies/medicines/upload-excel?pharmacy_id=${user?.id}`, {
-                    method: 'POST',
-                    body: formData,
-                });
-                if (!res.ok) throw new Error('فشل رفع الملف');
+                await api.uploadMedicineExcel(user!.id, result.assets[0]);
                 Alert.alert('✅ تم', 'تم رفع ملف الأدوية بنجاح');
                 load();
             }
@@ -72,7 +61,7 @@ export default function PharmacyMedicines() {
     return (
         <View style={styles.container}>
             {/* Header */}
-            <LinearGradient colors={['#D35400', C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+            <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
                 <View style={styles.headerBlob} />
                 <View style={styles.headerTop}>
                     <TouchableOpacity style={styles.excelBtn} onPress={uploadExcel}>

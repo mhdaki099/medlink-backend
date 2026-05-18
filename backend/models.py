@@ -24,6 +24,7 @@ class User(Base):
     # Patient specific
     blood_type = Column(String, nullable=True)
     allergies = Column(JSON, nullable=True)
+    drug_allergies = Column(JSON, nullable=True)
     chronic_conditions = Column(JSON, nullable=True)
 
     # Doctor specific
@@ -39,6 +40,7 @@ class User(Base):
     languages = Column(JSON, nullable=True)
     available_days = Column(JSON, nullable=True)
     available_hours = Column(String, nullable=True)
+    working_hours = Column(JSON, nullable=True)
     total_sessions = Column(Integer, nullable=True)
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
@@ -77,7 +79,7 @@ class Medicine(Base):
     pharmacy_id = Column(String, ForeignKey("users.id"))
     name = Column(String)
     name_en = Column(String)
-    category = Column(String)
+    category = Column(String, nullable=True)
     price = Column(Float)
     old_price = Column(Float, nullable=True)
     description = Column(String)
@@ -85,12 +87,15 @@ class Medicine(Base):
     stock_status = Column(String)
     quantity = Column(Integer)
     dosage = Column(String, nullable=True) # e.g. 500mg, 10ml
+    strength = Column(String, nullable=True)
+    barcode = Column(String, nullable=True)
     image = Column(String, nullable=True)
     alternatives = Column(JSON, nullable=True)
     requires_prescription = Column(Boolean, default=False)
     active_ingredients = Column(Text, nullable=True)
     usage_info = Column(Text, nullable=True)
     side_effects = Column(Text, nullable=True)
+    warnings = Column(Text, nullable=True)
 
 
 class LabTest(Base):
@@ -111,11 +116,41 @@ class WarehouseInventory(Base):
     id = Column(String, primary_key=True, index=True)
     warehouse_id = Column(String, ForeignKey("users.id"))
     name = Column(String)
-    category = Column(String)
+    category = Column(String, nullable=True)
+    strength = Column(String, nullable=True)
+    barcode = Column(String, nullable=True)
     bulk_price = Column(Float)
     unit = Column(String)
     stock = Column(Integer)
     min_order = Column(Integer)
+
+
+class FamilyLink(Base):
+    __tablename__ = "family_links"
+    id = Column(String, primary_key=True, index=True)
+    main_patient_id = Column(String, ForeignKey("users.id"))
+    linked_patient_id = Column(String, ForeignKey("users.id"), nullable=True)
+    relation = Column(String)
+    name = Column(String)
+    phone = Column(String, nullable=True)
+    consent_status = Column(String, default="pending") # pending, approved, rejected
+    created_at = Column(String)
+
+
+class ServiceBooking(Base):
+    __tablename__ = "service_bookings"
+    id = Column(String, primary_key=True, index=True)
+    patient_id = Column(String, ForeignKey("users.id"))
+    provider_id = Column(String, ForeignKey("users.id"))
+    provider_role = Column(String) # lab, radiology
+    service_id = Column(String, nullable=True)
+    service_name = Column(String, nullable=True)
+    date = Column(String)
+    time = Column(String)
+    visit_type = Column(String, default="visit_center") # visit_center, home_service
+    home_service_fee = Column(Float, default=0)
+    status = Column(String, default="booked")
+    created_at = Column(String)
 
 
 class Appointment(Base):

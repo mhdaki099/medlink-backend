@@ -45,6 +45,41 @@ def get_inventory(warehouse_id: str, db: Session = Depends(get_db)):
     items = db.query(WarehouseInventory).filter(WarehouseInventory.warehouse_id == warehouse_id).all()
     return [model_to_dict(i) for i in items]
 
+
+@router.post("/{warehouse_id}/inventory")
+def add_inventory_item(warehouse_id: str, item: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    new_item = WarehouseInventory(
+        id=f"wi_{uuid.uuid4().hex[:8]}",
+        warehouse_id=warehouse_id,
+        name=item.get("name", ""),
+        category=item.get("category") or None,
+        strength=item.get("strength"),
+        barcode=item.get("barcode"),
+        bulk_price=float(item.get("bulk_price", item.get("price", 0)) or 0),
+        unit=item.get("unit", "علبة"),
+        stock=int(item.get("stock", item.get("quantity", 0)) or 0),
+        min_order=int(item.get("min_order", 1) or 1),
+    )
+    if not new_item.name:
+        raise HTTPException(400, "اسم الصنف مطلوب")
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    return model_to_dict(new_item)
+
+
+@router.put("/inventory/{item_id}")
+def update_inventory_item(item_id: str, updates: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    item = db.query(WarehouseInventory).filter(WarehouseInventory.id == item_id).first()
+    if not item:
+        raise HTTPException(404, "الصنف غير موجود")
+    for key in ["name", "category", "strength", "barcode", "bulk_price", "unit", "stock", "min_order"]:
+        if key in updates:
+            setattr(item, key, updates[key])
+    db.commit()
+    db.refresh(item)
+    return model_to_dict(item)
+
 @router.get("/{warehouse_id}/orders")
 def get_orders(warehouse_id: str, current_user: dict = Depends(require_role("warehouse", "pharmacy", "admin")), db: Session = Depends(get_db)):
     orders = db.query(WarehouseOrder).filter(WarehouseOrder.warehouse_id == warehouse_id).all()
@@ -72,6 +107,8 @@ async def bulk_upload_inventory(warehouse_id: str, file: UploadFile = File(...),
         item = WarehouseInventory(
             id=f"wi_{uuid.uuid4().hex[:8]}", warehouse_id=warehouse_id,
             name=str(data.get("name", "")), category=str(data.get("category", "") or ""),
+            strength=str(data.get("strength", "") or ""),
+            barcode=str(data.get("barcode", "") or ""),
             bulk_price=float(data.get("bulk_price", 0) or data.get("price", 0) or 0),  # FIX: use bulk_price column
             stock=int(data.get("stock", 0) or data.get("quantity", 0) or 0),
             unit=str(data.get("unit", "") or ""),
@@ -80,3 +117,8 @@ async def bulk_upload_inventory(warehouse_id: str, file: UploadFile = File(...),
         db.add(item); added += 1
     db.commit()
     return {"message": f"تم إضافة {added} عنصر بنجاح", "count": added}
+
+
+@router.post("/{warehouse_id}/inventory/upload-excel")
+async def upload_inventory_excel_alias(warehouse_id: str, file: UploadFile = File(...), current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    return await bulk_upload_inventory(warehouse_id, file, current_user, db)

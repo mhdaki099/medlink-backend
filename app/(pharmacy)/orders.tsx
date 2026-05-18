@@ -6,13 +6,13 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 const C = {
-    primary: '#E67E22', accent: '#F39C12', success: '#27AE60', danger: '#E74C3C',
+    primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
     blue: '#2980B9', bg: '#F5F6FA', white: '#FFF', text: '#1A1A2E',
     textSec: '#636E72', textMuted: '#B2BEC3', border: '#E8ECF0',
 };
-const STATUS_COLORS: Record<string, string> = { pending: C.primary, processing: C.blue, delivered: C.success, cancelled: C.danger };
-const STATUS_LABELS: Record<string, string> = { pending: 'بانتظار', processing: 'جاري التوصيل', delivered: 'تم التوصيل', cancelled: 'ملغى' };
-const STATUS_ICONS: Record<string, string> = { pending: 'clock-outline', processing: 'truck-fast-outline', delivered: 'check-circle-outline', cancelled: 'close-circle-outline' };
+const STATUS_COLORS: Record<string, string> = { pending_confirmation: C.primary, pending: C.primary, preparing: C.blue, processing: C.blue, delivered: C.success, cancelled: C.danger };
+const STATUS_LABELS: Record<string, string> = { pending_confirmation: 'بانتظار التأكيد', pending: 'بانتظار التأكيد', preparing: 'قيد التجهيز', processing: 'قيد التجهيز', delivered: 'تم التسليم', cancelled: 'ملغى' };
+const STATUS_ICONS: Record<string, string> = { pending_confirmation: 'clock-outline', pending: 'clock-outline', preparing: 'package-variant', processing: 'package-variant', delivered: 'check-circle-outline', cancelled: 'close-circle-outline' };
 
 export default function PharmacyOrders() {
     const { user } = useAuth();
@@ -34,17 +34,17 @@ export default function PharmacyOrders() {
         catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
-    const filtered = filter === 'all' ? orders : orders.filter((o: any) => o.status === filter);
+    const filtered = filter === 'all' ? orders : orders.filter((o: any) => filter === 'pending_confirmation' ? ['pending', 'pending_confirmation'].includes(o.status) : filter === 'preparing' ? ['processing', 'preparing'].includes(o.status) : o.status === filter);
     const FILTERS = [
         { key: 'all', label: 'الكل', count: orders.length },
-        { key: 'pending', label: 'جديدة', count: orders.filter(o => o.status === 'pending').length },
-        { key: 'processing', label: 'قيد التوصيل', count: orders.filter(o => o.status === 'processing').length },
+        { key: 'pending_confirmation', label: 'جديدة', count: orders.filter(o => ['pending', 'pending_confirmation'].includes(o.status)).length },
+        { key: 'preparing', label: 'قيد التجهيز', count: orders.filter(o => ['processing', 'preparing'].includes(o.status)).length },
         { key: 'delivered', label: 'تم', count: orders.filter(o => o.status === 'delivered').length },
     ];
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#D35400', C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+            <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
                 <View style={styles.headerBlob} />
                 <View style={styles.headerRow}>
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
@@ -103,18 +103,18 @@ export default function PharmacyOrders() {
 
                             <View style={styles.orderFooter}>
                                 <Text style={styles.orderTotal}>{(ord.total || 0).toLocaleString()} ل.س</Text>
-                                {ord.status === 'pending' && (
+                                {['pending', 'pending_confirmation'].includes(ord.status) && (
                                     <View style={styles.actions}>
                                         <TouchableOpacity style={styles.rejectBtn} onPress={() => updateStatus(ord.id, 'cancelled')}>
                                             <MaterialCommunityIcons name="close" size={18} color={C.danger} />
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.acceptBtn} onPress={() => updateStatus(ord.id, 'processing')}>
+                                        <TouchableOpacity style={styles.acceptBtn} onPress={() => updateStatus(ord.id, 'preparing')}>
                                             <MaterialCommunityIcons name="check" size={16} color="#FFF" />
                                             <Text style={styles.acceptText}>قبول</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
-                                {ord.status === 'processing' && (
+                                {['processing', 'preparing'].includes(ord.status) && (
                                     <TouchableOpacity style={styles.deliveredBtn} onPress={() => updateStatus(ord.id, 'delivered')}>
                                         <MaterialCommunityIcons name="check-all" size={16} color={C.success} />
                                         <Text style={styles.deliveredText}>تم التوصيل</Text>

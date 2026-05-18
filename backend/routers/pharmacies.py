@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from db import get_db
-from models import User, Medicine, FavoriteMedicine, CartItem
+from models import User, Medicine, FavoriteMedicine, CartItem, Favorite, Order, Review
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict, safe_update
 
@@ -147,12 +147,17 @@ def add_medicine(medicine: dict, current_user: dict = Depends(require_role("phar
     med_id = f"m_{uuid.uuid4().hex[:8]}"
     new_med = Medicine(
         id=med_id, pharmacy_id=medicine.get("pharmacy_id"), name=medicine.get("name"),
-        name_en=medicine.get("name_en"), category=medicine.get("category"),
+        name_en=medicine.get("name_en"), category=medicine.get("category") or None,
         price=medicine.get("price"), old_price=medicine.get("old_price"),
         description=medicine.get("description"), manufacturer=medicine.get("manufacturer"),
         stock_status=medicine.get("stock_status", "in_stock"), quantity=medicine.get("quantity", 0),
-        dosage=medicine.get("dosage"), image=medicine.get("image"),
-        alternatives=medicine.get("alternatives", []), requires_prescription=medicine.get("requires_prescription", False)
+        dosage=medicine.get("dosage"), strength=medicine.get("strength"), barcode=medicine.get("barcode"),
+        image=medicine.get("image"), alternatives=medicine.get("alternatives", []),
+        requires_prescription=medicine.get("requires_prescription", False),
+        active_ingredients=medicine.get("active_ingredients"),
+        usage_info=medicine.get("usage_info"),
+        side_effects=medicine.get("side_effects"),
+        warnings=medicine.get("warnings"),
     )
     db.add(new_med); db.commit(); db.refresh(new_med)
     return model_to_dict(new_med)
@@ -176,13 +181,50 @@ async def bulk_upload_medicines(pharmacy_id: str = Query(...), file: UploadFile 
             description=str(data.get("description", "") or ""), manufacturer=str(data.get("manufacturer", "") or ""),
             stock_status=str(data.get("stock_status", "in_stock") or "in_stock"),
             quantity=int(data.get("quantity", 0) or 0), dosage=str(data.get("dosage", "") or ""),
+            strength=str(data.get("strength", "") or ""),
+            barcode=str(data.get("barcode", "") or ""),
             active_ingredients=str(data.get("active_ingredients", "") or ""),
             usage_info=str(data.get("usage_info", "") or ""),
             side_effects=str(data.get("side_effects", "") or ""),
+            warnings=str(data.get("warnings", "") or ""),
         )
         db.add(med); added += 1
     db.commit()
     return {"message": f"تم إضافة {added} دواء بنجاح", "count": added}
+
+
+@router.post("/medicines/upload-excel")
+async def upload_excel_alias(pharmacy_id: str = Query(...), file: UploadFile = File(...), current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
+    return await bulk_upload_medicines(pharmacy_id, file, current_user, db)
+
+
+@router.get("/{pharmacy_id}/analytics")
+def get_pharmacy_analytics(pharmacy_id: str, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
+    favorites = db.query(Favorite).filter(Favorite.target_id == pharmacy_id).count()
+    orders = db.query(Order).filter(Order.pharmacy_id == pharmacy_id).all()
+    week_ago = datetime.now(timezone.utc).timestamp() - 7 * 24 * 3600
+    month_ago = datetime.now(timezone.utc).timestamp() - 30 * 24 * 3600
+    weekly = 0
+    monthly = 0
+    for order in orders:
+        try:
+            ts = datetime.fromisoformat(order.created_at).timestamp()
+            weekly += 1 if ts >= week_ago else 0
+            monthly += 1 if ts >= month_ago else 0
+        except Exception:
+            pass
+    customers = db.query(Order.patient_id).filter(Order.pharmacy_id == pharmacy_id).distinct().count()
+    reviews = db.query(Review).filter(Review.target_id == pharmacy_id).all()
+    rating = round(sum(r.rating for r in reviews) / len(reviews), 1) if reviews else 0
+    return {
+        "favorites_count": favorites,
+        "weekly_bookings": weekly,
+        "monthly_bookings": monthly,
+        "total_orders": len(orders),
+        "active_customers": customers,
+        "overall_rating": rating,
+        "total_reviews": len(reviews),
+    }
 
 # --- Dynamic pharmacy routes LAST (to avoid catching /medicines/* paths) ---
 

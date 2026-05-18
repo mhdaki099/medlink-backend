@@ -59,6 +59,7 @@ export default function DoctorProfile() {
     
     const [selectedDate, setSelectedDate] = useState(now.toISOString().split('T')[0]);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
+    const [availability, setAvailability] = useState<any>({ time_slots: TIME_SLOTS, booked_slots: [] });
     
     const [booking, setBooking] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
@@ -73,9 +74,13 @@ export default function DoctorProfile() {
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await api.getDoctor(id as string, user?.id);
+                const [data, av] = await Promise.all([
+                    api.getDoctor(id as string, user?.id),
+                    api.getDoctorAvailability(id as string).catch(() => null),
+                ]);
                 setDoctor(data);
                 setIsFavorite(data.is_favorite || false);
+                if (av) setAvailability(av);
             } catch (e) {
                 console.error(e);
             } finally {
@@ -131,6 +136,7 @@ export default function DoctorProfile() {
                 patient_id: user.id,
                 date: selectedDate,
                 time: selectedTime,
+                price: doctor.price_per_session || 0,
                 notes: 'حجز جديد من التطبيق'
             });
             Alert.alert('نجاح', 'تم إرسال طلب الحجز بنجاح بانتظار موافقة الطبيب', [
@@ -297,15 +303,16 @@ export default function DoctorProfile() {
                 <View style={styles.sectionBox}>
                     <Text style={styles.sectionTitle}>اختر الوقت</Text>
                     <View style={styles.timeGrid}>
-                        {TIME_SLOTS.map((time, idx) => {
+                        {(availability.time_slots?.length ? availability.time_slots : TIME_SLOTS).map((time: string, idx: number) => {
                             const isSelected = selectedTime === time;
+                            const isBooked = availability.booked_slots?.some((slot: any) => slot.date === selectedDate && slot.time === time);
                             return (
                                 <TouchableOpacity 
                                     key={idx} 
-                                    style={[styles.timeSlotBtn, isSelected && styles.timeSlotBtnActive]}
-                                    onPress={() => setSelectedTime(time)}
+                                    style={[styles.timeSlotBtn, isSelected && styles.timeSlotBtnActive, isBooked && styles.timeSlotBtnBooked]}
+                                    onPress={() => isBooked ? Alert.alert('تنبيه', 'This appointment is already booked.') : setSelectedTime(time)}
                                 >
-                                    <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextActive]}>{time}</Text>
+                                    <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextActive, isBooked && styles.timeSlotTextBooked]}>{time}</Text>
                                 </TouchableOpacity>
                             );
                         })}
@@ -415,8 +422,10 @@ const styles = StyleSheet.create({
     timeGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', paddingHorizontal: 20, gap: 12, justifyContent: 'space-between' },
     timeSlotBtn: { width: '30%', backgroundColor: '#FFF', paddingVertical: 12, borderRadius: 14, alignItems: 'center', borderWidth: 1, borderColor: '#F3F4F6' },
     timeSlotBtnActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
+    timeSlotBtnBooked: { backgroundColor: '#111827', borderColor: '#111827', opacity: 0.55 },
     timeSlotText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#4B5563' },
     timeSlotTextActive: { color: '#FFF' },
+    timeSlotTextBooked: { color: '#FFF' },
     ratingCard: { marginHorizontal: 20, backgroundColor: '#FFF', borderRadius: 24, padding: 20, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
     ratingPrompt: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#111827', marginBottom: 15 },
     starsRow: { flexDirection: 'row-reverse', gap: 10, marginBottom: 15 },

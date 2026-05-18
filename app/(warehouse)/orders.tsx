@@ -6,7 +6,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 const C = {
-    primary: '#E65100', accent: '#FF8A65', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', blue: '#3B82F6',
+    primary: '#1E88E5', accent: '#43A047', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', blue: '#3B82F6',
     bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
 };
 const STATUS_COLORS: Record<string, string> = { pending: C.warning, processing: C.blue, delivered: C.success, cancelled: C.danger };
@@ -43,7 +43,7 @@ export default function WarehouseOrders() {
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#BF360C', C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+            <LinearGradient colors={[C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
                 <View style={styles.headerBlob} />
                 <View style={styles.headerRow}>
                     <View style={styles.headerIcon}>

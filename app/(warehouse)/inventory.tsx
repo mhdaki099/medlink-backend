@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Platform, Alert, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import * as DocumentPicker from 'expo-document-picker';
 
 const C = {
-    primary: '#E65100', accent: '#FF8A65', success: '#10B981', danger: '#EF4444', warning: '#F59E0B',
+    primary: '#1E88E5', accent: '#43A047', success: '#10B981', danger: '#EF4444', warning: '#F59E0B',
     bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
 };
 
@@ -15,15 +16,42 @@ export default function WarehouseInventory() {
     const [inventory, setInventory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [showAdd, setShowAdd] = useState(false);
+    const [form, setForm] = useState({ name: '', category: '', strength: '', barcode: '', bulk_price: '', stock: '', unit: 'علبة', min_order: '1' });
 
-    useEffect(() => {
-        const load = async () => {
-            if (!user?.id) return;
-            try { const inv = await api.getWarehouseInventory(user.id); setInventory(inv); }
-            catch (e) { console.warn(e); } finally { setLoading(false); }
-        };
-        load();
-    }, [user]);
+    const load = async () => {
+        if (!user?.id) return;
+        try { const inv = await api.getWarehouseInventory(user.id); setInventory(inv); }
+        catch (e) { console.warn(e); } finally { setLoading(false); }
+    };
+
+    useEffect(() => { load(); }, [user]);
+
+    const addStock = async () => {
+        if (!user?.id || !form.name) return Alert.alert('تنبيه', 'اسم الصنف مطلوب');
+        try {
+            await api.addWarehouseInventory(user.id, {
+                ...form,
+                bulk_price: parseFloat(form.bulk_price) || 0,
+                stock: parseInt(form.stock) || 0,
+                min_order: parseInt(form.min_order) || 1,
+            });
+            setShowAdd(false);
+            setForm({ name: '', category: '', strength: '', barcode: '', bulk_price: '', stock: '', unit: 'علبة', min_order: '1' });
+            load();
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
+
+    const uploadExcel = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({ type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'] });
+            if (!result.canceled && user?.id) {
+                await api.uploadWarehouseExcel(user.id, result.assets[0]);
+                Alert.alert('تم', 'تم استيراد ملف المخزون');
+                load();
+            }
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
 
     const filtered = inventory.filter(i => !search || i.name?.includes(search) || i.category?.includes(search));
     const lowStockCount = inventory.filter(i => i.stock < i.min_order * 2).length;
@@ -33,6 +61,12 @@ export default function WarehouseInventory() {
             <LinearGradient colors={['#BF360C', C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
                 <View style={styles.headerBlob} />
                 <View style={styles.headerRow}>
+                    <TouchableOpacity style={styles.headerAction} onPress={uploadExcel}>
+                        <MaterialCommunityIcons name="file-excel" size={22} color="#FFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.headerAction} onPress={() => setShowAdd(true)}>
+                        <MaterialCommunityIcons name="plus" size={22} color="#FFF" />
+                    </TouchableOpacity>
                     <View style={styles.headerIcon}>
                         <MaterialCommunityIcons name="package-variant" size={26} color={C.primary} />
                     </View>
@@ -87,6 +121,37 @@ export default function WarehouseInventory() {
                         );
                     })}
             </ScrollView>
+            <Modal visible={showAdd} transparent animationType="slide">
+                <View style={styles.overlay}>
+                    <View style={styles.modal}>
+                        <Text style={styles.modalTitle}>إضافة مخزون</Text>
+                        {[
+                            ['name', 'اسم الدواء *'],
+                            ['category', 'التصنيف'],
+                            ['strength', 'العيار'],
+                            ['barcode', 'الباركود'],
+                            ['bulk_price', 'السعر'],
+                            ['stock', 'الكمية'],
+                            ['unit', 'الوحدة'],
+                            ['min_order', 'الحد الأدنى'],
+                        ].map(([field, label]) => (
+                            <TextInput
+                                key={field}
+                                style={styles.modalInput}
+                                placeholder={label}
+                                value={(form as any)[field]}
+                                onChangeText={v => setForm(f => ({ ...f, [field]: v }))}
+                                textAlign="right"
+                                keyboardType={['bulk_price', 'stock', 'min_order'].includes(field) ? 'numeric' : 'default'}
+                            />
+                        ))}
+                        <View style={styles.modalBtns}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAdd(false)}><Text style={styles.cancelText}>إلغاء</Text></TouchableOpacity>
+                            <TouchableOpacity style={styles.saveBtn} onPress={addStock}><Text style={styles.saveText}>حفظ</Text></TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -96,6 +161,7 @@ const styles = StyleSheet.create({
     header: { paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20, paddingHorizontal: 20, overflow: 'hidden' },
     headerBlob: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.08)', top: -40, right: -30 },
     headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginBottom: 16 },
+    headerAction: { width: 42, height: 42, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     headerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#FFF' },
     headerSub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.8)' },
@@ -116,4 +182,13 @@ const styles = StyleSheet.create({
     metaText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
     lowAlert: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.danger + '10', borderRadius: 10, padding: 8, marginTop: 10 },
     lowAlertText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.danger },
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+    modal: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 10 },
+    modalTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: C.text, textAlign: 'center', marginBottom: 8 },
+    modalInput: { backgroundColor: C.bg, borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, height: 46, fontFamily: 'Cairo_400Regular' },
+    modalBtns: { flexDirection: 'row-reverse', gap: 10, marginTop: 8 },
+    cancelBtn: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center', padding: 13 },
+    saveBtn: { flex: 1, borderRadius: 12, backgroundColor: C.primary, alignItems: 'center', padding: 13 },
+    cancelText: { fontFamily: 'Cairo_700Bold', color: C.textSec },
+    saveText: { fontFamily: 'Cairo_700Bold', color: '#FFF' },
 });
