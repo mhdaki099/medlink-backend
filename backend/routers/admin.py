@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
@@ -166,3 +166,88 @@ def reject_registration(request_id: str, current_user: dict = Depends(require_ro
     req.status = "rejected"
     db.commit()
     return {"message": "تم رفض طلب التسجيل"}
+
+
+@router.post("/bulk-import/pharmacies")
+async def bulk_import_pharmacies(file: UploadFile = File(...), current_user: dict = Depends(require_role("admin")), db: Session = Depends(get_db)):
+    import openpyxl, io
+    content = await file.read()
+    filename = (file.filename or "").lower()
+    rows = []
+    if filename.endswith(".csv"):
+        import csv
+        text = content.decode("utf-8-sig")
+        reader = csv.DictReader(text.splitlines())
+        rows = list(reader)
+    else:
+        wb = openpyxl.load_workbook(io.BytesIO(content))
+        ws = wb.active
+        headers = [str(c.value or "").strip().lower() for c in ws[1]]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            rows.append(dict(zip(headers, row)))
+    added, errors = 0, []
+    for idx, data in enumerate(rows, start=2):
+        email = str(data.get("email", "") or "").strip()
+        name = str(data.get("name", "") or "").strip()
+        if not email or not name:
+            errors.append({"row": idx, "error": "name and email required"})
+            continue
+        if db.query(User).filter(User.email == email).first():
+            errors.append({"row": idx, "error": f"duplicate email {email}"})
+            continue
+        new_user = User(
+            id=f"ph_{uuid.uuid4().hex[:8]}", role="pharmacy", name=name,
+            email=email, password=hash_password(str(data.get("password", "123456"))),
+            phone=str(data.get("phone", "") or ""), city=str(data.get("city", "") or ""),
+            address=str(data.get("address", "") or ""), province=str(data.get("province", "") or ""),
+            district=str(data.get("district", "") or ""), area=str(data.get("area", "") or ""),
+            lat=float(data.get("lat")) if data.get("lat") else None,
+            lng=float(data.get("lng")) if data.get("lng") else None,
+            open_hours=str(data.get("open_hours", "") or ""),
+            verified=True, is_active=True, created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        db.add(new_user)
+        added += 1
+    db.commit()
+    return {"added": added, "errors": errors, "message": f"تم استيراد {added} صيدلية"}
+
+
+@router.post("/bulk-import/warehouses")
+async def bulk_import_warehouses(file: UploadFile = File(...), current_user: dict = Depends(require_role("admin")), db: Session = Depends(get_db)):
+    import openpyxl, io
+    content = await file.read()
+    filename = (file.filename or "").lower()
+    rows = []
+    if filename.endswith(".csv"):
+        import csv
+        text = content.decode("utf-8-sig")
+        reader = csv.DictReader(text.splitlines())
+        rows = list(reader)
+    else:
+        wb = openpyxl.load_workbook(io.BytesIO(content))
+        ws = wb.active
+        headers = [str(c.value or "").strip().lower() for c in ws[1]]
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            rows.append(dict(zip(headers, row)))
+    added, errors = 0, []
+    for idx, data in enumerate(rows, start=2):
+        email = str(data.get("email", "") or "").strip()
+        name = str(data.get("name", "") or "").strip()
+        if not email or not name:
+            errors.append({"row": idx, "error": "name and email required"})
+            continue
+        if db.query(User).filter(User.email == email).first():
+            errors.append({"row": idx, "error": f"duplicate email {email}"})
+            continue
+        new_user = User(
+            id=f"wh_{uuid.uuid4().hex[:8]}", role="warehouse", name=name,
+            email=email, password=hash_password(str(data.get("password", "123456"))),
+            phone=str(data.get("phone", "") or ""), city=str(data.get("city", "") or ""),
+            address=str(data.get("address", "") or ""), open_hours=str(data.get("open_hours", "") or ""),
+            verified=True, is_active=True, created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        db.add(new_user)
+        added += 1
+    db.commit()
+    return {"added": added, "errors": errors, "message": f"تم استيراد {added} مستودع"}
+

@@ -109,6 +109,11 @@ def get_doctor(doctor_id: str, patient_id: str = Query(None), db: Session = Depe
     d_dict = model_to_dict(d, ["password"])
     d_dict["upcoming_count"] = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.status.in_(["confirmed", "pending"])).count()
     d_dict["is_favorite"] = bool(db.query(Favorite).filter(Favorite.user_id == patient_id, Favorite.target_id == doctor_id).first()) if patient_id else False
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    d_dict["favorites_count"] = db.query(Favorite).filter(Favorite.target_id == doctor_id).count()
+    d_dict["weekly_bookings"] = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.created_at >= week_ago).count()
+    d_dict["monthly_bookings"] = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.created_at >= month_ago).count()
     return d_dict
 
 @router.post("/{doctor_id}/favorite")
@@ -120,7 +125,7 @@ def toggle_favorite(doctor_id: str, patient_id: str, current_user: dict = Depend
     db.commit(); return {"is_favorite": True}
 
 @router.get("/{doctor_id}/availability")
-def get_availability(doctor_id: str, db: Session = Depends(get_db)):
+def get_availability(doctor_id: str, date: str = Query(None), db: Session = Depends(get_db)):
     d = db.query(User).filter(User.id == doctor_id, User.role == "doctor").first()
     if not d:
         raise HTTPException(404, "الطبيب غير موجود")
@@ -128,17 +133,70 @@ def get_availability(doctor_id: str, db: Session = Depends(get_db)):
     booked = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.status.in_(active_statuses)).all()
     hours = d.available_hours or ""
     generated_slots = []
-    if d.working_hours and isinstance(d.working_hours, dict):
-        generated_slots = d.working_hours.get("slots", [])
+    wh = d.working_hours or {}
+    if isinstance(wh, dict) and wh.get("slots"):
+        generated_slots = wh.get("slots", [])
+    elif isinstance(wh, dict) and (wh.get("morning") or wh.get("evening")):
+        generated_slots = _generate_slots_from_working_hours(d, wh)
     elif hours:
         generated_slots = [h.strip() for h in hours.replace("،", ",").split(",") if h.strip()]
+    off_days = wh.get("off_days", []) if isinstance(wh, dict) else []
+    target_date = date
+    day_off = False
+    if target_date:
+        try:
+            from datetime import datetime as dt
+            weekday = dt.fromisoformat(target_date).weekday()
+            day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+            day_off = day_names[weekday] in [str(x).lower() for x in off_days]
+        except Exception:
+            pass
     return {
         "available_days": d.available_days or [],
         "available_hours": hours,
-        "working_hours": d.working_hours or {},
-        "time_slots": generated_slots,
+        "working_hours": wh,
+        "time_slots": [] if day_off else generated_slots,
         "booked_slots": [{"date": a.date, "time": a.time} for a in booked],
+        "day_off": day_off,
     }
+
+
+def _generate_slots_from_working_hours(doctor: User, wh: dict) -> list:
+    """Generate time slots from morning/evening sessions, consultation duration and buffer."""
+    duration = doctor.consultation_duration or wh.get("consultation_duration") or 30
+    buffer = doctor.buffer_minutes or wh.get("buffer_minutes") or 10
+    slots = []
+
+    def parse_range(range_str: str):
+        if not range_str or "-" not in range_str:
+            return None, None
+        parts = range_str.replace(" ", "").split("-")
+        return parts[0], parts[1]
+
+    def to_minutes(t: str):
+        t = t.upper().replace(" ", "")
+        if "AM" in t or "PM" in t:
+            from datetime import datetime as dt
+            return dt.strptime(t, "%I:%M%p").hour * 60 + dt.strptime(t, "%I:%M%p").minute
+        h, m = t.split(":")
+        return int(h) * 60 + int(m)
+
+    def from_minutes(mins: int):
+        from datetime import datetime as dt
+        h = mins // 60
+        m = mins % 60
+        return dt.strptime(f"{h}:{m:02d}", "%H:%M").strftime("%I:%M %p")
+
+    for session in [wh.get("morning", ""), wh.get("evening", "")]:
+        start, end = parse_range(session)
+        if not start or not end:
+            continue
+        cur = to_minutes(start)
+        end_m = to_minutes(end)
+        while cur + duration <= end_m:
+            slots.append(from_minutes(cur))
+            cur += duration + buffer
+    return slots
 
 @router.post("/{doctor_id}/reviews")
 def add_review(doctor_id: str, req: ReviewRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -208,10 +266,13 @@ def add_prescription(doctor_id: str, patient_id: str, data: dict, current_user: 
         ingredient = str(med.get("active_ingredient", med.get("active_ingredients", ""))).lower()
         if allergies and any(a and (a in name or a in ingredient) for a in allergies):
             warnings.append(f"تحذير حساسية دوائية: {med.get('name', '')}")
-    pres = Prescription(id=f"pre_{uuid.uuid4().hex[:8]}", doctor_id=doctor_id, patient_id=patient_id, medications=medications, notes=data.get("notes", ""), created_at=now.isoformat())
+    import random, string
+    code = "RX-" + "".join(random.choices(string.digits, k=8))
+    fulfillment = [{"index": i, "name": m.get("name", ""), "dosage": m.get("dosage", ""), "frequency": m.get("frequency", ""), "duration": m.get("duration", ""), "status": "pending"} for i, m in enumerate(medications)]
+    pres = Prescription(id=f"pre_{uuid.uuid4().hex[:8]}", doctor_id=doctor_id, patient_id=patient_id, prescription_code=code, medications=medications, fulfillment_items=fulfillment, notes=data.get("notes", ""), status="pending", created_at=now.isoformat())
     db.add(pres)
     db.add(MedicalRecord(id=f"rec_{uuid.uuid4().hex[:8]}", patient_id=patient_id, uploaded_by=doctor.name if doctor else "Doctor", type="prescription", title=f"وصفة طبية - د. {doctor.name if doctor else ''}", content=str(medications), date=now.strftime("%Y-%m-%d"), created_at=now.isoformat()))
-    db.add(Notification(id=f"ntf_{uuid.uuid4().hex[:8]}", user_id=patient_id, title="وصفة طبية جديدة", message=f"أضاف الدكتور {doctor.name if doctor else ''} وصفة طبية جديدة لملفك.", type="prescription", created_at=now.isoformat()))
+    db.add(Notification(id=f"ntf_{uuid.uuid4().hex[:8]}", user_id=patient_id, title="وصفة طبية جديدة", message=f"أضاف الدكتور {doctor.name if doctor else ''} وصفة طبية. رمز الوصفة: {code}", type="prescription", created_at=now.isoformat()))
     db.commit()
     result = model_to_dict(pres)
     result["warnings"] = warnings

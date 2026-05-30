@@ -230,7 +230,36 @@ export default function PatientHome() {
                         </View>
                     </View>
 
-                    {/* Categories */}
+                    {/* Service Categories — Doctors, Pharmacies, Labs, Radiology */}
+                    <Text style={[styles.sectionTitle, { marginBottom: 12, textAlign: 'right' }]}>خدماتنا الطبية</Text>
+                    <View style={styles.serviceCategoriesGrid}>
+                        {[
+                            { id: 'doctors', title: 'الأطباء', icon: 'stethoscope', route: '/(patient)/doctors', color: '#1E88E5' },
+                            { id: 'pharmacies', title: 'الصيدليات', icon: 'medical-bag', route: '/(patient)/pharmacies', color: '#43A047' },
+                            { id: 'labs', title: 'المختبرات', icon: 'flask-outline', route: '/(patient)/labs', color: '#8E24AA' },
+                            { id: 'radiology', title: 'مراكز الأشعة', icon: 'radiology-box', route: '/(patient)/radiology', color: '#E65100' },
+                        ].map((cat) => (
+                            <TouchableOpacity
+                                key={cat.id}
+                                style={styles.serviceCategoryCard}
+                                activeOpacity={0.85}
+                                onPress={() => router.push(cat.route as any)}
+                            >
+                                <LinearGradient colors={[cat.color, cat.color + 'CC']} style={styles.serviceCategoryIcon}>
+                                    <MaterialCommunityIcons name={cat.icon as any} size={28} color="#FFF" />
+                                </LinearGradient>
+                                <Text style={styles.serviceCategoryTitle}>{cat.title}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* Doctor Specialties — secondary navigation inside Doctors */}
+                    <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+                        <Text style={styles.sectionTitle}>تخصصات الأطباء</Text>
+                        <TouchableOpacity onPress={() => router.push('/(patient)/doctors' as any)}>
+                            <Text style={styles.seeAll}>عرض الكل</Text>
+                        </TouchableOpacity>
+                    </View>
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -437,6 +466,10 @@ const styles = StyleSheet.create({
     categoryCard: { alignItems: 'center', gap: 8, width: 75 },
     categoryIconCircle: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#1E88E5', shadowOpacity: 0.2, shadowRadius: 8 },
     categoryName: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'center' },
+    serviceCategoriesGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 12, marginBottom: 8 },
+    serviceCategoryCard: { width: (width - 52) / 2, backgroundColor: '#FFF', borderRadius: 20, padding: 16, alignItems: 'center', gap: 10, elevation: 3, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10 },
+    serviceCategoryIcon: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    serviceCategoryTitle: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
     /* Sections */
     sectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#111827' },

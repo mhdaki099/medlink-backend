@@ -114,7 +114,7 @@ export default function DoctorDashboard() {
                     <View style={styles.logoWrapper}>
                         <Image source={LOGO_IMG} style={styles.logoImg} resizeMode="contain" tintColor="#1E88E5" />
                     </View>
-                    <TouchableOpacity style={styles.actionBtnHeader}>
+                    <TouchableOpacity style={styles.actionBtnHeader} onPress={() => router.push('/(doctor)/notifications' as any)}>
                         <View style={styles.notiBadge} />
                         <Ionicons name="notifications-outline" size={22} color="#1E293B" />
                     </TouchableOpacity>

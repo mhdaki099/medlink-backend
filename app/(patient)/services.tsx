@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform, Image, 
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import BreadcrumbNav from '../../src/components/BreadcrumbNav';
 import Animated, {
     FadeInDown,
     FadeInRight,
@@ -90,6 +91,8 @@ export default function ServicesScreen() {
                     />
                 </Animated.View>
             </View>
+
+            <BreadcrumbNav items={[{ label: 'الرئيسية', route: '/(patient)' }, { label: 'خدماتي' }]} />
 
             <ScrollView
                 style={{ flex: 1 }}

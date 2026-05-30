@@ -181,6 +181,28 @@ export default function DoctorAppointments() {
                                 </View>
                             )}
 
+                            {apt.status === 'reschedule_requested' && (
+                                <View style={styles.actions}>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]} onPress={() => api.respondReschedule(apt.id, { action: 'reject', rejection_note: 'تم رفض طلب إعادة الجدولة' }).then(loadData)}>
+                                        <Text style={styles.cancelBtnText}>رفض الطلب</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.confirmBtn]} onPress={() => api.respondReschedule(apt.id, { action: 'approve' }).then(() => { Alert.alert('تم', 'تمت الموافقة'); loadData(); })}>
+                                        <Text style={styles.confirmBtnText}>موافقة</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {apt.status === 'cancellation_requested' && (
+                                <View style={styles.actions}>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]} onPress={() => handleStatusUpdate(apt.id, 'confirmed')}>
+                                        <Text style={styles.cancelBtnText}>رفض الإلغاء</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.actionBtn, styles.confirmBtn]} onPress={() => handleStatusUpdate(apt.id, 'cancelled')}>
+                                        <Text style={styles.confirmBtnText}>تأكيد الإلغاء</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
                             {apt.status === 'pending' && (
                                 <View style={styles.actions}>
                                     <TouchableOpacity 

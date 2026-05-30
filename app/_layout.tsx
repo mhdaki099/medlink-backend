@@ -54,6 +54,7 @@ function RootLayoutNavigator() {
             <Stack.Screen name="(lab)" />
             <Stack.Screen name="(warehouse)" />
             <Stack.Screen name="(admin)" />
+            <Stack.Screen name="(secretary)" />
         </Stack>
     );
 }

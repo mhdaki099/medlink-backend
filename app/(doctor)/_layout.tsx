@@ -118,8 +118,9 @@ export default function DoctorLayout() {
       <Tabs.Screen name="appointments" options={{ title: 'المواعيد' }} />
       <Tabs.Screen name="patients" options={{ title: 'المرضى' }} />
       <Tabs.Screen name="profile" options={{ title: 'العيادة' }} />
-      <Tabs.Screen name="new-prescription" options={{ href: null }} />
+            <Tabs.Screen name="new-prescription" options={{ href: null }} />
       <Tabs.Screen name="new-appointment" options={{ href: null }} />
+      <Tabs.Screen name="notifications" options={{ href: null }} />
     </Tabs>
   );
 }

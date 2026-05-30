@@ -19,7 +19,7 @@ def init_db():
         WarehouseInventory, Appointment, Order, WarehouseOrder, LabBooking,
         LabResult, MedicalRecord, AuditLog, Review, Prescription, Payment,
         Favorite, FavoriteMedicine, CartItem, PatientNote, Notification,
-        FamilyLink, ServiceBooking, DrugCatalog,
+        FamilyLink, ServiceBooking, DrugCatalog, AppointmentAuditLog,
     )
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
@@ -34,11 +34,19 @@ def ensure_sqlite_columns():
             "home_service_fee": "FLOAT DEFAULT 0",
             "has_home_service": "BOOLEAN DEFAULT 0",
             "address": "TEXT",
+            "province": "TEXT",
+            "district": "TEXT",
+            "area": "TEXT",
+            "consultation_duration": "INTEGER DEFAULT 30",
+            "buffer_minutes": "INTEGER DEFAULT 10",
+            "facility_gallery": "JSON",
+            "emergency_contact": "JSON",
         },
         "medicines": {
             "strength": "VARCHAR",
             "barcode": "VARCHAR",
             "warnings": "TEXT",
+            "contraindications": "TEXT",
             "active_ingredients": "TEXT",
             "usage_info": "TEXT",
             "side_effects": "TEXT",
@@ -57,6 +65,13 @@ def ensure_sqlite_columns():
         },
         "medical_records": {
             "record_owner": "TEXT DEFAULT 'self'",
+        },
+        "prescriptions": {
+            "prescription_code": "TEXT",
+            "status": "TEXT DEFAULT 'pending'",
+            "pharmacy_id": "TEXT",
+            "fulfillment_items": "JSON",
+            "closed_at": "TEXT",
         },
     }
     with engine.begin() as conn:

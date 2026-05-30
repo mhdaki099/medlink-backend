@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert, Modal, ScrollView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
+import ArabicCalendar from '../../src/components/ArabicCalendar';
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +23,14 @@ export default function AppointmentsScreen() {
     const { user } = useAuth();
     const [appointments, setAppointments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [rescheduleModal, setRescheduleModal] = useState<{ visible: boolean; aptId: string; doctorId: string }>({ visible: false, aptId: '', doctorId: '' });
+    const now = new Date();
+    const [selectedDate, setSelectedDate] = useState(now.toISOString().split('T')[0]);
+    const [selectedTime, setSelectedTime] = useState('');
+    const [currentMonth, setCurrentMonth] = useState(now.getMonth());
+    const [currentYear, setCurrentYear] = useState(now.getFullYear());
+    const [timeSlots, setTimeSlots] = useState<string[]>([]);
+    const [bookedSlots, setBookedSlots] = useState<any[]>([]);
 
     const load = async () => {
         try {
@@ -42,17 +51,31 @@ export default function AppointmentsScreen() {
         load();
     }, [user]);
 
-    const handleRequestReschedule = (aptId: string) => {
-        Alert.alert('طلب إعادة جدولة', 'هل تريد طلب إعادة جدولة هذا الموعد؟', [
-            { text: 'إلغاء', style: 'cancel' },
-            { text: 'نعم', onPress: async () => {
-                try {
-                    await api.requestReschedule(aptId, '', '');
-                    Alert.alert('تم', 'تم إرسال طلب إعادة الجدولة للطبيب');
-                    load();
-                } catch (e: any) { Alert.alert('خطأ', e.message); }
-            }},
-        ]);
+    const handleRequestReschedule = async (aptId: string, doctorId: string) => {
+        setRescheduleModal({ visible: true, aptId, doctorId });
+        setSelectedTime('');
+        try {
+            const av = await api.getDoctorAvailability(doctorId);
+            setTimeSlots(av.time_slots || []);
+            setBookedSlots(av.booked_slots || []);
+        } catch (e) {
+            console.warn(e);
+        }
+    };
+
+    const submitReschedule = async () => {
+        if (!selectedDate || !selectedTime) {
+            Alert.alert('تنبيه', 'يرجى اختيار التاريخ والوقت الجديد');
+            return;
+        }
+        try {
+            await api.requestReschedule(rescheduleModal.aptId, selectedDate, selectedTime);
+            Alert.alert('تم', 'تم إرسال طلب إعادة الجدولة للطبيب');
+            setRescheduleModal({ visible: false, aptId: '', doctorId: '' });
+            load();
+        } catch (e: any) {
+            Alert.alert('خطأ', e.message);
+        }
     };
 
     const handleRequestCancel = (aptId: string) => {
@@ -142,7 +165,7 @@ export default function AppointmentsScreen() {
                     )}
                     {(item.status === 'pending' || item.status === 'confirmed') && (
                         <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
-                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleRequestReschedule(item.id)}>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleRequestReschedule(item.id, item.doctor_id)}>
                                 <MaterialCommunityIcons name="calendar-edit" size={14} color="#D97706" />
                                 <Text style={[styles.detailsBtnText, { color: '#D97706' }]}>إعادة جدولة</Text>
                             </TouchableOpacity>
@@ -191,6 +214,43 @@ export default function AppointmentsScreen() {
                     refreshing={loading}
                 />
             )}
+            <Modal visible={rescheduleModal.visible} animationType="slide" transparent>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' }}>
+                        <Text style={{ fontFamily: 'Cairo_700Bold', fontSize: 18, textAlign: 'center', marginBottom: 16 }}>اختر موعداً جديداً</Text>
+                        <ArabicCalendar
+                            month={currentMonth}
+                            year={currentYear}
+                            selectedDate={selectedDate}
+                            onSelect={setSelectedDate}
+                            onPrevMonth={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(currentYear - 1); } else setCurrentMonth(currentMonth - 1); }}
+                            onNextMonth={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(currentYear + 1); } else setCurrentMonth(currentMonth + 1); }}
+                        />
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4, flexDirection: 'row-reverse' }}>
+                            {timeSlots.map((time) => {
+                                const booked = bookedSlots.some((s) => s.date === selectedDate && s.time === time);
+                                return (
+                                    <TouchableOpacity
+                                        key={time}
+                                        style={[{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: booked ? '#111827' : selectedTime === time ? '#1E88E5' : '#F1F5F9' }]}
+                                        onPress={() => booked ? Alert.alert('محجوز', 'هذا الموعد محجوز بالفعل') : setSelectedTime(time)}
+                                    >
+                                        <Text style={{ fontFamily: 'Cairo_600SemiBold', color: booked || selectedTime === time ? '#FFF' : '#475569', fontSize: 12 }}>{time}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                        <View style={{ flexDirection: 'row-reverse', gap: 10, marginTop: 20 }}>
+                            <TouchableOpacity style={{ flex: 1, backgroundColor: '#1E88E5', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }} onPress={submitReschedule}>
+                                <Text style={{ fontFamily: 'Cairo_700Bold', color: '#FFF' }}>إرسال الطلب</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={{ flex: 1, backgroundColor: '#F1F5F9', borderRadius: 14, paddingVertical: 14, alignItems: 'center' }} onPress={() => setRescheduleModal({ visible: false, aptId: '', doctorId: '' })}>
+                                <Text style={{ fontFamily: 'Cairo_700Bold', color: '#64748B' }}>إلغاء</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

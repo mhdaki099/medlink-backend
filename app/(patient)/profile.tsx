@@ -17,6 +17,10 @@ export default function PatientProfile() {
     const [email, setEmail] = useState(user?.email || '');
     const [phone, setPhone] = useState(user?.phone || '');
     const [drugAllergies, setDrugAllergies] = useState((user?.drug_allergies || []).join(', '));
+    const ec = user?.emergency_contact || {};
+    const [emergencyName, setEmergencyName] = useState(ec.name || '');
+    const [emergencyRelation, setEmergencyRelation] = useState(ec.relationship || '');
+    const [emergencyPhone, setEmergencyPhone] = useState(ec.phone || '');
     
     const [isSaving, setIsSaving] = useState(false);
     const [requests, setRequests] = useState<any[]>([]);
@@ -75,7 +79,12 @@ export default function PatientProfile() {
                 name: fullName,
                 email: email,
                 phone: phone,
-                drug_allergies: drugAllergies.split(',').map((x: string) => x.trim()).filter(Boolean)
+                drug_allergies: drugAllergies.split(',').map((x: string) => x.trim()).filter(Boolean),
+                emergency_contact: {
+                    name: emergencyName,
+                    relationship: emergencyRelation,
+                    phone: emergencyPhone,
+                },
             });
             
             // Update local state in AuthContext
@@ -200,6 +209,22 @@ export default function PatientProfile() {
                                 placeholder="مثال: Penicillin, Ibuprofen"
                                 textAlign="right"
                             />
+                        </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>جهة الاتصال للطوارئ</Text>
+                        <View style={styles.inputWrapper}>
+                            <MaterialCommunityIcons name="phone-alert-outline" size={20} color="#94A3B8" />
+                            <TextInput style={styles.input} value={emergencyName} onChangeText={setEmergencyName} placeholder="الاسم" textAlign="right" />
+                        </View>
+                        <View style={[styles.inputWrapper, { marginTop: 8 }]}>
+                            <MaterialCommunityIcons name="account-heart-outline" size={20} color="#94A3B8" />
+                            <TextInput style={styles.input} value={emergencyRelation} onChangeText={setEmergencyRelation} placeholder="صلة القرابة" textAlign="right" />
+                        </View>
+                        <View style={[styles.inputWrapper, { marginTop: 8 }]}>
+                            <MaterialCommunityIcons name="phone-outline" size={20} color="#94A3B8" />
+                            <TextInput style={styles.input} value={emergencyPhone} onChangeText={setEmergencyPhone} placeholder="رقم الهاتف" keyboardType="phone-pad" textAlign="right" />
                         </View>
                     </View>
 

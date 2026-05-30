@@ -13,7 +13,10 @@ const OWNER_FILTERS = [
     { key: 'all', label: 'الكل', icon: 'folder-multiple-outline' },
     { key: 'self', label: 'سجلي', icon: 'account-outline' },
     { key: 'child', label: 'الأطفال', icon: 'baby-face-outline' },
-    { key: 'relative', label: 'الأقارب', icon: 'account-group-outline' },
+    { key: 'father', label: 'الأب', icon: 'account-outline' },
+    { key: 'mother', label: 'الأم', icon: 'account-outline' },
+    { key: 'spouse', label: 'الزوج/ة', icon: 'heart-outline' },
+    { key: 'elderly', label: 'كبار السن', icon: 'account-group-outline' },
 ];
 
 export default function MedicalRecords() {
@@ -27,8 +30,9 @@ export default function MedicalRecords() {
     const loadRecords = async () => {
         if (!user?.id) return;
         try {
-            const data = await api.getPatientHistory(user.id);
-            setRecords(data.records || []);
+            const ownerParam = ownerFilter === 'all' ? undefined : ownerFilter;
+            const data = await api.getMedicalRecords(user.id, ownerParam);
+            setRecords(data);
         } catch (e) {
             console.error(e);
         } finally {
@@ -36,9 +40,13 @@ export default function MedicalRecords() {
         }
     };
 
-    useEffect(() => { loadRecords(); }, [user]);
+    useEffect(() => { loadRecords(); }, [user, ownerFilter]);
 
-    const filtered = ownerFilter === 'all' ? records : records.filter(r => r.record_owner === ownerFilter);
+    const filtered = records;
+
+    const ownerLabel = (owner: string) => ({
+        self: 'أنا', child: 'طفل', father: 'أب', mother: 'أم', spouse: 'زوج/زوجة', elderly: 'كبير سن'
+    }[owner] || owner);
 
     const getTypeIcon = (type: string) => {
         switch (type) {
@@ -76,7 +84,7 @@ export default function MedicalRecords() {
                             name={item.record_owner === 'child' ? 'baby-face-outline' : 'account-group-outline'} 
                             size={11} color="#6B7280" 
                         />
-                        <Text style={styles.ownerBadgeText}>{item.record_owner === 'child' ? 'طفل' : 'قريب'}</Text>
+                        <Text style={styles.ownerBadgeText}>{ownerLabel(item.record_owner)}</Text>
                     </View>
                 )}
             </View>

@@ -12,9 +12,39 @@ from utils.helpers import model_to_dict, safe_update
 router = APIRouter()
 
 @router.get("")
-def list_pharmacies(db: Session = Depends(get_db)):
-    pharmacies = db.query(User).filter(User.role == "pharmacy").all()
-    return [model_to_dict(p, ["password"]) for p in pharmacies]
+def list_pharmacies(
+    lat: float = Query(None),
+    lng: float = Query(None),
+    radius_km: float = Query(4.0),
+    province: str = Query(None),
+    district: str = Query(None),
+    area: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    pharmacies = db.query(User).filter(User.role == "pharmacy", User.is_active == True).all()
+    results = []
+    for p in pharmacies:
+        if province and (p.province or "").lower() != province.lower():
+            continue
+        if district and (p.district or "").lower() != district.lower():
+            continue
+        if area and (p.area or "").lower() != area.lower():
+            continue
+        pd = model_to_dict(p, ["password"])
+        if lat is not None and lng is not None and p.lat and p.lng:
+            from math import radians, sin, cos, sqrt, atan2
+            r = 6371
+            dlat = radians(p.lat - lat)
+            dlng = radians(p.lng - lng)
+            a = sin(dlat / 2) ** 2 + cos(radians(lat)) * cos(radians(p.lat)) * sin(dlng / 2) ** 2
+            dist = 2 * r * atan2(sqrt(a), sqrt(1 - a))
+            pd["distance_km"] = round(dist, 2)
+            if dist > radius_km:
+                continue
+        results.append(pd)
+    if lat is not None and lng is not None:
+        results.sort(key=lambda x: x.get("distance_km", 9999))
+    return results
 
 # --- Static Medicine Routes FIRST ---
 
@@ -233,7 +263,22 @@ def get_pharmacy(pharmacy_id: str, db: Session = Depends(get_db)):
     p = db.query(User).filter(User.id == pharmacy_id, User.role == "pharmacy").first()
     if not p:
         raise HTTPException(404, "الصيدلية غير موجودة")
-    return model_to_dict(p, ["password"])
+    pd = model_to_dict(p, ["password"])
+    week_ago = datetime.now(timezone.utc).timestamp() - 7 * 24 * 3600
+    month_ago = datetime.now(timezone.utc).timestamp() - 30 * 24 * 3600
+    orders = db.query(Order).filter(Order.pharmacy_id == pharmacy_id).all()
+    weekly = monthly = 0
+    for order in orders:
+        try:
+            ts = datetime.fromisoformat(order.created_at).timestamp()
+            if ts >= week_ago: weekly += 1
+            if ts >= month_ago: monthly += 1
+        except Exception:
+            pass
+    pd["favorites_count"] = db.query(Favorite).filter(Favorite.target_id == pharmacy_id).count()
+    pd["weekly_bookings"] = weekly
+    pd["monthly_bookings"] = monthly
+    return pd
 
 @router.get("/{pharmacy_id}/medicines")
 def get_pharmacy_medicines(pharmacy_id: str, category: str = Query(None), db: Session = Depends(get_db)):

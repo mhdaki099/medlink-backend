@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 const C = {
@@ -14,6 +15,7 @@ const C = {
 
 export default function PharmacyDashboard() {
     const { user, logout } = useAuth();
+    const router = useRouter();
     const [orders, setOrders] = useState<any[]>([]);
     const [medicines, setMedicines] = useState<any[]>([]);
     const [analytics, setAnalytics] = useState<any>(null);
@@ -99,6 +101,14 @@ export default function PharmacyDashboard() {
                     </View>
                 ))}
             </View>
+
+            {/* Prescription Fulfillment Quick Action */}
+            <TouchableOpacity style={styles.rxBtn} onPress={() => router.push('/(pharmacy)/prescriptions' as any)}>
+                <LinearGradient colors={[C.accent, C.primary]} style={styles.rxBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                    <MaterialCommunityIcons name="file-document-outline" size={24} color="#FFF" />
+                    <Text style={styles.rxBtnText}>صرف الوصفات الطبية</Text>
+                </LinearGradient>
+            </TouchableOpacity>
 
             {/* Pending Orders */}
             <View style={styles.section}>
@@ -227,4 +237,7 @@ const styles = StyleSheet.create({
     acceptBtnText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
     deliveredBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.success + '12', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     deliveredBtnText: { color: C.success, fontSize: 13, fontFamily: 'Cairo_700Bold' },
+    rxBtn: { marginHorizontal: 16, marginTop: 16, borderRadius: 16, overflow: 'hidden' },
+    rxBtnGrad: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
+    rxBtnText: { fontFamily: 'Cairo_700Bold', fontSize: 15, color: '#FFF' },
 });

@@ -77,6 +77,31 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
     db.refresh(booking)
     return model_to_dict(booking)
 
+@router.get("/{provider_id}/analytics")
+def get_provider_analytics(provider_id: str, db: Session = Depends(get_db)):
+    from models import Favorite, ServiceBooking
+    from datetime import timedelta
+    provider = db.query(User).filter(User.id == provider_id).first()
+    if not provider:
+        raise HTTPException(404, "المزود غير موجود")
+    fav_count = db.query(Favorite).filter(Favorite.target_id == provider_id).count()
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    bookings = db.query(ServiceBooking).filter(ServiceBooking.provider_id == provider_id).all()
+    weekly = monthly = 0
+    for b in bookings:
+        if b.created_at >= week_ago:
+            weekly += 1
+        if b.created_at >= month_ago:
+            monthly += 1
+    return {
+        "favorites_count": fav_count,
+        "weekly_bookings": weekly,
+        "monthly_bookings": monthly,
+        "total_bookings": len(bookings),
+    }
+
+
 @router.get("/tests/all")
 def all_tests(db: Session = Depends(get_db)):
     tests = db.query(LabTest).all()

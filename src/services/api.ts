@@ -140,7 +140,10 @@ class ApiClient {
     }
 
     // ── Pharmacies & Medicines ───────────────────────────────────────────────
-    getPharmacies() { return this.get<any[]>('/pharmacies'); }
+    getPharmacies(params?: { lat?: number; lng?: number; radius_km?: number; province?: string; district?: string; area?: string }) {
+        const q = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
+        return this.get<any[]>(`/pharmacies${q ? '?' + q : ''}`);
+    }
     getPharmacy(id: string) { return this.get<any>(`/pharmacies/${id}`); }
     getPharmacyAnalytics(id: string) { return this.get<any>(`/pharmacies/${id}/analytics`); }
     getPharmacyMedicines(id: string, category?: string) {
@@ -243,13 +246,29 @@ class ApiClient {
     requestCancelAppointment(id: string) {
         return this.put<any>(`/appointments/${id}/request-cancel`, {});
     }
+    respondReschedule(id: string, data: { action: string; date?: string; time?: string; rejection_note?: string }) {
+        return this.put<any>(`/appointments/${id}/respond-reschedule`, data);
+    }
+    getAppointmentAudit(id: string) {
+        return this.get<any[]>(`/appointments/${id}/audit`);
+    }
 
-    // Prescriptions
+    // Prescriptions & fulfillment
     createPrescription(data: any) {
         return this.post<any>('/prescriptions', data);
     }
     getPatientPrescriptions(patientId: string) {
         return this.get<any[]>(`/prescriptions/patient/${patientId}`);
+    }
+    searchPrescriptions(params: { code?: string; patient_name?: string; phone?: string }) {
+        const q = new URLSearchParams(params as any).toString();
+        return this.get<any[]>(`/prescriptions/search?${q}`);
+    }
+    dispensePrescriptionItem(prescriptionId: string, data: any) {
+        return this.put<any>(`/prescriptions/${prescriptionId}/dispense`, data);
+    }
+    getPrescription(id: string) {
+        return this.get<any>(`/prescriptions/${id}`);
     }
     cancelAppointment(id: string) { return this.delete<any>(`/appointments/${id}`); }
 
@@ -343,6 +362,37 @@ class ApiClient {
     }
     createServiceBooking(data: any) { return this.post<any>('/labs/service-bookings', data); }
     getRadiologyCenters() { return this.get<any[]>('/labs/radiology'); }
+    getProviderAnalytics(providerId: string) { return this.get<any>(`/labs/${providerId}/analytics`); }
+
+    getUserNotifications(userId: string) { return this.get<any[]>(`/patients/${userId}/notifications`); }
+    markUserNotificationRead(id: string) { return this.put<any>(`/patients/notifications/${id}/read`, {}); }
+
+    async bulkImportPharmacies(asset: { uri: string; name?: string }) {
+        const formData = new FormData();
+        formData.append('file', {
+            uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''),
+            name: asset.name || 'pharmacies.xlsx',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        } as any);
+        const headers: Record<string, string> = { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true' };
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const res = await fetch(`${BASE_URL}/admin/bulk-import/pharmacies`, { method: 'POST', headers, body: formData });
+        if (!res.ok) throw new Error(await res.text() || 'Upload failed');
+        return res.json();
+    }
+    async bulkImportWarehousesAdmin(asset: { uri: string; name?: string }) {
+        const formData = new FormData();
+        formData.append('file', {
+            uri: Platform.OS === 'android' ? asset.uri : asset.uri.replace('file://', ''),
+            name: asset.name || 'warehouses.xlsx',
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        } as any);
+        const headers: Record<string, string> = { 'Accept': 'application/json', 'Bypass-Tunnel-Reminder': 'true' };
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const res = await fetch(`${BASE_URL}/admin/bulk-import/warehouses`, { method: 'POST', headers, body: formData });
+        if (!res.ok) throw new Error(await res.text() || 'Upload failed');
+        return res.json();
+    }
 
     // ── Admin ─────────────────────────────────────────────────────────────────
     getAdminDashboard() { return this.get<any>('/admin/dashboard'); }

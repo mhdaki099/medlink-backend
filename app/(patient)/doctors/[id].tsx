@@ -8,6 +8,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import ProviderStatsBar from '../../../src/components/ProviderStatsBar';
 
 const { width, height } = Dimensions.get('window');
 
@@ -67,6 +68,7 @@ export default function DoctorProfile() {
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState('');
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+    const [analytics, setAnalytics] = useState<any>(null);
 
     // Slider Animation State
     const [isConfirmed, setIsConfirmed] = useState(false);
@@ -81,6 +83,11 @@ export default function DoctorProfile() {
                 setDoctor(data);
                 setIsFavorite(data.is_favorite || false);
                 if (av) setAvailability(av);
+                setAnalytics({
+                    favorites_count: data.favorites_count,
+                    weekly_bookings: data.weekly_bookings,
+                    monthly_bookings: data.monthly_bookings,
+                });
             } catch (e) {
                 console.error(e);
             } finally {
@@ -231,6 +238,7 @@ export default function DoctorProfile() {
 
             {/* Content Area */}
             <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
+                <ProviderStatsBar stats={analytics} rating={doctor.rating} />
                 {/* Stats */}
                 <View style={styles.statsContainer}>
                     <LinearGradient
@@ -310,7 +318,7 @@ export default function DoctorProfile() {
                                 <TouchableOpacity 
                                     key={idx} 
                                     style={[styles.timeSlotBtn, isSelected && styles.timeSlotBtnActive, isBooked && styles.timeSlotBtnBooked]}
-                                    onPress={() => isBooked ? Alert.alert('تنبيه', 'This appointment is already booked.') : setSelectedTime(time)}
+                                    onPress={() => isBooked ? Alert.alert('محجوز', 'هذا الموعد محجوز بالفعل') : setSelectedTime(time)}
                                 >
                                     <Text style={[styles.timeSlotText, isSelected && styles.timeSlotTextActive, isBooked && styles.timeSlotTextBooked]}>{time}</Text>
                                 </TouchableOpacity>

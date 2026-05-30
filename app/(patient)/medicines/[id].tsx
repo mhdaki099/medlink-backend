@@ -76,6 +76,7 @@ export default function MedicineDetailScreen() {
         { title: 'الاستخدامات', content: medicine.usage_info, icon: 'information-outline', color: '#43A047' },
         { title: 'الآثار الجانبية', content: medicine.side_effects, icon: 'alert-circle-outline', color: '#F59E0B' },
         { title: 'التحذيرات', content: medicine.warnings, icon: 'shield-alert-outline', color: '#EF4444' },
+        { title: 'موانع الاستخدام', content: medicine.contraindications, icon: 'cancel', color: '#7C3AED' },
     ].filter(s => s.content);
 
     return (

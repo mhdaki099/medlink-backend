@@ -51,6 +51,19 @@ class User(Base):
     home_service_fee = Column(Float, nullable=True, default=0)
     has_home_service = Column(Boolean, default=False)
 
+    # Location hierarchy (pharmacy / lab / radiology)
+    province = Column(String, nullable=True)
+    district = Column(String, nullable=True)
+    area = Column(String, nullable=True)
+
+    # Provider settings
+    consultation_duration = Column(Integer, nullable=True, default=30)
+    buffer_minutes = Column(Integer, nullable=True, default=10)
+    facility_gallery = Column(JSON, nullable=True)
+
+    # Patient emergency contact (API-ready for future alerts)
+    emergency_contact = Column(JSON, nullable=True)
+
     # General / Corporate
     services = Column(JSON, nullable=True) # List of services offered
     supervisor_id = Column(String, ForeignKey("users.id"), nullable=True) # For Secretary -> Doctor link
@@ -98,6 +111,7 @@ class Medicine(Base):
     usage_info = Column(Text, nullable=True)
     side_effects = Column(Text, nullable=True)
     warnings = Column(Text, nullable=True)
+    contraindications = Column(Text, nullable=True)
 
 
 class LabTest(Base):
@@ -263,9 +277,26 @@ class Prescription(Base):
     id = Column(String, primary_key=True, index=True)
     doctor_id = Column(String, ForeignKey("users.id"))
     patient_id = Column(String, ForeignKey("users.id"))
+    pharmacy_id = Column(String, ForeignKey("users.id"), nullable=True)
+    prescription_code = Column(String, unique=True, index=True, nullable=True)
     medications = Column(JSON)
+    fulfillment_items = Column(JSON, nullable=True)
     notes = Column(Text, nullable=True)
+    status = Column(String, default="pending")  # pending, partially_dispensed, fully_dispensed
     is_dispensed = Column(Boolean, default=False)
+    created_at = Column(String)
+    closed_at = Column(String, nullable=True)
+
+
+class AppointmentAuditLog(Base):
+    __tablename__ = "appointment_audit_logs"
+    id = Column(String, primary_key=True, index=True)
+    appointment_id = Column(String, ForeignKey("appointments.id"))
+    user_id = Column(String, ForeignKey("users.id"))
+    action = Column(String)
+    old_status = Column(String, nullable=True)
+    new_status = Column(String, nullable=True)
+    details = Column(Text, nullable=True)
     created_at = Column(String)
 
 

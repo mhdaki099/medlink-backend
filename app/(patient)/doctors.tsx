@@ -216,7 +216,7 @@ export default function DoctorsScreen() {
                 {myDoctors.length > 0 && (
                     <View style={styles.sectionContainer}>
                         <View style={styles.sectionHeader}>
-                            <Text style={styles.sectionTitle}>My Doctors</Text>
+                            <Text style={styles.sectionTitle}>أطبائي</Text>
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12, flexDirection: 'row-reverse' }}>
                             {myDoctors.map((doctor: any) => (
