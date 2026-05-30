@@ -15,51 +15,75 @@ const { width, height } = Dimensions.get('window');
 const SERVICES = [
     {
         id: 'doctors',
-        title: 'أطبائي',
-        sub: 'أطبائي المعالجين وحجز مواعيد',
+        title: 'الأطباء',
+        sub: 'حجز مواعيد واستشارات طبية',
         icon: 'stethoscope',
         route: '/(patient)/doctors',
+        color: '#1E88E5',
         delay: 300
     },
     {
-        id: 'medicines',
-        title: 'أدويتي',
-        sub: 'طلب أدوية ووصفات إلكترونية',
-        icon: 'pill',
+        id: 'pharmacies',
+        title: 'الصيدليات',
+        sub: 'أدوية ووصفة إلكترونية',
+        icon: 'pharmacy',
         route: '/(patient)/pharmacies',
-        delay: 450
-    },
-    {
-        id: 'appointments',
-        title: 'مواعيدي',
-        sub: 'إدارة جميع الحجوزات القادمة',
-        icon: 'calendar-month',
-        route: '/(patient)/appointments',
-        delay: 600
-    },
-    {
-        id: 'records',
-        title: 'سجل طبي',
-        sub: 'الملفات الطبية لك ولعائلتك',
-        icon: 'folder-heart-outline',
-        route: '/(patient)/records',
-        delay: 750
+        color: '#43A047',
+        delay: 400
     },
     {
         id: 'labs',
-        title: 'نتائج المختبر',
-        sub: 'تحاليل ونتائج مخبرية',
+        title: 'المختبرات',
+        sub: 'تحاليل طبية وأشعة',
         icon: 'flask-outline',
         route: '/(patient)/labs',
-        delay: 900
+        color: '#AF52DE',
+        delay: 500
     },
     {
         id: 'radiology',
         title: 'مراكز الأشعة',
-        sub: 'حجز أشعة ورنين مغناطيسي',
-        icon: 'radiology-box-outline',
+        sub: 'أشعة ورنين مغناطيسي',
+        icon: 'radioactive',
         route: '/(patient)/radiology',
-        delay: 1050
+        color: '#FF6B35',
+        delay: 600
+    },
+    {
+        id: 'appointments',
+        title: 'مواعيدي',
+        sub: 'إدارة جميع الحجوزات',
+        icon: 'calendar-month',
+        route: '/(patient)/appointments',
+        color: '#1E88E5',
+        delay: 700
+    },
+    {
+        id: 'records',
+        title: 'السجل الطبي',
+        sub: 'ملفات طبية لعائلتك',
+        icon: 'folder-heart-outline',
+        route: '/(patient)/records',
+        color: '#43A047',
+        delay: 800
+    },
+    {
+        id: 'my_doctors',
+        title: 'أطبائي',
+        sub: 'أطباؤك المعالجون',
+        icon: 'medical-bag',
+        route: '/(patient)/my-doctors',
+        color: '#1E88E5',
+        delay: 900
+    },
+    {
+        id: 'prescriptions',
+        title: 'وصفاتي',
+        sub: 'وصفة طبية إلكترونية',
+        icon: 'prescription',
+        route: '/(patient)/my-prescriptions',
+        color: '#43A047',
+        delay: 1000
     }
 ];
 
@@ -162,8 +186,8 @@ export default function ServicesScreen() {
                                     activeOpacity={0.9}
                                     onPress={() => router.push(srv.route as any)}
                                 >
-                                    <View style={styles.iconBox}>
-                                        <MaterialCommunityIcons name={srv.icon as any} size={28} color="#1E88E5" />
+                                    <View style={[styles.iconBox, { backgroundColor: (srv.color || '#1E88E5') + '15', borderColor: (srv.color || '#1E88E5') + '30' }]}>
+                                        <MaterialCommunityIcons name={srv.icon as any} size={28} color={srv.color || '#1E88E5'} />
                                     </View>
                                     <View style={styles.srvTextCol}>
                                         <Text style={styles.srvTitle}>{srv.title}</Text>

@@ -1,5 +1,7 @@
 import React from 'react';
-import { ScrollView, TouchableOpacity, Text, View, StyleSheet } from 'react-native';
+import { ScrollView, TouchableOpacity, Text, View, StyleSheet, Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
 
 export const ARABIC_WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 export const ARABIC_MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
@@ -52,15 +54,68 @@ export default function ArabicCalendar({ month, year, selectedDate, onSelect, on
 }
 
 const styles = StyleSheet.create({
-    wrap: { marginBottom: 16 },
-    header: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', gap: 20, marginBottom: 12, paddingHorizontal: 20 },
-    title: { fontFamily: 'Cairo_700Bold', fontSize: 16, color: '#1E88E5' },
-    nav: { fontFamily: 'Cairo_700Bold', fontSize: 16, color: '#1E88E5', padding: 8 },
-    scroll: { paddingHorizontal: 16, gap: 12, flexDirection: 'row-reverse' },
-    day: { alignItems: 'center', padding: 10, borderRadius: 16, backgroundColor: '#FFF', minWidth: 56, borderWidth: 1, borderColor: '#F1F5F9' },
-    dayActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
-    dayName: { fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: '#64748B', marginBottom: 4 },
-    dayNameActive: { color: 'rgba(255,255,255,0.9)' },
-    dayNum: { fontFamily: 'Cairo_700Bold', fontSize: 15, color: '#1E293B' },
-    dayNumActive: { color: '#FFF' },
+    wrap: { marginBottom: 16, backgroundColor: '#F8FAFF', borderRadius: 16, padding: 12 },
+    header: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingHorizontal: 8,
+    },
+    title: {
+        fontFamily: 'Cairo_700Bold',
+        fontSize: 18,
+        color: '#1E88E5',
+        textAlign: 'center',
+    },
+    nav: {
+        fontFamily: 'Cairo_700Bold',
+        fontSize: 14,
+        color: '#1E88E5',
+        padding: 10,
+        backgroundColor: '#E3F2FD',
+        borderRadius: 10,
+    },
+    scroll: {
+        paddingVertical: 8,
+        gap: 10,
+        flexDirection: 'row-reverse',
+    },
+    day: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: 14,
+        backgroundColor: '#FFF',
+        minWidth: (width - 80) / 5,
+        borderWidth: 1.5,
+        borderColor: '#E2E8F0',
+        shadowColor: '#000',
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    dayActive: {
+        backgroundColor: '#1E88E5',
+        borderColor: '#1E88E5',
+    },
+    dayName: {
+        fontFamily: 'Cairo_600SemiBold',
+        fontSize: 10,
+        color: '#64748B',
+        marginBottom: 6,
+        textAlign: 'center',
+    },
+    dayNameActive: {
+        color: 'rgba(255,255,255,0.9)',
+    },
+    dayNum: {
+        fontFamily: 'Cairo_700Bold',
+        fontSize: 16,
+        color: '#1E293B',
+        textAlign: 'center',
+    },
+    dayNumActive: {
+        color: '#FFF',
+    },
 });
