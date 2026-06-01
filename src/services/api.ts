@@ -195,7 +195,24 @@ class ApiClient {
     }
 
     // ── Labs ─────────────────────────────────────────────────────────────────
-    getLabs() { return this.get<any[]>('/labs'); }
+    getLabs(filters?: { q?: string; province?: string; district?: string; area?: string }) {
+        const params = new URLSearchParams();
+        if (filters?.q) params.append('q', filters.q);
+        if (filters?.province) params.append('province', filters.province);
+        if (filters?.district) params.append('district', filters.district);
+        if (filters?.area) params.append('area', filters.area);
+        const query = params.toString();
+        return this.get<any[]>(`/labs${query ? '?' + query : ''}`);
+    }
+    getRadiologyCenters(filters?: { q?: string; province?: string; district?: string; area?: string }) {
+        const params = new URLSearchParams();
+        if (filters?.q) params.append('q', filters.q);
+        if (filters?.province) params.append('province', filters.province);
+        if (filters?.district) params.append('district', filters.district);
+        if (filters?.area) params.append('area', filters.area);
+        const query = params.toString();
+        return this.get<any[]>(`/labs/radiology${query ? '?' + query : ''}`);
+    }
     getLab(id: string) { return this.get<any>(`/labs/${id}`); }
     getLabTests(labId?: string) {
         return labId ? this.get<any[]>(`/labs/${labId}/tests`) : this.get<any[]>('/labs/tests/all');
