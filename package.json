@@ -1,0 +1,15 @@
+{
+  "name": "drapp-syria-root",
+  "private": true,
+  "description": "Wrapper — the Expo app lives in ./DrApp_Syria-master",
+  "scripts": {
+    "start": "npm --prefix ./DrApp_Syria-master start",
+    "android": "npm --prefix ./DrApp_Syria-master run android",
+    "ios": "npm --prefix ./DrApp_Syria-master run ios",
+    "web": "npm --prefix ./DrApp_Syria-master run web",
+    "expo": "npm --prefix ./DrApp_Syria-master exec -- expo start",
+    "expo:tunnel": "npm --prefix ./DrApp_Syria-master exec -- expo start --tunnel",
+    "start:tunnel": "npm --prefix ./DrApp_Syria-master run start:tunnel",
+    "build:apk": "npm --prefix ./DrApp_Syria-master run build:apk"
+  }
+}
