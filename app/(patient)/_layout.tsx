@@ -4,10 +4,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, View, Text, TouchableOpacity, Dimensions, Animated, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 85; 
-const FAB_SIZE = 60; 
+const TAB_BAR_BASE_HEIGHT = 85;
+const FAB_SIZE = 60;
 const TAB_WIDTH = width / 3;
 
 // Define the 3 core tabs in order
@@ -20,10 +21,13 @@ const TABS = [
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function CustomTabBar({ state, navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
+
   const activeIndexRaw = TABS.findIndex(t => {
     const route = state.routes[state.index];
     if (route.name === t.name) return true;
-    if (t.name === 'services' && ['doctors', 'pharmacies', 'records', 'appointments', 'labs'].includes(route.name)) return true;
+    if (t.name === 'services' && ['doctors', 'pharmacies', 'records', 'appointments', 'labs', 'radiology'].includes(route.name)) return true;
     return false;
   });
   const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
@@ -63,7 +67,7 @@ function CustomTabBar({ state, navigation }: any) {
   const cutoutWidth = 75;
   
   return (
-    <View style={styles.tabBarWrapper}>
+    <View style={[styles.tabBarWrapper, { height: TAB_BAR_HEIGHT }]}>
       <View style={styles.backgroundContainer}>
         <Animated.View style={[
           styles.cutoutSlider, 
@@ -147,6 +151,7 @@ export default function PatientLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
@@ -169,14 +174,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: width,
-    height: TAB_BAR_HEIGHT + (Platform.OS === 'ios' ? 20 : 10),
     backgroundColor: 'transparent',
   },
   backgroundContainer: {
     position: 'absolute',
     bottom: 0,
     width: width,
-    height: TAB_BAR_HEIGHT,
+    height: '100%',
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
   },
@@ -189,12 +193,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -1,
     width: TAB_WIDTH,
-    height: TAB_BAR_HEIGHT + 1,
     zIndex: 1,
   },
   tabItemsWrapper: {
     flexDirection: 'row-reverse',
-    height: TAB_BAR_HEIGHT,
+    height: TAB_BAR_BASE_HEIGHT,
     width: width,
     alignItems: 'center',
     zIndex: 10,

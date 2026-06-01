@@ -1,0 +1,23 @@
+{
+  "name": "order_processing",
+  "display_name": "Order Processing",
+  "description": "Process and manage customer orders",
+  "version": "1.0.0",
+  "category": "ecommerce",
+  "icon": "ShoppingCart",
+  "author": "System",
+  "license": "MIT",
+  "keywords": ["orders", "processing", "checkout", "sales"],
+  "permissions": ["read_orders", "write_orders", "process_payments"],
+  "entry_point": "index.ts",
+  "ui_components": ["OrderList", "OrderDetails", "CheckoutForm"],
+  "hooks": ["useOrders", "useCheckout"],
+  "utilities": ["calculateTotal", "formatOrderData"],
+  "default_config": {
+    "auto_confirm_orders": true,
+    "enable_guest_checkout": true,
+    "require_phone": true
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}

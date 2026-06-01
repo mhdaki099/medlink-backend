@@ -1,0 +1,24 @@
+{
+  "name": "payment_gateway",
+  "display_name": "Payment Gateway",
+  "description": "Process payments through multiple providers",
+  "version": "1.0.0",
+  "category": "integrations",
+  "icon": "CreditCard",
+  "author": "System",
+  "license": "MIT",
+  "keywords": ["payment", "gateway", "processing", "transactions"],
+  "permissions": ["process_payments", "refund_payments", "view_transactions"],
+  "entry_point": "index.ts",
+  "ui_components": ["PaymentForm", "TransactionList", "RefundDialog"],
+  "hooks": ["usePayments", "useTransactions"],
+  "utilities": ["processPayment", "validateCard", "formatAmount"],
+  "default_config": {
+    "provider": "stripe",
+    "currency": "USD",
+    "auto_capture": true,
+    "sandbox_mode": false
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}

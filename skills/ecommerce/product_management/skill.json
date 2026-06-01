@@ -1,0 +1,23 @@
+{
+  "name": "product_management",
+  "display_name": "Product Management",
+  "description": "Manage products, inventory, and stock levels",
+  "version": "1.0.0",
+  "category": "ecommerce",
+  "icon": "Package",
+  "author": "System",
+  "license": "MIT",
+  "keywords": ["products", "inventory", "stock", "management"],
+  "permissions": ["read_products", "write_products", "manage_inventory"],
+  "entry_point": "index.ts",
+  "ui_components": ["ProductList", "ProductForm", "StockManager"],
+  "hooks": ["useProducts", "useInventory"],
+  "utilities": ["calculateStock", "formatProductData"],
+  "default_config": {
+    "low_stock_threshold": 10,
+    "enable_auto_restock": false,
+    "show_out_of_stock": true
+  },
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z"
+}

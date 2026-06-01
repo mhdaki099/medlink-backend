@@ -95,6 +95,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if req.role == 'patient':
         new_id = f"p_{uuid.uuid4().hex[:8]}"
         full_name = f"{req.first_name} {req.last_name}".strip()
+        
+        # Generate unique patient ID (معرف فريد للمريض)
+        patient_unique_id = f"DR{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+        
         new_user = User(
             id=new_id,
             role=req.role,
@@ -105,6 +109,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             city=req.city,
             address=req.address,
             drug_allergies=req.drug_allergies,
+            patient_unique_id=patient_unique_id,
+            qr_code_url=None,  # Will be generated on demand
             is_active=True,
             verified=False,
             created_at=datetime.now(timezone.utc).isoformat()

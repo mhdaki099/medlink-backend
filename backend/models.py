@@ -26,6 +26,8 @@ class User(Base):
     allergies = Column(JSON, nullable=True)
     drug_allergies = Column(JSON, nullable=True)
     chronic_conditions = Column(JSON, nullable=True)
+    patient_unique_id = Column(String, unique=True, nullable=True, index=True)
+    qr_code_url = Column(String, nullable=True)
 
     # Doctor specific
     specialization = Column(String, nullable=True)
@@ -178,6 +180,7 @@ class Appointment(Base):
     time = Column(String)
     status = Column(String)
     notes = Column(Text, nullable=True)
+    reason = Column(Text, nullable=True)  # وصف الحالة / سبب الزيارة
     price = Column(Float)
     record_access_granted = Column(Boolean, default=False)
     created_at = Column(String)

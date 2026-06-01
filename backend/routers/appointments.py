@@ -108,6 +108,7 @@ def create_appointment(appointment: dict, current_user: dict = Depends(get_curre
         time=time,
         status=status,
         notes=appointment.get("notes"),
+        reason=appointment.get("reason", ""),  # Reason for visit / وصف الحالة
         price=appointment.get("price", 0),
         record_access_granted=appointment.get("record_access_granted", False),
         created_at=now,
