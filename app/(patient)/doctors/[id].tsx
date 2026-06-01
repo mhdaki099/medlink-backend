@@ -61,6 +61,7 @@ export default function DoctorProfile() {
     const [selectedDate, setSelectedDate] = useState(now.toISOString().split('T')[0]);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [availability, setAvailability] = useState<any>({ time_slots: TIME_SLOTS, booked_slots: [] });
+    const [conditionDescription, setConditionDescription] = useState('');
     
     const [booking, setBooking] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
@@ -130,6 +131,11 @@ export default function DoctorProfile() {
             resetBtn();
             return;
         }
+        if (!conditionDescription.trim()) {
+            Alert.alert('تنبيه', 'الرجاء وصف حالتك الصحية أو سبب الزيارة');
+            resetBtn();
+            return;
+        }
         if (!user) {
             Alert.alert('تنبيه', 'يجب تسجيل الدخول للحجز');
             resetBtn();
@@ -144,6 +150,7 @@ export default function DoctorProfile() {
                 date: selectedDate,
                 time: selectedTime,
                 price: doctor.price_per_session || 0,
+                reason: conditionDescription,
                 notes: 'حجز جديد من التطبيق'
             });
             Alert.alert('نجاح', 'تم إرسال طلب الحجز بنجاح بانتظار موافقة الطبيب', [
@@ -327,6 +334,27 @@ export default function DoctorProfile() {
                     </View>
                 </View>
 
+                {/* Condition Description */}
+                <View style={styles.sectionBox}>
+                    <Text style={styles.sectionTitle}>وصف الحالة *</Text>
+                    <View style={styles.conditionInputContainer}>
+                        <TextInput
+                            style={styles.conditionInput}
+                            placeholder="صف حالتك الصحية أو سبب الزيارة بالتفصيل..."
+                            placeholderTextColor="#9CA3AF"
+                            value={conditionDescription}
+                            onChangeText={setConditionDescription}
+                            multiline
+                            numberOfLines={4}
+                            textAlign="right"
+                            textAlignVertical="top"
+                        />
+                        <Text style={styles.conditionHint}>
+                            💡 وصف دقيق للحالة يساعد الطبيب على تقديم الرعاية المناسبة
+                        </Text>
+                    </View>
+                </View>
+
                 {/* Rating Section */}
                 <View style={styles.sectionBox}>
                     <Text style={styles.sectionTitle}>تقييم الطبيب</Text>
@@ -434,6 +462,30 @@ const styles = StyleSheet.create({
     timeSlotText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#4B5563' },
     timeSlotTextActive: { color: '#FFF' },
     timeSlotTextBooked: { color: '#FFF' },
+    conditionInputContainer: { marginHorizontal: 20 },
+    conditionInput: { 
+        backgroundColor: '#FFF', 
+        borderRadius: 16, 
+        padding: 16, 
+        minHeight: 120, 
+        fontFamily: 'Cairo_400Regular', 
+        fontSize: 14, 
+        color: '#111827', 
+        borderWidth: 1.5, 
+        borderColor: '#E5E7EB',
+        shadowColor: '#000',
+        shadowOpacity: 0.03,
+        shadowRadius: 5,
+        elevation: 2
+    },
+    conditionHint: { 
+        fontSize: 12, 
+        fontFamily: 'Cairo_400Regular', 
+        color: '#6B7280', 
+        marginTop: 8, 
+        textAlign: 'right',
+        lineHeight: 18
+    },
     ratingCard: { marginHorizontal: 20, backgroundColor: '#FFF', borderRadius: 24, padding: 20, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
     ratingPrompt: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#111827', marginBottom: 15 },
     starsRow: { flexDirection: 'row-reverse', gap: 10, marginBottom: 15 },

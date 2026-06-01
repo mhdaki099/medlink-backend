@@ -95,9 +95,15 @@ def create_appointment(appointment: dict, current_user: dict = Depends(get_curre
     patient_id = appointment.get("patient_id")
     date = appointment.get("date")
     time = appointment.get("time")
+    reason = appointment.get("reason", "").strip()
+    
+    # Validate reason for patient-initiated bookings
+    is_manual = appointment.get("status") == "manual" or current_user["role"] in ("doctor", "secretary")
+    if not is_manual and not reason:
+        raise HTTPException(400, "يجب تقديم وصف للحالة الصحية أو سبب الزيارة")
+    
     ensure_slot_available(db, doctor_id, date, time)
 
-    is_manual = appointment.get("status") == "manual" or current_user["role"] in ("doctor", "secretary")
     status = "patient_confirmation_pending" if is_manual else "pending"
     apt_id = f"apt_{uuid.uuid4().hex[:8]}"
     new_apt = Appointment(
@@ -108,7 +114,7 @@ def create_appointment(appointment: dict, current_user: dict = Depends(get_curre
         time=time,
         status=status,
         notes=appointment.get("notes"),
-        reason=appointment.get("reason", ""),  # Reason for visit / وصف الحالة
+        reason=reason,  # Reason for visit / وصف الحالة
         price=appointment.get("price", 0),
         record_access_granted=appointment.get("record_access_granted", False),
         created_at=now,
@@ -147,7 +153,11 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
     old_status = apt.status
     new_status = status_update.get("status", apt.status)
     rejection_note = status_update.get("rejection_note") or apt.rejection_note
-    if new_status == "rejected" and not rejection_note:
+    rejection_reason_type = status_update.get("rejection_reason_type")
+    recommended_specialty = status_update.get("recommended_specialty")
+    recommended_doctor_id = status_update.get("recommended_doctor_id")
+
+    if new_status == "rejected" and not rejection_note and not rejection_reason_type:
         raise HTTPException(status_code=400, detail="يجب إدخال سبب رفض الموعد")
 
     new_date = status_update.get("date", apt.date)
@@ -160,6 +170,12 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
     apt.time = new_time
     if rejection_note:
         apt.rejection_note = rejection_note
+    if rejection_reason_type:
+        apt.rejection_reason_type = rejection_reason_type
+    if recommended_specialty:
+        apt.recommended_specialty = recommended_specialty
+    if recommended_doctor_id:
+        apt.recommended_doctor_id = recommended_doctor_id
     if new_status in ("confirmed", "cancelled", "rejected", "completed"):
         apt.reschedule_requested = False
         apt.cancel_requested = False
@@ -172,7 +188,8 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
         add_notification(db, apt.patient_id, "تم تأكيد الموعد", f"تم تأكيد موعدك مع د. {doctor_name} بتاريخ {apt.date} الساعة {apt.time}", "appointment_confirmed")
     elif new_status in ("cancelled", "rejected"):
         reason_text = f" السبب: {rejection_note}" if rejection_note else ""
-        add_notification(db, apt.patient_id, "تم رفض/إلغاء الموعد", f"تم تحديث موعدك مع د. {doctor_name}.{reason_text}", "appointment_rejected")
+        rec_text = f" يُنصح بمراجعة: {recommended_specialty}" if recommended_specialty else ""
+        add_notification(db, apt.patient_id, "تم رفض/إلغاء الموعد", f"تم تحديث موعدك مع د. {doctor_name}.{reason_text}{rec_text}", "appointment_rejected")
     elif new_status == "completed":
         add_notification(db, apt.patient_id, "تم إكمال الموعد", f"تم إكمال جلستك مع د. {doctor_name}", "appointment_completed")
     if (status_update.get("date") or status_update.get("time")) and old_status == "confirmed" and new_status == "confirmed":
