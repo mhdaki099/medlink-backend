@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Alert, Dimensions, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Alert, Dimensions, ActivityIndicator, Modal, Share } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
+
+const { width } = Dimensions.get('window');
 
 const { width } = Dimensions.get('window');
 
@@ -137,6 +139,25 @@ export default function PatientProfile() {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
+                {/* Patient Unique ID Card */}
+                {user?.patient_unique_id && (
+                    <View style={styles.uidCard}>
+                        <View style={styles.uidLeft}>
+                            <MaterialCommunityIcons name="qrcode" size={40} color="#1E88E5" />
+                        </View>
+                        <View style={styles.uidCenter}>
+                            <Text style={styles.uidLabel}>معرّف المريض الفريد</Text>
+                            <Text style={styles.uidValue}>{user.patient_unique_id}</Text>
+                            <Text style={styles.uidHint}>شارك هذا المعرف مع طبيبك لحجز المواعيد</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.uidShareBtn}
+                            onPress={() => Share.share({ message: `معرّف المريض: ${user.patient_unique_id}`, title: 'معرّف المريض' })}
+                        >
+                            <MaterialCommunityIcons name="share-variant" size={20} color="#1E88E5" />
+                        </TouchableOpacity>
+                    </View>
+                )}
                 {/* Profile Form */}
                 <View style={styles.formContainer}>
                     <View style={styles.inputGroup}>
@@ -407,6 +428,22 @@ const styles = StyleSheet.create({
         paddingTop: 70, // Room for avatar
         paddingHorizontal: 20,
     },
+    uidCard: {
+        backgroundColor: '#EBF5FF',
+        borderRadius: 18,
+        padding: 16,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    uidLeft: { marginLeft: 12 },
+    uidCenter: { flex: 1, alignItems: 'flex-end' },
+    uidLabel: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#3B82F6', marginBottom: 2 },
+    uidValue: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#1E40AF', letterSpacing: 1 },
+    uidHint: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#6B7280', marginTop: 2, textAlign: 'right' },
+    uidShareBtn: { padding: 8 },
     formContainer: {
         backgroundColor: '#FFFFFF',
         borderRadius: 24,

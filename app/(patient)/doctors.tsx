@@ -49,7 +49,6 @@ export default function DoctorsScreen() {
             if (apts && apts.length > 0) {
                 const upcoming = apts.find((a: any) => ['confirmed', 'pending', 'patient_confirmation_pending'].includes(a.status));
                 if (upcoming) {
-                    // Fetch doctor details for this appointment to get photo and name
                     const docDetails = await api.getDoctor(upcoming.doctor_id).catch(() => null);
                     if (docDetails) {
                         setUpcomingAppointment({ ...upcoming, doctor: docDetails });
@@ -237,7 +236,7 @@ export default function DoctorsScreen() {
                 <View style={[styles.sectionContainer, { marginTop: upcomingAppointment ? 10 : 20 }]}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>التخصصات</Text>
-                        <TouchableOpacity>
+                        <TouchableOpacity onPress={() => setSelectedSpec('all')}>
                             <Text style={styles.seeAllText}>عرض الكل</Text>
                         </TouchableOpacity>
                     </View>
@@ -249,10 +248,10 @@ export default function DoctorsScreen() {
                         {categories.map((sp) => (
                             <TouchableOpacity
                                 key={sp.id}
-                                style={[styles.chipBox, selectedSpec === sp.name_en && styles.chipBoxActive]}
-                                onPress={() => setSelectedSpec(sp.name_en)}
+                                style={[styles.chipBox, selectedSpec === (sp.id === 'all' ? 'all' : sp.name) && styles.chipBoxActive]}
+                                onPress={() => setSelectedSpec(sp.id === 'all' ? 'all' : sp.name)}
                             >
-                                <Text style={[styles.chipText, selectedSpec === sp.name_en && styles.chipTextActive]}>
+                                <Text style={[styles.chipText, selectedSpec === (sp.id === 'all' ? 'all' : sp.name) && styles.chipTextActive]}>
                                     {sp.name}
                                 </Text>
                             </TouchableOpacity>

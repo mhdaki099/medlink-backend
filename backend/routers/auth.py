@@ -9,6 +9,7 @@ from db import get_db
 from models import User, RegistrationRequest
 from auth_utils import create_access_token, verify_password, hash_password, get_current_user
 from utils.helpers import model_to_dict
+from .doctors import SPEC_AR_TO_EN
 
 router = APIRouter()
 
@@ -40,6 +41,13 @@ class RegisterRequest(BaseModel):
     home_service_fee: float = 0.0
     has_home_service: bool = False
     documents: list[str] = []
+    province: str = ""
+    district: str = ""
+    area: str = ""
+    association_no: str = ""
+    license_no: str = ""
+    lat: float | None = None
+    lng: float | None = None
 
 
 @router.post("/login")
@@ -97,7 +105,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         full_name = f"{req.first_name} {req.last_name}".strip()
         
         # Generate unique patient ID (معرف فريد للمريض)
-        patient_unique_id = f"DR{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
+        patient_unique_id = f"PT-{datetime.now(timezone.utc).strftime('%Y%m%d')}{uuid.uuid4().hex[:6].upper()}"
         
         new_user = User(
             id=new_id,
@@ -106,11 +114,14 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             email=req.email,
             password=hash_password(req.password),
             phone=req.phone,
-            city=req.city,
+            city=req.city or req.province,
             address=req.address,
+            province=req.province,
+            district=req.district,
+            area=req.area,
             drug_allergies=req.drug_allergies,
             patient_unique_id=patient_unique_id,
-            qr_code_url=None,  # Will be generated on demand
+            qr_code_url=None,
             is_active=True,
             verified=False,
             created_at=datetime.now(timezone.utc).isoformat()

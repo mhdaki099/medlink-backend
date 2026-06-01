@@ -28,10 +28,11 @@ class User(Base):
     chronic_conditions = Column(JSON, nullable=True)
     patient_unique_id = Column(String, unique=True, nullable=True, index=True)
     qr_code_url = Column(String, nullable=True)
+    is_provisional = Column(Boolean, default=False)  # Unregistered patient placeholder
 
     # Doctor specific
     specialization = Column(String, nullable=True)
-    specialization_en = Column(String, nullable=True)
+    specialization_en = Column(String, nullable=True)  # English name for filtering
     clinic_name = Column(String, nullable=True)
     clinic_address = Column(String, nullable=True)
     price_per_session = Column(Float, nullable=True)
@@ -49,9 +50,11 @@ class User(Base):
 
     # Pharmacy / Lab / Warehouse specific
     license_no = Column(String, nullable=True)
+    association_no = Column(String, nullable=True)  # Medical association registration number
     open_hours = Column(String, nullable=True)
     home_service_fee = Column(Float, nullable=True, default=0)
     has_home_service = Column(Boolean, default=False)
+    documents = Column(JSON, nullable=True)  # Uploaded document URLs
 
     # Location hierarchy (pharmacy / lab / radiology)
     province = Column(String, nullable=True)
@@ -167,7 +170,11 @@ class ServiceBooking(Base):
     time = Column(String)
     visit_type = Column(String, default="visit_center") # visit_center, home_service
     home_service_fee = Column(Float, default=0)
-    status = Column(String, default="booked")
+    status = Column(String, default="pending")  # pending, confirmed, rejected, completed
+    reason = Column(Text, nullable=True)  # Patient's reason for booking
+    rejection_note = Column(Text, nullable=True)
+    rejection_reason_type = Column(String, nullable=True)  # test_unavailable | service_unavailable | other
+    recommended_provider_id = Column(String, nullable=True)
     created_at = Column(String)
 
 
@@ -185,6 +192,9 @@ class Appointment(Base):
     record_access_granted = Column(Boolean, default=False)
     created_at = Column(String)
     rejection_note = Column(Text, nullable=True)
+    rejection_reason_type = Column(String, nullable=True)  # booked_by_phone | wrong_specialty | other
+    recommended_specialty = Column(String, nullable=True)
+    recommended_doctor_id = Column(String, nullable=True)
     reschedule_requested = Column(Boolean, default=False)
     cancel_requested = Column(Boolean, default=False)
     requested_date = Column(String, nullable=True)
@@ -370,3 +380,30 @@ class DrugCatalog(Base):
     side_effects = Column(Text, nullable=True)
     warnings = Column(Text, nullable=True)
     requires_prescription = Column(Boolean, default=False)
+
+
+class ConsultationReport(Base):
+    __tablename__ = "consultation_reports"
+    id = Column(String, primary_key=True, index=True)
+    appointment_id = Column(String, ForeignKey("appointments.id"))
+    doctor_id = Column(String, ForeignKey("users.id"))
+    patient_id = Column(String, ForeignKey("users.id"))
+    condition_summary = Column(Text, nullable=True)
+    is_healthy = Column(Boolean, default=False)
+    notes = Column(Text, nullable=True)
+    follow_up = Column(Text, nullable=True)
+    created_at = Column(String)
+
+
+class ServiceRequest(Base):
+    __tablename__ = "service_requests"
+    id = Column(String, primary_key=True, index=True)
+    consultation_report_id = Column(String, ForeignKey("consultation_reports.id"), nullable=True)
+    doctor_id = Column(String, ForeignKey("users.id"))
+    patient_id = Column(String, ForeignKey("users.id"))
+    request_type = Column(String)  # lab, radiology
+    service_name = Column(String, nullable=True)
+    reference_code = Column(String, unique=True, nullable=True, index=True)
+    notes = Column(Text, nullable=True)
+    status = Column(String, default="pending")
+    created_at = Column(String)

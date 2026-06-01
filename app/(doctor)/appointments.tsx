@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, ActivityIndicator, 
-    RefreshControl, TouchableOpacity, Alert, Platform, Image, Modal, FlatList 
+    RefreshControl, TouchableOpacity, Alert, Platform, Image, Modal, FlatList, TextInput
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeInRight, FadeInDown } from 'react-native-reanimated';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../src/theme';
 
@@ -21,11 +22,16 @@ export default function DoctorAppointments() {
     const [rejectModal, setRejectModal] = useState<{visible: boolean, aptId: string}>({visible: false, aptId: ''});
 
     const REJECTION_REASONS = [
-        'الحالة تحتاج فحص عند اختصاص آخر',
-        'تحويل إلى طبيب آخر',
-        'الموعد محجوز مسبقاً',
-        'العيادة مغلقة في هذا اليوم',
+        { type: 'booked_by_phone', label: 'الموعد محجوز مسبقاً عبر الهاتف' },
+        { type: 'wrong_specialty', label: 'الحالة تحتاج تخصصاً آخر' },
+        { type: 'clinic_closed', label: 'العيادة مغلقة في هذا اليوم' },
+        { type: 'other', label: 'سبب آخر' },
     ];
+
+    const [rejectReasonType, setRejectReasonType] = useState('');
+    const [rejectCustomNote, setRejectCustomNote] = useState('');
+    const [rejectRecommendedSpec, setRejectRecommendedSpec] = useState('');
+    const [rejectStep, setRejectStep] = useState<'reason' | 'detail'>('reason');
 
     const loadData = async () => {
         if (!user?.id) {
@@ -48,10 +54,20 @@ export default function DoctorAppointments() {
 
     useEffect(() => { loadData(); }, [filter, user]);
 
-    const handleStatusUpdate = async (id: string, newStatus: string, rejectionNote?: string) => {
+    const handleStatusUpdate = async (id: string, newStatus: string, rejectionNote?: string, rejectionReasonType?: string, recommendedSpecialty?: string) => {
         try {
             await api.updateAppointmentStatus(id, newStatus, undefined, undefined, rejectionNote);
-            Alert.alert('✅ تم', `تم ${newStatus === 'confirmed' ? 'تأكيد' : 'إلغاء'}${newStatus === 'completed' ? ' إكمال' : ''} الموعد بنجاح`);
+            // If we have structured rejection data, send it separately
+            if (rejectionReasonType) {
+                // The rejection_reason_type is sent as part of the status update body
+                await api.put(`/appointments/${id}/status`, {
+                    status: newStatus,
+                    rejection_note: rejectionNote,
+                    rejection_reason_type: rejectionReasonType,
+                    recommended_specialty: recommendedSpecialty,
+                }).catch(() => {}); // Already updated above, this is for extra fields
+            }
+            Alert.alert('✅ تم', `تم ${newStatus === 'confirmed' ? 'تأكيد' : newStatus === 'completed' ? 'إكمال' : 'إلغاء'} الموعد بنجاح`);
             loadData();
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
@@ -59,12 +75,18 @@ export default function DoctorAppointments() {
     };
 
     const handleReject = (aptId: string) => {
+        setRejectStep('reason');
+        setRejectReasonType('');
+        setRejectCustomNote('');
+        setRejectRecommendedSpec('');
         setRejectModal({ visible: true, aptId });
     };
 
-    const submitRejection = (reason: string) => {
+    const submitRejection = () => {
+        if (!rejectReasonType) return;
+        const note = rejectReasonType === 'other' ? rejectCustomNote : REJECTION_REASONS.find(r => r.type === rejectReasonType)?.label || '';
         setRejectModal({ visible: false, aptId: '' });
-        handleStatusUpdate(rejectModal.aptId, 'rejected', reason);
+        handleStatusUpdate(rejectModal.aptId, 'rejected', note, rejectReasonType, rejectRecommendedSpec);
     };
 
     const handleRequestHistory = async (patientId: string) => {
@@ -230,7 +252,7 @@ export default function DoctorAppointments() {
                                     </TouchableOpacity>
                                     <TouchableOpacity 
                                         style={[styles.actionBtn, styles.confirmBtn]}
-                                        onPress={() => handleStatusUpdate(apt.id, 'completed')}
+                                        onPress={() => router.push({ pathname: '/(doctor)/consultation-report', params: { appointmentId: apt.id, patientId: apt.patient_id, patientName: apt.patient?.name || '' } } as any)}
                                     >
                                         <Text style={styles.confirmBtnText}>إنهاء الجلسة</Text>
                                     </TouchableOpacity>
@@ -244,24 +266,77 @@ export default function DoctorAppointments() {
             {/* Rejection Reasons Modal (Req #15) */}
             <Modal visible={rejectModal.visible} transparent animationType="slide">
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '60%' }}>
+                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '70%' }}>
                         <Text style={{ fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'center', marginBottom: 16 }}>سبب الرفض</Text>
-                        {REJECTION_REASONS.map((reason, i) => (
+                        
+                        {/* Step 1: Choose reason type */}
+                        {REJECTION_REASONS.map((reason) => (
                             <TouchableOpacity 
-                                key={i} 
-                                style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}
-                                onPress={() => submitRejection(reason)}
+                                key={reason.type} 
+                                style={{ 
+                                    paddingVertical: 14, 
+                                    borderBottomWidth: 1, 
+                                    borderBottomColor: '#F3F4F6', 
+                                    flexDirection: 'row-reverse', 
+                                    alignItems: 'center', 
+                                    gap: 8,
+                                    backgroundColor: rejectReasonType === reason.type ? '#EBF5FF' : 'transparent',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 8,
+                                }}
+                                onPress={() => setRejectReasonType(reason.type)}
                             >
-                                <MaterialCommunityIcons name="circle-outline" size={18} color="#6B7280" />
-                                <Text style={{ fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#374151' }}>{reason}</Text>
+                                <MaterialCommunityIcons 
+                                    name={rejectReasonType === reason.type ? "radiobox-marked" : "radiobox-blank"} 
+                                    size={20} 
+                                    color={rejectReasonType === reason.type ? "#1E88E5" : "#6B7280"} 
+                                />
+                                <Text style={{ fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#374151', flex: 1, textAlign: 'right' }}>{reason.label}</Text>
                             </TouchableOpacity>
                         ))}
-                        <TouchableOpacity 
-                            style={{ marginTop: 12, paddingVertical: 12, backgroundColor: '#F3F4F6', borderRadius: 12, alignItems: 'center' }}
-                            onPress={() => setRejectModal({ visible: false, aptId: '' })}
-                        >
-                            <Text style={{ fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#6B7280' }}>إلغاء</Text>
-                        </TouchableOpacity>
+
+                        {/* Extra fields for wrong_specialty */}
+                        {rejectReasonType === 'wrong_specialty' && (
+                            <View style={{ marginTop: 12 }}>
+                                <Text style={{ fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#374151', textAlign: 'right', marginBottom: 6 }}>التخصص المناسب (اختياري)</Text>
+                                <TextInput
+                                    style={{ backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', height: 44, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular', textAlign: 'right' }}
+                                    placeholder="مثال: طب الأعصاب"
+                                    value={rejectRecommendedSpec}
+                                    onChangeText={setRejectRecommendedSpec}
+                                />
+                            </View>
+                        )}
+
+                        {/* Extra field for other */}
+                        {rejectReasonType === 'other' && (
+                            <View style={{ marginTop: 12 }}>
+                                <Text style={{ fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#374151', textAlign: 'right', marginBottom: 6 }}>اكتب السبب</Text>
+                                <TextInput
+                                    style={{ backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minHeight: 80, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Cairo_400Regular', textAlign: 'right', textAlignVertical: 'top' }}
+                                    placeholder="اكتب سبب الرفض..."
+                                    value={rejectCustomNote}
+                                    onChangeText={setRejectCustomNote}
+                                    multiline
+                                />
+                            </View>
+                        )}
+
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                            <TouchableOpacity 
+                                style={{ flex: 1, paddingVertical: 12, backgroundColor: '#F3F4F6', borderRadius: 12, alignItems: 'center' }}
+                                onPress={() => setRejectModal({ visible: false, aptId: '' })}
+                            >
+                                <Text style={{ fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#6B7280' }}>إلغاء</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={{ flex: 1, paddingVertical: 12, backgroundColor: rejectReasonType ? '#EF4444' : '#D1D5DB', borderRadius: 12, alignItems: 'center' }}
+                                onPress={submitRejection}
+                                disabled={!rejectReasonType}
+                            >
+                                <Text style={{ fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#FFF' }}>تأكيد الرفض</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>

@@ -20,6 +20,7 @@ def init_db():
         LabResult, MedicalRecord, AuditLog, Review, Prescription, Payment,
         Favorite, FavoriteMedicine, CartItem, PatientNote, Notification,
         FamilyLink, ServiceBooking, DrugCatalog, AppointmentAuditLog,
+        ConsultationReport, ServiceRequest,
     )
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
@@ -41,6 +42,13 @@ def ensure_sqlite_columns():
             "buffer_minutes": "INTEGER DEFAULT 10",
             "facility_gallery": "JSON",
             "emergency_contact": "JSON",
+            "services": "JSON",
+            "patient_unique_id": "TEXT",
+            "qr_code_url": "TEXT",
+            "specialization_en": "TEXT",
+            "association_no": "TEXT",
+            "documents": "JSON",
+            "is_provisional": "BOOLEAN DEFAULT 0",
         },
         "medicines": {
             "strength": "VARCHAR",
@@ -62,6 +70,10 @@ def ensure_sqlite_columns():
             "cancel_requested": "BOOLEAN DEFAULT 0",
             "requested_date": "TEXT",
             "requested_time": "TEXT",
+            "reason": "TEXT",
+            "rejection_reason_type": "TEXT",
+            "recommended_specialty": "TEXT",
+            "recommended_doctor_id": "TEXT",
         },
         "medical_records": {
             "record_owner": "TEXT DEFAULT 'self'",
@@ -72,6 +84,17 @@ def ensure_sqlite_columns():
             "pharmacy_id": "TEXT",
             "fulfillment_items": "JSON",
             "closed_at": "TEXT",
+            "is_dispensed": "BOOLEAN DEFAULT 0",
+        },
+        "service_bookings": {
+            "rejection_note": "TEXT",
+            "rejection_reason_type": "TEXT",
+            "recommended_provider_id": "TEXT",
+            "reason": "TEXT",
+        },
+        "lab_bookings": {
+            "rejection_note": "TEXT",
+            "reason": "TEXT",
         },
     }
     with engine.begin() as conn:

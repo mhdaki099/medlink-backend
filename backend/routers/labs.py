@@ -11,14 +11,28 @@ from utils.helpers import model_to_dict
 router = APIRouter()
 
 @router.get("")
-def list_labs(db: Session = Depends(get_db)):
-    labs = db.query(User).filter(User.role == "lab").all()
+def list_labs(q: str = None, province: str = None, district: str = None, db: Session = Depends(get_db)):
+    query = db.query(User).filter(User.role == "lab", User.is_active == True)
+    if q:
+        query = query.filter(User.name.ilike(f"%{q}%"))
+    if province:
+        query = query.filter(User.province.ilike(f"%{province}%"))
+    if district:
+        query = query.filter(User.district.ilike(f"%{district}%"))
+    labs = query.all()
     return [model_to_dict(l, ["password"]) for l in labs]
 
 
 @router.get("/radiology")
-def list_radiology_centers(db: Session = Depends(get_db)):
-    centers = db.query(User).filter(User.role == "radiology").all()
+def list_radiology_centers(q: str = None, province: str = None, district: str = None, db: Session = Depends(get_db)):
+    query = db.query(User).filter(User.role == "radiology", User.is_active == True)
+    if q:
+        query = query.filter(User.name.ilike(f"%{q}%"))
+    if province:
+        query = query.filter(User.province.ilike(f"%{province}%"))
+    if district:
+        query = query.filter(User.district.ilike(f"%{district}%"))
+    centers = query.all()
     return [model_to_dict(c, ["password"]) for c in centers]
 
 
@@ -56,19 +70,35 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
     visit_type = data.get("visit_type", "visit_center")
     if visit_type not in {"visit_center", "home_service"}:
         raise HTTPException(400, "نوع الزيارة غير صحيح")
+
+    # Check slot availability
+    provider_id = data.get("provider_id")
+    date = data.get("date")
+    time = data.get("time")
+    if provider_id and date and time:
+        existing = db.query(ServiceBooking).filter(
+            ServiceBooking.provider_id == provider_id,
+            ServiceBooking.date == date,
+            ServiceBooking.time == time,
+            ServiceBooking.status.in_(["pending", "confirmed"]),
+        ).first()
+        if existing:
+            raise HTTPException(409, "هذا الموعد محجوز بالفعل")
+
     now = datetime.now(timezone.utc).isoformat()
     booking = ServiceBooking(
         id=f"sb_{uuid.uuid4().hex[:8]}",
         patient_id=data.get("patient_id"),
-        provider_id=data.get("provider_id"),
+        provider_id=provider_id,
         provider_role=provider_role,
         service_id=data.get("service_id"),
         service_name=data.get("service_name"),
-        date=data.get("date"),
-        time=data.get("time"),
+        date=date,
+        time=time,
         visit_type=visit_type,
         home_service_fee=float(data.get("home_service_fee", 0) or 0),
-        status="booked",
+        reason=data.get("reason", ""),
+        status="pending",
         created_at=now,
     )
     db.add(booking)
@@ -76,6 +106,89 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
     db.commit()
     db.refresh(booking)
     return model_to_dict(booking)
+
+
+@router.put("/service-bookings/{booking_id}/status")
+def update_service_booking_status(booking_id: str, data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Approve, reject, or complete a service booking."""
+    booking = db.query(ServiceBooking).filter(ServiceBooking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(404, "الحجز غير موجود")
+
+    new_status = data.get("status", booking.status)
+    if new_status not in ("pending", "confirmed", "rejected", "completed", "cancelled"):
+        raise HTTPException(400, "حالة غير صحيحة")
+
+    if new_status == "rejected":
+        reason_type = data.get("rejection_reason_type")
+        if not reason_type:
+            raise HTTPException(400, "يجب تحديد سبب الرفض")
+        booking.rejection_reason_type = reason_type
+        booking.rejection_note = data.get("rejection_note", "")
+        booking.recommended_provider_id = data.get("recommended_provider_id")
+
+        # Notify patient
+        now = datetime.now(timezone.utc).isoformat()
+        reason_text = booking.rejection_note or ""
+        db.add(Notification(
+            id=f"ntf_{uuid.uuid4().hex[:8]}",
+            user_id=booking.patient_id,
+            title="تم رفض الحجز",
+            message=f"تم رفض حجزك. {reason_text}",
+            type="service_booking_rejected",
+            created_at=now,
+        ))
+    elif new_status == "confirmed":
+        now = datetime.now(timezone.utc).isoformat()
+        db.add(Notification(
+            id=f"ntf_{uuid.uuid4().hex[:8]}",
+            user_id=booking.patient_id,
+            title="تم تأكيد الحجز",
+            message=f"تم تأكيد حجزك بتاريخ {booking.date} الساعة {booking.time}",
+            type="service_booking_confirmed",
+            created_at=now,
+        ))
+
+    booking.status = new_status
+    db.commit()
+    db.refresh(booking)
+    return model_to_dict(booking)
+
+
+@router.get("/service-bookings/{booking_id}/availability")
+def get_provider_availability(booking_id: str, db: Session = Depends(get_db)):
+    """Get booked slots for a provider on a given date."""
+    booking = db.query(ServiceBooking).filter(ServiceBooking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(404, "الحجز غير موجود")
+    return model_to_dict(booking)
+
+
+@router.get("/providers/{provider_id}/availability")
+def get_provider_slots(provider_id: str, date: str = None, db: Session = Depends(get_db)):
+    """Return available time slots and booked slots for a lab/radiology provider."""
+    provider = db.query(User).filter(User.id == provider_id).first()
+    if not provider:
+        raise HTTPException(404, "المزود غير موجود")
+
+    booked = db.query(ServiceBooking).filter(
+        ServiceBooking.provider_id == provider_id,
+        ServiceBooking.status.in_(["pending", "confirmed"]),
+    ).all()
+
+    wh = provider.working_hours or {}
+    generated_slots = []
+    if isinstance(wh, dict) and (wh.get("morning") or wh.get("evening")):
+        from routers.doctors import _generate_slots_from_working_hours
+        generated_slots = _generate_slots_from_working_hours(provider, wh)
+    elif provider.open_hours:
+        generated_slots = [h.strip() for h in provider.open_hours.replace("،", ",").split(",") if h.strip()]
+
+    return {
+        "time_slots": generated_slots,
+        "booked_slots": [{"date": b.date, "time": b.time} for b in booked],
+        "working_hours": wh,
+    }
 
 @router.get("/{provider_id}/analytics")
 def get_provider_analytics(provider_id: str, db: Session = Depends(get_db)):

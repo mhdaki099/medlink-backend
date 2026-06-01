@@ -301,6 +301,258 @@ export const SYRIA_GOVERNORATES: Governorate[] = [
         ]
       }
     ]
+  },
+  {
+    id: "idlib",
+    name: "إدلب",
+    name_en: "Idlib",
+    districts: [
+      {
+        id: "idlib_city",
+        name: "مدينة إدلب",
+        name_en: "Idlib City",
+        subDistricts: [
+          { id: "idlib_center", name: "مركز إدلب", name_en: "Idlib Center" },
+          { id: "alqusour", name: "القصور", name_en: "Al-Qusour" },
+          { id: "alnasr", name: "النصر", name_en: "Al-Nasr" }
+        ]
+      },
+      {
+        id: "rural_idlib",
+        name: "ريف إدلب",
+        name_en: "Rural Idlib",
+        subDistricts: [
+          { id: "maarat_alnuman", name: "معرة النعمان", name_en: "Maarat al-Numan" },
+          { id: "ariha", name: "أريحا", name_en: "Ariha" },
+          { id: "jisr_alshughur", name: "جسر الشغور", name_en: "Jisr al-Shughur" },
+          { id: "saraqib", name: "سراقب", name_en: "Saraqib" },
+          { id: "kafr_nabl", name: "كفرنبل", name_en: "Kafr Nabl" },
+          { id: "binnish", name: "بنش", name_en: "Binnish" },
+          { id: "taftanaz", name: "تفتناز", name_en: "Taftanaz" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "deir_ez_zor",
+    name: "دير الزور",
+    name_en: "Deir ez-Zor",
+    districts: [
+      {
+        id: "deir_ez_zor_city",
+        name: "مدينة دير الزور",
+        name_en: "Deir ez-Zor City",
+        subDistricts: [
+          { id: "alqusour", name: "القصور", name_en: "Al-Qusour" },
+          { id: "aljubaileh", name: "الجبيلة", name_en: "Al-Jubaileh" },
+          { id: "alhamidiya", name: "الحميدية", name_en: "Al-Hamidiya" },
+          { id: "alsinaa", name: "الصناعة", name_en: "Al-Sinaa" }
+        ]
+      },
+      {
+        id: "rural_deir_ez_zor",
+        name: "ريف دير الزور",
+        name_en: "Rural Deir ez-Zor",
+        subDistricts: [
+          { id: "albukamal", name: "البوكمال", name_en: "Al-Bukamal" },
+          { id: "almayadeen", name: "الميادين", name_en: "Al-Mayadeen" },
+          { id: "alquriya", name: "القورية", name_en: "Al-Quriya" },
+          { id: "hajin", name: "هجين", name_en: "Hajin" },
+          { id: "albasira", name: "البصيرة", name_en: "Al-Basira" },
+          { id: "alashara", name: "العشارة", name_en: "Al-Ashara" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "raqqa",
+    name: "الرقة",
+    name_en: "Raqqa",
+    districts: [
+      {
+        id: "raqqa_city",
+        name: "مدينة الرقة",
+        name_en: "Raqqa City",
+        subDistricts: [
+          { id: "alnaim", name: "النعيم", name_en: "Al-Naim" },
+          { id: "alrashid", name: "الرشيد", name_en: "Al-Rashid" },
+          { id: "alromeileh", name: "الرميلة", name_en: "Al-Romeileh" },
+          { id: "alsinaa", name: "الصناعة", name_en: "Al-Sinaa" }
+        ]
+      },
+      {
+        id: "rural_raqqa",
+        name: "ريف الرقة",
+        name_en: "Rural Raqqa",
+        subDistricts: [
+          { id: "tell_abyad", name: "تل أبيض", name_en: "Tell Abyad" },
+          { id: "ain_issa", name: "عين عيسى", name_en: "Ain Issa" },
+          { id: "suluk", name: "سلوك", name_en: "Suluk" },
+          { id: "alkaramah", name: "الكرامة", name_en: "Al-Karamah" },
+          { id: "alraqqa_samra", name: "الرقة السمراء", name_en: "Al-Raqqa al-Samra" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "hasakah",
+    name: "الحسكة",
+    name_en: "Hasakah",
+    districts: [
+      {
+        id: "hasakah_city",
+        name: "مدينة الحسكة",
+        name_en: "Hasakah City",
+        subDistricts: [
+          { id: "ghweran", name: "غويران", name_en: "Ghweran" },
+          { id: "nashwa_sharqiya", name: "الناشوة الشرقية", name_en: "Nashwa Sharqiya" },
+          { id: "nashwa_gharbiya", name: "الناشوة الغربية", name_en: "Nashwa Gharbiya" },
+          { id: "aziziya", name: "العزيزية", name_en: "Aziziya" }
+        ]
+      },
+      {
+        id: "rural_hasakah",
+        name: "ريف الحسكة",
+        name_en: "Rural Hasakah",
+        subDistricts: [
+          { id: "qamishli", name: "القامشلي", name_en: "Qamishli" },
+          { id: "ras_alain", name: "رأس العين", name_en: "Ras al-Ain" },
+          { id: "malikiya", name: "المالكية", name_en: "Malikiya" },
+          { id: "amuda", name: "عامودا", name_en: "Amuda" },
+          { id: "darbasiya", name: "الدرباسية", name_en: "Darbasiya" },
+          { id: "yaroubiya", name: "اليعربية", name_en: "Yaroubiya" },
+          { id: "shaddadi", name: "الشدادي", name_en: "Shaddadi" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "quneitra",
+    name: "القنيطرة",
+    name_en: "Quneitra",
+    districts: [
+      {
+        id: "quneitra_city",
+        name: "مدينة القنيطرة",
+        name_en: "Quneitra City",
+        subDistricts: [
+          { id: "quneitra_center", name: "مركز القنيطرة", name_en: "Quneitra Center" }
+        ]
+      },
+      {
+        id: "rural_quneitra",
+        name: "ريف القنيطرة",
+        name_en: "Rural Quneitra",
+        subDistricts: [
+          { id: "khan_arnabah", name: "خان أرنبة", name_en: "Khan Arnabah" },
+          { id: "fiq", name: "فيق", name_en: "Fiq" },
+          { id: "jubata_alkhashab", name: "جباتا الخشب", name_en: "Jubata al-Khashab" },
+          { id: "hadar", name: "حضر", name_en: "Hadar" },
+          { id: "beer_ajam", name: "بئر عجم", name_en: "Beer Ajam" }
+        ]
+      }
+    ]
+  },
+  {
+    id: "damascus_countryside",
+    name: "ريف دمشق",
+    name_en: "Damascus Countryside",
+    districts: [
+      {
+        id: "zabadani",
+        name: "الزبداني",
+        name_en: "Zabadani",
+        subDistricts: [
+          { id: "zabadani_city", name: "مدينة الزبداني", name_en: "Zabadani City" },
+          { id: "madaya", name: "مضايا", name_en: "Madaya" },
+          { id: "serghaya", name: "سرغايا", name_en: "Serghaya" },
+          { id: "bloudan", name: "بلودان", name_en: "Bloudan" }
+        ]
+      },
+      {
+        id: "qudsaya",
+        name: "قدسيا",
+        name_en: "Qudsaya",
+        subDistricts: [
+          { id: "qudsaya_city", name: "قدسيا", name_en: "Qudsaya" },
+          { id: "hameh", name: "الهامة", name_en: "Hameh" },
+          { id: "ashrafiyat_sahnaya", name: "أشرفية صحنايا", name_en: "Ashrafiyat Sahnaya" }
+        ]
+      },
+      {
+        id: "douma",
+        name: "دوما",
+        name_en: "Douma",
+        subDistricts: [
+          { id: "douma_city", name: "مدينة دوما", name_en: "Douma City" },
+          { id: "harasta", name: "حرستا", name_en: "Harasta" },
+          { id: "arbin", name: "عربين", name_en: "Arbin" },
+          { id: "zamalka", name: "زملكا", name_en: "Zamalka" },
+          { id: "ain_tarma", name: "عين ترما", name_en: "Ain Tarma" }
+        ]
+      },
+      {
+        id: "yabrud",
+        name: "يبرود",
+        name_en: "Yabrud",
+        subDistricts: [
+          { id: "yabrud_city", name: "مدينة يبرود", name_en: "Yabrud City" },
+          { id: "assal_alward", name: "عسال الورد", name_en: "Assal al-Ward" },
+          { id: "rankous", name: "رنكوس", name_en: "Rankous" }
+        ]
+      },
+      {
+        id: "qatana",
+        name: "قطنا",
+        name_en: "Qatana",
+        subDistricts: [
+          { id: "qatana_city", name: "مدينة قطنا", name_en: "Qatana City" },
+          { id: "beit_jen", name: "بيت جن", name_en: "Beit Jen" },
+          { id: "sa_sa", name: "سعسع", name_en: "Sa'sa" }
+        ]
+      },
+      {
+        id: "tall",
+        name: "التل",
+        name_en: "Tall",
+        subDistricts: [
+          { id: "tall_city", name: "مدينة التل", name_en: "Tall City" },
+          { id: "sednaya", name: "صيدنايا", name_en: "Sednaya" },
+          { id: "rankous", name: "رنكوس", name_en: "Rankous" },
+          { id: "maaloula", name: "معلولا", name_en: "Maaloula" }
+        ]
+      },
+      {
+        id: "darayya",
+        name: "داريا",
+        name_en: "Darayya",
+        subDistricts: [
+          { id: "darayya_city", name: "مدينة داريا", name_en: "Darayya City" },
+          { id: "muadamiyat", name: "المعضمية", name_en: "Muadamiyat" },
+          { id: "ashrafiyat_sahnaya", name: "أشرفية صحنايا", name_en: "Ashrafiyat Sahnaya" }
+        ]
+      },
+      {
+        id: "jaramana",
+        name: "جرمانا",
+        name_en: "Jaramana",
+        subDistricts: [
+          { id: "jaramana_city", name: "مدينة جرمانا", name_en: "Jaramana City" },
+          { id: "mleiha", name: "مليحة", name_en: "Mleiha" },
+          { id: "kafr_batna", name: "كفر بطنا", name_en: "Kafr Batna" }
+        ]
+      },
+      {
+        id: "nabk",
+        name: "النبك",
+        name_en: "Nabk",
+        subDistricts: [
+          { id: "nabk_city", name: "مدينة النبك", name_en: "Nabk City" },
+          { id: "deir_atiyah", name: "دير عطية", name_en: "Deir Atiyah" },
+          { id: "qara", name: "قارة", name_en: "Qara" }
+        ]
+      }
+    ]
   }
 ];
 

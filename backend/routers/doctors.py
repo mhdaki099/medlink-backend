@@ -11,17 +11,40 @@ from utils.helpers import model_to_dict, safe_update
 router = APIRouter()
 
 SPECIALIZATIONS = [
-    {"id": "sp1", "name": "قلبية", "name_en": "Cardiology", "icon": "heart"},
-    {"id": "sp2", "name": "طب الأطفال", "name_en": "Pediatrics", "icon": "baby-face"},
-    {"id": "sp3", "name": "هضمية", "name_en": "Gastroenterology", "icon": "stomach"},
-    {"id": "sp4", "name": "الجهاز التنفسي", "name_en": "Pulmonology", "icon": "lungs"},
-    {"id": "sp5", "name": "جلدية وتجميل", "name_en": "Dermatology", "icon": "flower-outline"},
-    {"id": "sp6", "name": "عظام ومفاصل", "name_en": "Orthopedics", "icon": "bone"},
-    {"id": "sp7", "name": "طب العيون", "name_en": "Ophthalmology", "icon": "eye"},
-    {"id": "sp8", "name": "بلعوم", "name_en": "ENT", "icon": "ear-hearing"},
-    {"id": "sp9", "name": "طب الأسنان", "name_en": "Dentistry", "icon": "tooth"},
-    {"id": "sp10", "name": "طب الأعصاب", "name_en": "Neurology", "icon": "brain"},
+    {"id": "sp1",  "name": "قلبية",                    "name_en": "Cardiology",              "icon": "heart"},
+    {"id": "sp2",  "name": "طب الأطفال",               "name_en": "Pediatrics",              "icon": "baby-face"},
+    {"id": "sp3",  "name": "هضمية",                    "name_en": "Gastroenterology",        "icon": "stomach"},
+    {"id": "sp4",  "name": "الجهاز التنفسي",           "name_en": "Pulmonology",             "icon": "lungs"},
+    {"id": "sp5",  "name": "جلدية وتجميل",             "name_en": "Dermatology",             "icon": "flower-outline"},
+    {"id": "sp6",  "name": "عظام ومفاصل",              "name_en": "Orthopedics",             "icon": "bone"},
+    {"id": "sp7",  "name": "طب العيون",                "name_en": "Ophthalmology",           "icon": "eye"},
+    {"id": "sp8",  "name": "بلعوم",                    "name_en": "ENT",                     "icon": "ear-hearing"},
+    {"id": "sp9",  "name": "طب الأسنان",               "name_en": "Dentistry",               "icon": "tooth"},
+    {"id": "sp10", "name": "طب الأعصاب",               "name_en": "Neurology",               "icon": "brain"},
+    {"id": "sp11", "name": "طب الباطنة",               "name_en": "Internal Medicine",       "icon": "stethoscope"},
+    {"id": "sp12", "name": "طب الطوارئ",               "name_en": "Emergency Medicine",      "icon": "ambulance"},
+    {"id": "sp13", "name": "طب الأورام",               "name_en": "Oncology",                "icon": "ribbon"},
+    {"id": "sp14", "name": "طب النساء والتوليد",       "name_en": "Obstetrics & Gynecology", "icon": "human-female"},
+    {"id": "sp15", "name": "طب المسالك البولية",       "name_en": "Urology",                 "icon": "water"},
+    {"id": "sp16", "name": "طب الغدد الصماء",          "name_en": "Endocrinology",           "icon": "flask"},
+    {"id": "sp17", "name": "طب الروماتيزم",            "name_en": "Rheumatology",            "icon": "hand-back-right"},
+    {"id": "sp18", "name": "طب الكلى",                 "name_en": "Nephrology",              "icon": "kidney"},
+    {"id": "sp19", "name": "طب الأمراض المعدية",       "name_en": "Infectious Diseases",     "icon": "virus"},
+    {"id": "sp20", "name": "جراحة عامة",               "name_en": "General Surgery",         "icon": "scalpel"},
+    {"id": "sp21", "name": "جراحة العظام",             "name_en": "Orthopedic Surgery",      "icon": "bone"},
+    {"id": "sp22", "name": "جراحة القلب",              "name_en": "Cardiac Surgery",         "icon": "heart-pulse"},
+    {"id": "sp23", "name": "جراحة الأعصاب",            "name_en": "Neurosurgery",            "icon": "brain"},
+    {"id": "sp24", "name": "جراحة التجميل",            "name_en": "Plastic Surgery",         "icon": "star-face"},
+    {"id": "sp25", "name": "طب الأسرة",                "name_en": "Family Medicine",         "icon": "home-heart"},
+    {"id": "sp26", "name": "طب الشيخوخة",              "name_en": "Geriatrics",              "icon": "human-cane"},
+    {"id": "sp27", "name": "طب الأمراض النفسية",       "name_en": "Psychiatry",              "icon": "head-cog"},
+    {"id": "sp28", "name": "طب الصدر",                 "name_en": "Chest Medicine",          "icon": "lungs"},
+    {"id": "sp29", "name": "طب الدم",                  "name_en": "Hematology",              "icon": "blood-bag"},
+    {"id": "sp30", "name": "طب الأمراض الجلدية",       "name_en": "Dermatology",             "icon": "flower"},
 ]
+
+# Arabic → English mapping for backfill and registration
+SPEC_AR_TO_EN = {s["name"]: s["name_en"] for s in SPECIALIZATIONS}
 
 class ReviewRequest(BaseModel):
     patient_id: str
@@ -29,13 +52,17 @@ class ReviewRequest(BaseModel):
     comment: str = ""
 
 @router.get("")
-def list_doctors(specialization: str = Query(None), db: Session = Depends(get_db)):
-    query = db.query(User).filter(User.role == "doctor")
-    if specialization:
+def list_doctors(specialization: str = Query(None), province: str = Query(None), district: str = Query(None), db: Session = Depends(get_db)):
+    query = db.query(User).filter(User.role == "doctor", User.is_active == True)
+    if specialization and specialization.lower() not in ("all", "الكل", ""):
         query = query.filter(
             (User.specialization.ilike(f"%{specialization}%")) |
             (User.specialization_en.ilike(f"%{specialization}%"))
         )
+    if province:
+        query = query.filter(User.province.ilike(f"%{province}%"))
+    if district:
+        query = query.filter(User.district.ilike(f"%{district}%"))
     return [model_to_dict(d, ["password"]) for d in query.all()]
 
 @router.get("/specializations")
@@ -220,6 +247,9 @@ def update_doctor_profile(doctor_id: str, updates: dict, current_user: dict = De
     doc = db.query(User).filter(User.id == doctor_id).first()
     if not doc:
         raise HTTPException(404, "الطبيب غير موجود")
+    # Auto-populate specialization_en when specialization changes
+    if "specialization" in updates and updates["specialization"]:
+        updates["specialization_en"] = SPEC_AR_TO_EN.get(updates["specialization"], updates.get("specialization_en", ""))
     safe_update(doc, updates)
     db.commit()
     return model_to_dict(doc, ["password"])
