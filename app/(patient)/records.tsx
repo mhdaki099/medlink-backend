@@ -1,178 +1,332 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
-    View, Text, StyleSheet, FlatList, TouchableOpacity, 
-    ActivityIndicator, Platform, Modal, ScrollView, Alert
+    View, Text, StyleSheet, ScrollView, ActivityIndicator, 
+    RefreshControl, TouchableOpacity, Modal 
 } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Colors, BorderRadius, Shadow } from '../../src/theme';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { useRouter } from 'expo-router';
 
-const OWNER_FILTERS = [
-    { key: 'all', label: 'الكل', icon: 'folder-multiple-outline' },
-    { key: 'self', label: 'سجلي', icon: 'account-outline' },
-    { key: 'child', label: 'الأطفال', icon: 'baby-face-outline' },
-    { key: 'father', label: 'الأب', icon: 'account-outline' },
-    { key: 'mother', label: 'الأم', icon: 'account-outline' },
-    { key: 'spouse', label: 'الزوج/ة', icon: 'heart-outline' },
-    { key: 'elderly', label: 'كبار السن', icon: 'account-group-outline' },
-];
-
-export default function MedicalRecords() {
+export default function PatientRecordsScreen() {
     const { user } = useAuth();
-    const router = useRouter();
-    const [records, setRecords] = useState<any[]>([]);
+    const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [selectedRecord, setSelectedRecord] = useState<any>(null);
-    const [ownerFilter, setOwnerFilter] = useState('all');
+    const [refreshing, setRefreshing] = useState(false);
+    const [selectedVisit, setSelectedVisit] = useState<any>(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
 
-    const loadRecords = async () => {
+    const load = async () => {
         if (!user?.id) return;
         try {
-            const ownerParam = ownerFilter === 'all' ? undefined : ownerFilter;
-            const data = await api.getMedicalRecords(user.id, ownerParam);
-            setRecords(data);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
+            const visits = await api.getPatientVisits(user.id);
+            setData(visits);
+        } catch (e) { 
+            console.warn(e); 
+        } finally { 
+            setLoading(false); 
+            setRefreshing(false); 
         }
     };
 
-    useEffect(() => { loadRecords(); }, [user, ownerFilter]);
+    useEffect(() => { load(); }, [user]);
 
-    const filtered = records;
-
-    const ownerLabel = (owner: string) => ({
-        self: 'أنا', child: 'طفل', father: 'أب', mother: 'أم', spouse: 'زوج/زوجة', elderly: 'كبير سن'
-    }[owner] || owner);
-
-    const getTypeIcon = (type: string) => {
-        switch (type) {
-            case 'prescription': return 'pill';
-            case 'lab_result': return 'flask-outline';
-            case 'xray': return 'radiobox-marked';
-            default: return 'file-document-outline';
-        }
+    const openVisitDetail = (visit: any) => {
+        setSelectedVisit(visit);
+        setShowDetailModal(true);
     };
-
-    const getTypeColor = (type: string) => {
-        switch (type) {
-            case 'prescription': return '#1E88E5';
-            case 'lab_result': return '#8E24AA';
-            case 'xray': return '#E65100';
-            default: return '#43A047';
-        }
-    };
-
-    const renderRecordItem = ({ item }: { item: any }) => (
-        <TouchableOpacity style={styles.recordCard} onPress={() => setSelectedRecord(item)} activeOpacity={0.85}>
-            <View style={[styles.recordIcon, { backgroundColor: getTypeColor(item.type) + '15' }]}>
-                <MaterialCommunityIcons 
-                    name={getTypeIcon(item.type) as any} 
-                    size={24} 
-                    color={getTypeColor(item.type)} 
-                />
-            </View>
-            <View style={styles.recordInfo}>
-                <Text style={styles.recordTitle}>{item.title}</Text>
-                <Text style={styles.recordMeta}>{item.uploaded_by} • {item.date}</Text>
-                {item.record_owner && item.record_owner !== 'self' && (
-                    <View style={styles.ownerBadge}>
-                        <MaterialCommunityIcons 
-                            name={item.record_owner === 'child' ? 'baby-face-outline' : 'account-group-outline'} 
-                            size={11} color="#6B7280" 
-                        />
-                        <Text style={styles.ownerBadgeText}>{ownerLabel(item.record_owner)}</Text>
-                    </View>
-                )}
-            </View>
-            <Ionicons name="chevron-back" size={20} color="#94A3B8" />
-        </TouchableOpacity>
-    );
 
     return (
         <View style={styles.container}>
-            <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="chevron-forward" size={24} color="#FFF" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>سجلي الطبي</Text>
-                    <View style={{ width: 40 }} />
-                </View>
-                {/* Owner Filter */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={{ gap: 8 }}>
-                    {OWNER_FILTERS.map(f => (
-                        <TouchableOpacity key={f.key} style={[styles.filterChip, ownerFilter === f.key && styles.filterActive]} onPress={() => setOwnerFilter(f.key)}>
-                            <MaterialCommunityIcons name={f.icon as any} size={14} color={ownerFilter === f.key ? '#1E88E5' : 'rgba(255,255,255,0.8)'} />
-                            <Text style={[styles.filterText, ownerFilter === f.key && styles.filterTextActive]}>{f.label}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+            <LinearGradient
+                colors={['#8B5CF6', '#6366F1']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.header}
+            >
+                <Text style={styles.headerTitle}>📋 سجلاتي الطبية</Text>
+                <Text style={styles.headerSub}>تاريخ كامل لجميع زياراتك الطبية</Text>
             </LinearGradient>
 
-            {loading ? (
-                <ActivityIndicator color="#1E88E5" style={{ marginTop: 50 }} />
-            ) : (
-                <FlatList
-                    data={filtered}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderRecordItem}
-                    contentContainerStyle={styles.list}
-                    onRefresh={loadRecords}
-                    refreshing={loading}
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <MaterialCommunityIcons name="folder-open-outline" size={60} color="#E2E8F0" />
-                            <Text style={styles.emptyTxt}>لا توجد سجلات طبية حالياً</Text>
-                        </View>
-                    }
-                />
+            {data && (
+                <View style={styles.statsCard}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{data.total_visits || 0}</Text>
+                        <Text style={styles.statLabel}>إجمالي الزيارات</Text>
+                    </View>
+                </View>
             )}
 
-            {/* View File Modal */}
-            <Modal visible={!!selectedRecord} transparent animationType="slide">
-                <View style={styles.modalBg}>
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHandle} />
-                        <View style={styles.modalHeader}>
-                            <TouchableOpacity onPress={() => setSelectedRecord(null)}>
-                                <Ionicons name="close" size={24} color="#1E293B" />
-                            </TouchableOpacity>
-                            <Text style={styles.modalTitle}>عرض الملف</Text>
-                        </View>
+            <ScrollView
+                style={styles.list}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl 
+                        refreshing={refreshing} 
+                        onRefresh={() => { setRefreshing(true); load(); }} 
+                    />
+                }
+            >
+                {loading ? (
+                    <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} size="large" />
+                ) : !data || data.visits?.length === 0 ? (
+                    <View style={styles.empty}>
+                        <Text style={styles.emptyIcon}>📋</Text>
+                        <Text style={styles.emptyText}>لا توجد سجلات طبية بعد</Text>
+                        <Text style={styles.emptySubtext}>ستظهر هنا جميع زياراتك وتقاريرك الطبية</Text>
+                    </View>
+                ) : (
+                    data.visits.map((visit: any, idx: number) => (
+                        <TouchableOpacity 
+                            key={visit.id} 
+                            style={styles.visitCard}
+                            onPress={() => openVisitDetail(visit)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.visitHeader}>
+                                <View style={styles.visitDateBadge}>
+                                    <Ionicons name="calendar-outline" size={14} color={Colors.primary} />
+                                    <Text style={styles.visitDate}>{visit.visit_date}</Text>
+                                </View>
+                                <Text style={styles.doctorName}>د. {visit.doctor_name}</Text>
+                            </View>
 
-                        {selectedRecord && (
-                            <ScrollView showsVerticalScrollIndicator={false}>
-                                <Text style={styles.detailLabel}>العنوان:</Text>
-                                <Text style={styles.detailVal}>{selectedRecord.title}</Text>
-                                
-                                <Text style={styles.detailLabel}>بواسطة:</Text>
-                                <Text style={styles.detailVal}>{selectedRecord.uploaded_by}</Text>
+                            <Text style={styles.specialization}>{visit.doctor_specialization}</Text>
 
-                                <Text style={styles.detailLabel}>التاريخ:</Text>
-                                <Text style={styles.detailVal}>{selectedRecord.date}</Text>
+                            {visit.complaint && (
+                                <View style={styles.complaintBox}>
+                                    <Text style={styles.complaintLabel}>الشكوى:</Text>
+                                    <Text style={styles.complaintText} numberOfLines={2}>
+                                        {visit.complaint}
+                                    </Text>
+                                </View>
+                            )}
 
-                                {selectedRecord.record_owner && (
-                                    <>
-                                        <Text style={styles.detailLabel}>السجل لـ:</Text>
-                                        <Text style={styles.detailVal}>
-                                            {selectedRecord.record_owner === 'self' ? 'نفسي' : selectedRecord.record_owner === 'child' ? 'طفل' : 'قريب'}
+                            <View style={styles.visitFooter}>
+                                {visit.consultation_report && (
+                                    <View style={styles.badge}>
+                                        <Ionicons name="document-text" size={12} color="#10B981" />
+                                        <Text style={styles.badgeText}>تقرير</Text>
+                                    </View>
+                                )}
+                                {visit.prescription && (
+                                    <View style={styles.badge}>
+                                        <Ionicons name="medical" size={12} color="#8B5CF6" />
+                                        <Text style={styles.badgeText}>وصفة</Text>
+                                    </View>
+                                )}
+                                {visit.service_requests?.length > 0 && (
+                                    <View style={styles.badge}>
+                                        <Ionicons name="flask" size={12} color="#F59E0B" />
+                                        <Text style={styles.badgeText}>
+                                            {visit.service_requests.length} طلب
                                         </Text>
-                                    </>
+                                    </View>
+                                )}
+                                <Ionicons name="chevron-back" size={18} color={Colors.textMuted} />
+                            </View>
+                        </TouchableOpacity>
+                    ))
+                )}
+                <View style={{ height: 20 }} />
+            </ScrollView>
+
+            {/* Visit Detail Modal */}
+            <Modal
+                visible={showDetailModal}
+                animationType="slide"
+                transparent={false}
+                onRequestClose={() => setShowDetailModal(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <TouchableOpacity onPress={() => setShowDetailModal(false)}>
+                            <Ionicons name="close" size={28} color={Colors.text} />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>تفاصيل الزيارة</Text>
+                    </View>
+
+                    <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                        {selectedVisit && (
+                            <>
+                                {/* Visit Info */}
+                                <View style={styles.detailSection}>
+                                    <Text style={styles.sectionTitle}>معلومات الزيارة</Text>
+                                    <View style={styles.infoCard}>
+                                        <View style={styles.infoRow}>
+                                            <Text style={styles.infoValue}>
+                                                د. {selectedVisit.doctor_name}
+                                            </Text>
+                                            <Text style={styles.infoLabel}>الطبيب</Text>
+                                        </View>
+                                        <View style={styles.infoRow}>
+                                            <Text style={styles.infoValue}>
+                                                {selectedVisit.doctor_specialization}
+                                            </Text>
+                                            <Text style={styles.infoLabel}>التخصص</Text>
+                                        </View>
+                                        <View style={styles.infoRow}>
+                                            <Text style={styles.infoValue}>
+                                                {selectedVisit.visit_date} - {selectedVisit.visit_time}
+                                            </Text>
+                                            <Text style={styles.infoLabel}>التاريخ والوقت</Text>
+                                        </View>
+                                        {selectedVisit.price && (
+                                            <View style={styles.infoRow}>
+                                                <Text style={styles.infoValue}>
+                                                    {selectedVisit.price.toLocaleString()} ل.س
+                                                </Text>
+                                                <Text style={styles.infoLabel}>التكلفة</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                </View>
+
+                                {/* Complaint */}
+                                {selectedVisit.complaint && (
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.sectionTitle}>الشكوى</Text>
+                                        <View style={styles.contentCard}>
+                                            <Text style={styles.contentText}>
+                                                {selectedVisit.complaint}
+                                            </Text>
+                                        </View>
+                                    </View>
                                 )}
 
-                                <View style={styles.divider} />
+                                {/* Consultation Report */}
+                                {selectedVisit.consultation_report && (
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.sectionTitle}>تقرير الاستشارة</Text>
+                                        <View style={styles.contentCard}>
+                                            {selectedVisit.consultation_report.is_healthy ? (
+                                                <View style={styles.healthyBadge}>
+                                                    <Ionicons name="checkmark-circle" size={20} color="#10B981" />
+                                                    <Text style={styles.healthyText}>المريض بصحة جيدة</Text>
+                                                </View>
+                                            ) : (
+                                                <>
+                                                    <Text style={styles.reportLabel}>ملخص الحالة:</Text>
+                                                    <Text style={styles.contentText}>
+                                                        {selectedVisit.consultation_report.condition_summary}
+                                                    </Text>
+                                                </>
+                                            )}
+                                            {selectedVisit.consultation_report.notes && (
+                                                <>
+                                                    <Text style={[styles.reportLabel, { marginTop: 12 }]}>
+                                                        ملاحظات:
+                                                    </Text>
+                                                    <Text style={styles.contentText}>
+                                                        {selectedVisit.consultation_report.notes}
+                                                    </Text>
+                                                </>
+                                            )}
+                                            {selectedVisit.follow_up && (
+                                                <>
+                                                    <Text style={[styles.reportLabel, { marginTop: 12 }]}>
+                                                        المتابعة:
+                                                    </Text>
+                                                    <Text style={styles.contentText}>
+                                                        {selectedVisit.follow_up}
+                                                    </Text>
+                                                </>
+                                            )}
+                                        </View>
+                                    </View>
+                                )}
 
-                                <Text style={styles.detailLabel}>المحتوى:</Text>
-                                <View style={styles.contentBox}>
-                                    <Text style={styles.detailVal}>{selectedRecord.content}</Text>
-                                </View>
-                            </ScrollView>
+                                {/* Prescription */}
+                                {selectedVisit.prescription && selectedVisit.prescription.medications?.length > 0 && (
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.sectionTitle}>الوصفة الطبية</Text>
+                                        <View style={styles.contentCard}>
+                                            {selectedVisit.prescription.prescription_code && (
+                                                <View style={styles.codeBox}>
+                                                    <Text style={styles.codeLabel}>رمز الوصفة:</Text>
+                                                    <Text style={styles.codeValue}>
+                                                        {selectedVisit.prescription.prescription_code}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            {selectedVisit.prescription.medications.map((med: any, idx: number) => (
+                                                <View key={idx} style={styles.medItem}>
+                                                    <View style={styles.medHeader}>
+                                                        <Text style={styles.medName}>{med.name}</Text>
+                                                        <Ionicons name="medical" size={16} color="#8B5CF6" />
+                                                    </View>
+                                                    <Text style={styles.medDetail}>
+                                                        الجرعة: {med.dosage}
+                                                    </Text>
+                                                    <Text style={styles.medDetail}>
+                                                        المدة: {med.duration}
+                                                    </Text>
+                                                </View>
+                                            ))}
+                                            {selectedVisit.prescription.notes && (
+                                                <View style={styles.prescNotes}>
+                                                    <Text style={styles.reportLabel}>ملاحظات:</Text>
+                                                    <Text style={styles.contentText}>
+                                                        {selectedVisit.prescription.notes}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+                                )}
+
+                                {/* Service Requests */}
+                                {selectedVisit.service_requests?.length > 0 && (
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.sectionTitle}>
+                                            طلبات التحاليل والأشعة
+                                        </Text>
+                                        {selectedVisit.service_requests.map((req: any, idx: number) => (
+                                            <View key={idx} style={styles.serviceCard}>
+                                                <View style={styles.serviceHeader}>
+                                                    <View style={styles.serviceTypeBadge}>
+                                                        <Ionicons 
+                                                            name={req.request_type === 'lab' ? 'flask' : 'scan'} 
+                                                            size={14} 
+                                                            color="#FFF" 
+                                                        />
+                                                        <Text style={styles.serviceTypeText}>
+                                                            {req.request_type === 'lab' ? 'تحليل' : 'أشعة'}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={styles.serviceName}>{req.service_name}</Text>
+                                                </View>
+                                                <View style={styles.refCodeBox}>
+                                                    <Text style={styles.refCodeLabel}>رمز المرجع:</Text>
+                                                    <Text style={styles.refCodeValue}>{req.reference_code}</Text>
+                                                </View>
+                                                {req.notes && (
+                                                    <Text style={styles.serviceNotes}>{req.notes}</Text>
+                                                )}
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+
+                                {/* Notes */}
+                                {selectedVisit.notes?.length > 0 && (
+                                    <View style={styles.detailSection}>
+                                        <Text style={styles.sectionTitle}>ملاحظات الطبيب</Text>
+                                        {selectedVisit.notes.map((note: any, idx: number) => (
+                                            <View key={idx} style={styles.noteCard}>
+                                                <Text style={styles.noteText}>{note.note_text}</Text>
+                                                <Text style={styles.noteDate}>
+                                                    {new Date(note.created_at).toLocaleDateString('ar-SY')}
+                                                </Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                )}
+                            </>
                         )}
-                    </View>
+                        <View style={{ height: 40 }} />
+                    </ScrollView>
                 </View>
             </Modal>
         </View>
@@ -180,33 +334,210 @@ export default function MedicalRecords() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FAFBFF' },
-    header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-    headerRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    headerTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#FFF' },
-    backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-    filterRow: { marginBottom: 4 },
-    filterChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
-    filterActive: { backgroundColor: '#FFF' },
-    filterText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: 'rgba(255,255,255,0.9)' },
-    filterTextActive: { color: '#1E88E5' },
-    list: { padding: 20 },
-    recordCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, marginBottom: 12, flexDirection: 'row-reverse', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-    recordIcon: { width: 50, height: 50, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
-    recordInfo: { flex: 1, alignItems: 'flex-end' },
-    recordTitle: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
-    recordMeta: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#64748B', marginTop: 2 },
-    ownerBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 3, backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginTop: 4, alignSelf: 'flex-end' },
-    ownerBadgeText: { fontSize: 10, fontFamily: 'Cairo_600SemiBold', color: '#6B7280' },
-    empty: { alignItems: 'center', marginTop: 100 },
-    emptyTxt: { fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginTop: 15 },
-    modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, height: '80%', padding: 24 },
-    modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#F1F5F9', alignSelf: 'center', marginBottom: 16 },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-    modalTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
-    detailLabel: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#64748B', marginBottom: 4, textAlign: 'right' },
-    detailVal: { fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#1E293B', marginBottom: 20, textAlign: 'right' },
-    divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 10 },
-    contentBox: { backgroundColor: '#F8FAFC', padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#F1F5F9' }
+    container: { flex: 1, backgroundColor: Colors.background },
+    header: { paddingTop: 52, paddingBottom: 20, paddingHorizontal: 16 },
+    headerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', textAlign: 'right' },
+    headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', textAlign: 'right', marginTop: 4 },
+    
+    statsCard: { 
+        backgroundColor: Colors.white, 
+        marginHorizontal: 16, 
+        marginTop: 16, 
+        borderRadius: BorderRadius.lg, 
+        padding: 16,
+        ...Shadow.small 
+    },
+    statItem: { alignItems: 'center' },
+    statValue: { fontSize: 28, fontWeight: '800', color: Colors.primary },
+    statLabel: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
+
+    list: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
+    
+    visitCard: { 
+        backgroundColor: Colors.white, 
+        borderRadius: BorderRadius.lg, 
+        padding: 16, 
+        marginBottom: 12,
+        ...Shadow.small 
+    },
+    visitHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: 8 
+    },
+    visitDateBadge: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: Colors.primary + '15',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: BorderRadius.sm,
+        gap: 4
+    },
+    visitDate: { fontSize: 12, fontWeight: '600', color: Colors.primary },
+    doctorName: { fontSize: 16, fontWeight: '800', color: Colors.text },
+    specialization: { 
+        fontSize: 13, 
+        color: Colors.textSecondary, 
+        textAlign: 'right',
+        marginBottom: 10 
+    },
+    
+    complaintBox: { 
+        backgroundColor: Colors.background, 
+        padding: 10, 
+        borderRadius: BorderRadius.md,
+        marginBottom: 10 
+    },
+    complaintLabel: { fontSize: 11, fontWeight: '700', color: Colors.textMuted, marginBottom: 4 },
+    complaintText: { fontSize: 13, color: Colors.text, textAlign: 'right' },
+    
+    visitFooter: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'flex-end',
+        gap: 8,
+        marginTop: 8 
+    },
+    badge: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: Colors.background,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: BorderRadius.sm,
+        gap: 4
+    },
+    badgeText: { fontSize: 11, fontWeight: '600', color: Colors.textSecondary },
+
+    empty: { alignItems: 'center', marginTop: 80 },
+    emptyIcon: { fontSize: 64, marginBottom: 16 },
+    emptyText: { fontSize: 16, fontWeight: '700', color: Colors.textSecondary },
+    emptySubtext: { fontSize: 13, color: Colors.textMuted, marginTop: 8, textAlign: 'center' },
+
+    // Modal styles
+    modalContainer: { flex: 1, backgroundColor: Colors.white },
+    modalHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 50,
+        paddingBottom: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.background 
+    },
+    modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.text },
+    modalBody: { flex: 1, paddingHorizontal: 16 },
+
+    detailSection: { marginTop: 20 },
+    sectionTitle: { 
+        fontSize: 16, 
+        fontWeight: '800', 
+        color: Colors.text, 
+        textAlign: 'right',
+        marginBottom: 12 
+    },
+    
+    infoCard: { 
+        backgroundColor: Colors.background, 
+        borderRadius: BorderRadius.lg, 
+        padding: 16,
+        gap: 12 
+    },
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    infoLabel: { fontSize: 13, color: Colors.textSecondary },
+    infoValue: { fontSize: 14, fontWeight: '700', color: Colors.text },
+
+    contentCard: { 
+        backgroundColor: Colors.background, 
+        borderRadius: BorderRadius.lg, 
+        padding: 16 
+    },
+    contentText: { fontSize: 14, color: Colors.text, textAlign: 'right', lineHeight: 22 },
+    reportLabel: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary, marginBottom: 6 },
+
+    healthyBadge: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        gap: 8,
+        padding: 12,
+        backgroundColor: '#10B98115',
+        borderRadius: BorderRadius.md 
+    },
+    healthyText: { fontSize: 15, fontWeight: '700', color: '#10B981' },
+
+    codeBox: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        backgroundColor: Colors.white,
+        padding: 12,
+        borderRadius: BorderRadius.md,
+        marginBottom: 16 
+    },
+    codeLabel: { fontSize: 13, color: Colors.textSecondary },
+    codeValue: { fontSize: 15, fontWeight: '800', color: Colors.primary },
+
+    medItem: { 
+        backgroundColor: Colors.white, 
+        padding: 12, 
+        borderRadius: BorderRadius.md,
+        marginBottom: 10 
+    },
+    medHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: 6 
+    },
+    medName: { fontSize: 15, fontWeight: '700', color: Colors.text },
+    medDetail: { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+    prescNotes: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.white },
+
+    serviceCard: { 
+        backgroundColor: Colors.background, 
+        borderRadius: BorderRadius.lg, 
+        padding: 14,
+        marginBottom: 10 
+    },
+    serviceHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: 10 
+    },
+    serviceTypeBadge: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        backgroundColor: '#F59E0B',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: BorderRadius.sm,
+        gap: 4 
+    },
+    serviceTypeText: { fontSize: 11, fontWeight: '700', color: '#FFF' },
+    serviceName: { fontSize: 15, fontWeight: '700', color: Colors.text },
+    refCodeBox: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        backgroundColor: Colors.white,
+        padding: 10,
+        borderRadius: BorderRadius.md 
+    },
+    refCodeLabel: { fontSize: 12, color: Colors.textSecondary },
+    refCodeValue: { fontSize: 14, fontWeight: '800', color: '#F59E0B' },
+    serviceNotes: { fontSize: 12, color: Colors.textMuted, marginTop: 8, textAlign: 'right' },
+
+    noteCard: { 
+        backgroundColor: Colors.background, 
+        borderRadius: BorderRadius.md, 
+        padding: 12,
+        marginBottom: 8 
+    },
+    noteText: { fontSize: 13, color: Colors.text, textAlign: 'right', marginBottom: 6 },
+    noteDate: { fontSize: 11, color: Colors.textMuted, textAlign: 'right' },
 });

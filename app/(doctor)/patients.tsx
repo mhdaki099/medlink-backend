@@ -84,14 +84,18 @@ export default function DoctorPatients() {
         }
     };
 
+    const [patientVisits, setPatientVisits] = useState<any>(null);
+
     const loadNotes = async (patientId: string) => {
         try {
-            const [nData, pData] = await Promise.all([
+            const [nData, pData, vData] = await Promise.all([
                 api.getPatientNotes(user!.id, patientId),
-                api.getPatientPrescriptions(patientId)
+                api.getPatientPrescriptions(patientId),
+                api.getPatientVisits(patientId)
             ]);
             setNotes(nData);
             setPatientPrescriptions(pData);
+            setPatientVisits(vData);
         } catch (e) { console.warn(e); }
     };
 
@@ -355,25 +359,74 @@ export default function DoctorPatients() {
                         </View>
                         
                         <View style={styles.historySection}>
-                            <Text style={styles.sectionTitle}>الوصفات الطبية السابقة</Text>
-                            {patientPrescriptions.length === 0 ? (
-                                <Text style={styles.noNotes}>لا توجد وصفات طبية سابقة</Text>
+                            <Text style={styles.sectionTitle}>سجل الزيارات الكامل</Text>
+                            {!patientVisits ? (
+                                <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
+                            ) : patientVisits.visits?.length === 0 ? (
+                                <Text style={styles.noNotes}>لا توجد زيارات مسجلة</Text>
                             ) : (
-                                patientPrescriptions.map((p, pIdx) => (
-                                    <View key={pIdx} style={styles.realPrescCard}>
-                                        <View style={styles.prescHeaderRow}>
-                                            <Text style={styles.prescDateText}>{new Date(p.created_at).toLocaleDateString('ar-SY')}</Text>
-                                            <Text style={styles.prescDocLabel}>بواسطة: د. {p.doctor?.name || 'مجهول'}</Text>
+                                patientVisits.visits.map((visit: any, vIdx: number) => (
+                                    <View key={vIdx} style={styles.visitTimelineCard}>
+                                        <View style={styles.visitTimelineHeader}>
+                                            <Text style={styles.visitTimelineDate}>
+                                                {visit.visit_date} - {visit.visit_time}
+                                            </Text>
+                                            <Ionicons name="calendar-outline" size={14} color="#94A3B8" />
                                         </View>
-                                        <View style={styles.prescMedList}>
-                                            {p.medications.map((m: any, mIdx: number) => (
-                                                <View key={mIdx} style={styles.medItem}>
-                                                    <Ionicons name="medical-outline" size={14} color="#5D5FEF" />
-                                                    <Text style={styles.medNameText}>{m.name} ({m.dosage}) - {m.duration}</Text>
-                                                </View>
-                                            ))}
-                                        </View>
-                                        {p.notes ? <Text style={styles.prescNoteText}>{p.notes}</Text> : null}
+                                        
+                                        {visit.complaint && (
+                                            <View style={styles.visitComplaintBox}>
+                                                <Text style={styles.visitComplaintLabel}>الشكوى:</Text>
+                                                <Text style={styles.visitComplaintText}>{visit.complaint}</Text>
+                                            </View>
+                                        )}
+
+                                        {visit.consultation_report && (
+                                            <View style={styles.visitReportBox}>
+                                                <Text style={styles.visitReportLabel}>📋 التقرير:</Text>
+                                                {visit.consultation_report.is_healthy ? (
+                                                    <Text style={styles.visitReportText}>✅ المريض بصحة جيدة</Text>
+                                                ) : (
+                                                    <Text style={styles.visitReportText}>
+                                                        {visit.consultation_report.condition_summary}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        )}
+
+                                        {visit.prescription && visit.prescription.medications?.length > 0 && (
+                                            <View style={styles.visitPrescBox}>
+                                                <Text style={styles.visitPrescLabel}>💊 الأدوية:</Text>
+                                                {visit.prescription.medications.slice(0, 2).map((med: any, mIdx: number) => (
+                                                    <Text key={mIdx} style={styles.visitMedText}>
+                                                        • {med.name} ({med.dosage})
+                                                    </Text>
+                                                ))}
+                                                {visit.prescription.medications.length > 2 && (
+                                                    <Text style={styles.visitMedMore}>
+                                                        +{visit.prescription.medications.length - 2} أدوية أخرى
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        )}
+
+                                        {visit.service_requests?.length > 0 && (
+                                            <View style={styles.visitServicesBox}>
+                                                <Text style={styles.visitServicesLabel}>🧪 الطلبات:</Text>
+                                                {visit.service_requests.map((req: any, rIdx: number) => (
+                                                    <Text key={rIdx} style={styles.visitServiceText}>
+                                                        • {req.service_name} ({req.reference_code})
+                                                    </Text>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        {visit.follow_up && (
+                                            <View style={styles.visitFollowUpBox}>
+                                                <Text style={styles.visitFollowUpLabel}>📅 المتابعة:</Text>
+                                                <Text style={styles.visitFollowUpText}>{visit.follow_up}</Text>
+                                            </View>
+                                        )}
                                     </View>
                                 ))
                             )}
@@ -719,4 +772,188 @@ const styles = StyleSheet.create({
         textAlign: 'right',
         fontStyle: 'italic'
     }
+});
+ze: 11, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'right', marginTop: 4 },
+    recordContent: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#475569', textAlign: 'right', marginTop: 10 },
+
+    patientHero: { alignItems: 'center', paddingVertical: 30, backgroundColor: '#F8FAFC', borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
+    heroAvatar: { width: 100, height: 100, borderRadius: 35, borderWidth: 4, borderColor: '#FFF', elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+    heroMeta: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#64748B', marginTop: 5 },
+    sectionTitle: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right', marginBottom: 15, paddingHorizontal: 20 },
+    noteInputSection: { padding: 20 },
+    noteInput: { backgroundColor: '#F8FAFC', borderRadius: 20, height: 120, padding: 15, fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#1E293B', borderWidth: 1, borderColor: '#E2E8F0' },
+    submitNoteBtn: { backgroundColor: '#1E88E5', height: 48, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 15 },
+    submitNoteTxt: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#FFF' },
+    notesList: { padding: 20 },
+    noNotes: { textAlign: 'center', color: '#94A3B8', fontFamily: 'Cairo_400Regular', marginTop: 10 },
+    noteCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', elevation: 2, shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 5 },
+    noteHeader: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 8 },
+    noteDate: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginRight: 5 },
+    noteText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#334155', textAlign: 'right', lineHeight: 22 },
+    historySection: { padding: 20, paddingTop: 0 },
+
+    // Visit Timeline Styles
+    visitTimelineCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#0EA5E9' },
+    visitTimelineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    visitTimelineDate: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#1E293B' },
+    visitComplaintBox: { backgroundColor: '#FEF3C7', padding: 10, borderRadius: 10, marginBottom: 8 },
+    visitComplaintLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#92400E', marginBottom: 4 },
+    visitComplaintText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#78350F', textAlign: 'right' },
+    visitReportBox: { backgroundColor: '#DBEAFE', padding: 10, borderRadius: 10, marginBottom: 8 },
+    visitReportLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#1E40AF', marginBottom: 4 },
+    visitReportText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#1E3A8A', textAlign: 'right' },
+    visitPrescBox: { backgroundColor: '#F3E8FF', padding: 10, borderRadius: 10, marginBottom: 8 },
+    visitPrescLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#6B21A8', marginBottom: 4 },
+    visitMedText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#581C87', textAlign: 'right', marginTop: 2 },
+    visitMedMore: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#7C3AED', marginTop: 4, textAlign: 'right' },
+    visitServicesBox: { backgroundColor: '#FEF3C7', padding: 10, borderRadius: 10, marginBottom: 8 },
+    visitServicesLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#92400E', marginBottom: 4 },
+    visitServiceText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#78350F', textAlign: 'right', marginTop: 2 },
+    visitFollowUpBox: { backgroundColor: '#D1FAE5', padding: 10, borderRadius: 10 },
+    visitFollowUpLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#065F46', marginBottom: 4 },
+    visitFollowUpText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#047857', textAlign: 'right' },
+
+    /* Prescription Specific Styles */
+    cardActionsRow: { 
+        flexDirection: 'row-reverse', 
+        gap: 10, 
+        paddingHorizontal: 15, 
+        paddingBottom: 15 
+    },
+    actionBtnCompact: { 
+        flex: 1, 
+        height: 42, 
+        borderRadius: 12, 
+        flexDirection: 'row', 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
+    overlay: { 
+        flex: 1, 
+        backgroundColor: 'rgba(0,0,0,0.5)', 
+        justifyContent: 'flex-end' 
+    },
+    prescModalContent: { 
+        backgroundColor: '#FFF', 
+        borderTopLeftRadius: 35, 
+        borderTopRightRadius: 35, 
+        height: '85%', 
+        padding: 24 
+    },
+    prescHeader: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: 25 
+    },
+    prescTitle: { 
+        fontSize: 18, 
+        fontFamily: 'Cairo_700Bold', 
+        color: '#1E293B' 
+    },
+    prescBody: { flex: 1 },
+    prescPatientInfo: { 
+        backgroundColor: '#F8FAFC', 
+        borderRadius: 20, 
+        padding: 15, 
+        alignItems: 'flex-end', 
+        marginBottom: 25 
+    },
+    prescPatientLabel: { 
+        fontSize: 12, 
+        fontFamily: 'Cairo_400Regular', 
+        color: '#94A3B8' 
+    },
+    prescPatientName: { 
+        fontSize: 18, 
+        fontFamily: 'Cairo_700Bold', 
+        color: '#1E293B', 
+        marginTop: 2 
+    },
+    prescSectionTitle: { 
+        fontSize: 15, 
+        fontFamily: 'Cairo_700Bold', 
+        color: '#1E293B', 
+        textAlign: 'right', 
+        marginBottom: 15 
+    },
+    medicationRow: { 
+        backgroundColor: '#F8FAFC', 
+        borderRadius: 16, 
+        padding: 15, 
+        marginBottom: 15 
+    },
+    medRowTop: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: 10 
+    },
+    medIdx: { 
+        fontSize: 13, 
+        fontFamily: 'Cairo_700Bold', 
+        color: '#64748B' 
+    },
+    medInput: { 
+        backgroundColor: '#FFF', 
+        borderRadius: 12, 
+        height: 44, 
+        paddingHorizontal: 12, 
+        fontSize: 13, 
+        fontFamily: 'Cairo_400Regular', 
+        color: '#1E293B', 
+        borderWidth: 1, 
+        borderColor: '#E2E8F0', 
+        marginBottom: 10 
+    },
+    medSubInputs: { 
+        flexDirection: 'row', 
+        gap: 10 
+    },
+    addMedBtn: { 
+        flexDirection: 'row', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: 44, 
+        borderRadius: 12, 
+        borderWidth: 2, 
+        borderColor: '#5D5FEF', 
+        borderStyle: 'dashed', 
+        marginBottom: 20 
+    },
+    addMedText: { 
+        fontSize: 14, 
+        fontFamily: 'Cairo_700Bold', 
+        color: '#5D5FEF', 
+        marginRight: 8 
+    },
+    prescNotesInput: { 
+        backgroundColor: '#F8FAFC', 
+        borderRadius: 16, 
+        height: 100, 
+        padding: 15, 
+        fontSize: 13, 
+        fontFamily: 'Cairo_400Regular', 
+        color: '#1E293B', 
+        borderWidth: 1, 
+        borderColor: '#E2E8F0' 
+    },
+    prescFooter: { 
+        paddingTop: 20, 
+        borderTopWidth: 1, 
+        borderTopColor: '#F1F5F9' 
+    },
+    sendPrescBtn: { 
+        backgroundColor: '#5D5FEF', 
+        height: 52, 
+        borderRadius: 16, 
+        flexDirection: 'row', 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    },
+    sendPrescTxt: { 
+        fontSize: 15, 
+        fontFamily: 'Cairo_700Bold', 
+        color: '#FFF' 
+    },
 });

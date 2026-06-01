@@ -99,8 +99,12 @@ class ApiClient {
     }
 
     // ── Doctors ──────────────────────────────────────────────────────────────
-    getDoctors(specialization?: string) {
-        const q = specialization ? `?specialization=${encodeURIComponent(specialization)}` : '';
+    getDoctors(specialization?: string, province?: string, district?: string) {
+        const params: Record<string, string> = {};
+        if (specialization && specialization !== 'all') params.specialization = specialization;
+        if (province) params.province = province;
+        if (district) params.district = district;
+        const q = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
         return this.get<any[]>(`/doctors${q}`);
     }
     getDoctor(id: string, patientId?: string) {
@@ -312,6 +316,7 @@ class ApiClient {
     getPatientProfile(id: string) { return this.get<any>(`/patients/${id}`); }
     getNotifications(patientId: string) { return this.get<any[]>(`/patients/${patientId}/notifications`); }
     getPatientHistory(patientId: string) { return this.get<any>(`/patients/${patientId}/history`); }
+    getPatientVisits(patientId: string) { return this.get<any>(`/patients/${patientId}/visits`); }
     requestMedicalHistory(patientId: string, doctorId: string) {
         return this.post<any>('/patients/history-request', { patient_id: patientId, doctor_id: doctorId });
     }
@@ -361,8 +366,28 @@ class ApiClient {
         return this.get<any[]>(`/labs/service-bookings${q ? '?' + q : ''}`);
     }
     createServiceBooking(data: any) { return this.post<any>('/labs/service-bookings', data); }
-    getRadiologyCenters() { return this.get<any[]>('/labs/radiology'); }
+    updateServiceBookingStatus(id: string, data: any) { return this.put<any>(`/labs/service-bookings/${id}/status`, data); }
+    getRadiologyCenters(params?: { q?: string; province?: string; district?: string }) {
+        const query = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
+        return this.get<any[]>(`/labs/radiology${query ? '?' + query : ''}`);
+    }
+    getLabsFiltered(params?: { q?: string; province?: string; district?: string }) {
+        const query = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
+        return this.get<any[]>(`/labs${query ? '?' + query : ''}`);
+    }
+    getProviderAvailability(providerId: string) { return this.get<any>(`/labs/providers/${providerId}/availability`); }
     getProviderAnalytics(providerId: string) { return this.get<any>(`/labs/${providerId}/analytics`); }
+
+    // ── Consultation Reports ──────────────────────────────────────────────────
+    createConsultationReport(data: any) { return this.post<any>('/consultations', data); }
+    getConsultationByAppointment(appointmentId: string) { return this.get<any>(`/consultations/appointment/${appointmentId}`); }
+    getPatientConsultations(patientId: string) { return this.get<any[]>(`/consultations/patient/${patientId}`); }
+    addServiceRequest(reportId: string, data: any) { return this.post<any>(`/consultations/${reportId}/service-requests`, data); }
+    getPatientServiceRequests(patientId: string) { return this.get<any[]>(`/consultations/service-requests/patient/${patientId}`); }
+
+    // ── Patient by UID ────────────────────────────────────────────────────────
+    getPatientByUID(uid: string) { return this.get<any>(`/patients/by-uid/${uid}`); }
+    createProvisionalPatient(data: { name: string; phone: string }) { return this.post<any>('/patients/provisional', data); }
 
     getUserNotifications(userId: string) { return this.get<any[]>(`/patients/${userId}/notifications`); }
     markUserNotificationRead(id: string) { return this.put<any>(`/patients/notifications/${id}/read`, {}); }
@@ -400,6 +425,7 @@ class ApiClient {
         const q = role ? `?role=${role}` : '';
         return this.get<any[]>(`/admin/users${q}`);
     }
+    getAdminUserDetail(id: string) { return this.get<any>(`/admin/users/${id}`); }
     verifyUser(id: string) { return this.put<any>(`/admin/users/${id}/verify`, {}); }
     toggleUserActive(id: string) { return this.put<any>(`/admin/users/${id}/toggle-active`, {}); }
     toggleUserFeatured(id: string) { return this.put<any>(`/admin/users/${id}/toggle-featured`, {}); }
@@ -407,7 +433,10 @@ class ApiClient {
     createAdminUser(data: any) {
         return this.post<any>('/admin/users', data);
     }
-    getAuditLogs() { return this.get<any[]>('/admin/audit-logs'); }
+    getAuditLogs(params?: { user_id?: string; action?: string; limit?: number }) {
+        const q = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
+        return this.get<any[]>(`/admin/audit-logs${q ? '?' + q : ''}`);
+    }
     getAdminStats() { return this.get<any>('/admin/stats'); }
 
     // ── Registration Requests ────────────────────────────────────────────────
