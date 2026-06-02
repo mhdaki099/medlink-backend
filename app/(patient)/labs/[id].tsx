@@ -63,7 +63,9 @@ export default function LabProfileScreen() {
                 home_service_fee: bookingForm.visit_type === 'home_service' ? (lab?.home_service_fee || 0) : 0,
             });
             setBookingModal({ visible: false, test: null });
-            Alert.alert('✅ تم الحجز', 'تم إرسال طلب الحجز بنجاح');
+            Alert.alert('✅ تم الحجز', 'تم إرسال طلب الحجز بنجاح', [
+                { text: 'حسناً', onPress: () => router.back() },
+            ]);
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
         } finally {

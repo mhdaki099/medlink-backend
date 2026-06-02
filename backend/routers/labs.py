@@ -236,10 +236,13 @@ def update_booking_status(booking_id: str, status_update: dict, current_user: di
 
 @router.get("/{lab_id}")
 def get_lab(lab_id: str, db: Session = Depends(get_db)):
-    lab = db.query(User).filter(User.id == lab_id, User.role == "lab").first()
-    if not lab:
-        raise HTTPException(404, "المختبر غير موجود")
-    return model_to_dict(lab, ["password"])
+    provider = db.query(User).filter(
+        User.id == lab_id,
+        User.role.in_(["lab", "radiology"]),
+    ).first()
+    if not provider:
+        raise HTTPException(404, "المزود غير موجود")
+    return model_to_dict(provider, ["password"])
 
 @router.get("/{lab_id}/tests")
 def get_lab_tests(lab_id: str, db: Session = Depends(get_db)):

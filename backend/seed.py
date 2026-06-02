@@ -252,6 +252,32 @@ USERS: List[Dict[str, Any]] = [
         "open_hours": "07:30 - 20:00",
         "created_at": "2023-09-10T08:00:00"
     },
+    # Radiology centers
+    {
+        "id": "rad1", "role": "radiology", "name": "مركز الشام للأشعة", "name_en": "Al-Sham Radiology Center",
+        "email": "rad.sham@medlink.sy", "password": "123456",
+        "phone": "+963-944-778899",
+        "city": "دمشق", "address": "شارع بغداد، المزة، دمشق",
+        "photo": "https://images.unsplash.com/photo-1516549655169-df83a0774514?w=200",
+        "lat": 33.5100, "lng": 36.2700,
+        "license_no": "RAD-DAM-2020-0012",
+        "is_active": True, "verified": True,
+        "open_hours": "08:00 - 20:00",
+        "has_home_service": True, "home_service_fee": 15000,
+        "created_at": "2023-06-15T08:00:00"
+    },
+    {
+        "id": "rad2", "role": "radiology", "name": "مركز حلب للتصوير الطبي", "name_en": "Aleppo Medical Imaging Center",
+        "email": "rad.aleppo@medlink.sy", "password": "123456",
+        "phone": "+963-955-334455",
+        "city": "حلب", "address": "حي الفرقان، حلب",
+        "photo": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=200",
+        "lat": 36.2100, "lng": 37.1600,
+        "license_no": "RAD-ALP-2021-0033",
+        "is_active": True, "verified": True,
+        "open_hours": "09:00 - 18:00",
+        "created_at": "2024-01-20T08:00:00"
+    },
     # Warehouse
     {
         "id": "wh1", "role": "warehouse", "name": "مستودع الدواء الرئيسي", "name_en": "Main Medical Warehouse",

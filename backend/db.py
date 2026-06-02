@@ -25,6 +25,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
     ensure_demo_secretary()
+    ensure_demo_radiology_centers()
 
 
 def ensure_sqlite_columns():
@@ -137,6 +138,60 @@ def ensure_demo_secretary():
                 created_at=datetime.now(timezone.utc).isoformat(),
             )
         )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_demo_radiology_centers():
+    """Create demo radiology centers on existing DBs if none exist."""
+    from datetime import datetime, timezone
+    from models import User
+    from auth_utils import hash_password
+
+    db = SessionLocal()
+    try:
+        if db.query(User).filter(User.role == "radiology").first():
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        demos = [
+            {
+                "id": "rad1",
+                "role": "radiology",
+                "name": "مركز الشام للأشعة",
+                "email": "rad.sham@medlink.sy",
+                "password": hash_password("123456"),
+                "phone": "+963-944-778899",
+                "city": "دمشق",
+                "address": "شارع بغداد، المزة، دمشق",
+                "open_hours": "08:00 - 20:00",
+                "has_home_service": True,
+                "home_service_fee": 15000,
+                "is_active": True,
+                "verified": True,
+                "created_at": now,
+            },
+            {
+                "id": "rad2",
+                "role": "radiology",
+                "name": "مركز حلب للتصوير الطبي",
+                "email": "rad.aleppo@medlink.sy",
+                "password": hash_password("123456"),
+                "phone": "+963-955-334455",
+                "city": "حلب",
+                "address": "حي الفرقان، حلب",
+                "open_hours": "09:00 - 18:00",
+                "is_active": True,
+                "verified": True,
+                "created_at": now,
+            },
+        ]
+        for row in demos:
+            if db.query(User).filter(User.id == row["id"]).first():
+                continue
+            db.add(User(**row))
         db.commit()
     except Exception:
         db.rollback()

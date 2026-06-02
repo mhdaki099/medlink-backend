@@ -24,7 +24,7 @@ export default function RadiologyProfileScreen() {
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await api.getLab(id as string); // Radiology centers use same endpoint
+                const data = await api.getLab(id as string);
                 setCenter(data);
             } catch (e) {
                 console.warn(e);
