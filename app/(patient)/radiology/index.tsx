@@ -6,8 +6,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { api } from '../../src/services/api';
-import { useAuth } from '../../src/contexts/AuthContext';
+import { api } from '../../../src/services/api';
+import { useAuth } from '../../../src/contexts/AuthContext';
 
 export default function RadiologyScreen() {
     const router = useRouter();

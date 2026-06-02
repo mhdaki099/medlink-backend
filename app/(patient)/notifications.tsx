@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     View, Text, StyleSheet, FlatList, TouchableOpacity, 
-    ActivityIndicator, Platform
+    ActivityIndicator, Platform, Alert
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,8 +28,9 @@ export default function Notifications() {
         try {
             const data = await api.getNotifications(user.id);
             setNotifs(data);
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل التنبيهات');
         } finally {
             setLoading(false);
         }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, RefreshControl, Dimensions, Platform, Modal, TextInput
+    ActivityIndicator, RefreshControl, Dimensions, Platform, Modal, TextInput, Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -47,8 +47,9 @@ export default function MyPrescriptionsScreen() {
         try {
             const data = await api.getPatientPrescriptions(user.id);
             setPrescriptions(data || []);
-        } catch (e) {
+        } catch (e: any) {
             console.warn('Failed to load prescriptions:', e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل الوصفات');
         } finally {
             setLoading(false);
             setRefreshing(false);

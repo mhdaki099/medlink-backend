@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
+from typing import Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import uuid
@@ -30,7 +31,8 @@ def add_notification(db: Session, user_id: str, title: str, message: str, type_:
     ))
 
 
-def log_appointment_audit(db: Session, appointment_id: str, user_id: str, action: str, old_status: str | None, new_status: str | None, details: str = ""):
+# def log_appointment_audit(..., old_status: str | None, new_status: str | None, ...):  # Python 3.10+
+def log_appointment_audit(db: Session, appointment_id: str, user_id: str, action: str, old_status: Optional[str], new_status: Optional[str], details: str = ""):
     db.add(AppointmentAuditLog(
         id=f"aal_{uuid.uuid4().hex[:8]}",
         appointment_id=appointment_id,
@@ -43,7 +45,8 @@ def log_appointment_audit(db: Session, appointment_id: str, user_id: str, action
     ))
 
 
-def ensure_slot_available(db: Session, doctor_id: str, date: str, time: str, appointment_id: str | None = None):
+# def ensure_slot_available(..., appointment_id: str | None = None):  # Python 3.10+
+def ensure_slot_available(db: Session, doctor_id: str, date: str, time: str, appointment_id: Optional[str] = None):
     if not doctor_id or not date or not time:
         raise HTTPException(status_code=400, detail="بيانات الموعد غير مكتملة")
     query = db.query(Appointment).filter(

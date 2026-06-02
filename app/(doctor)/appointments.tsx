@@ -43,8 +43,9 @@ export default function DoctorAppointments() {
                 ...(filter !== 'all' ? { status: filter } : {}) 
             });
             setAppointments(apts);
-        } catch (e) {
+        } catch (e: any) {
             console.warn(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل المواعيد');
         } finally {
             setLoading(false);
             setRefreshing(false);

@@ -1,7 +1,7 @@
 """
 Medical records router - patient visit history and records timeline.
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import uuid
@@ -9,12 +9,111 @@ import uuid
 from db import get_db
 from models import (
     User, Appointment, ConsultationReport, Prescription,
-    ServiceRequest, MedicalRecord, LabBooking, LabResult
+    ServiceRequest, MedicalRecord, LabBooking, LabResult, LabTest
 )
 from auth_utils import get_current_user
 from utils.helpers import model_to_dict
 
 router = APIRouter()
+
+
+def _ensure_patient_access(patient_id: str, current_user: dict):
+    if current_user["role"] == "patient" and current_user["sub"] != patient_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+
+
+def _enrich_lab_booking(booking: LabBooking, db: Session) -> dict:
+    bdict = model_to_dict(booking)
+    test = db.query(LabTest).filter(LabTest.id == booking.test_id).first()
+    lab = db.query(User).filter(User.id == booking.lab_id).first()
+    if test:
+        bdict["test"] = model_to_dict(test)
+    if lab:
+        bdict["lab"] = model_to_dict(lab, ["password"])
+    return bdict
+
+
+def _enrich_lab_result(result: LabResult, db: Session) -> dict:
+    rdict = model_to_dict(result)
+    test = db.query(LabTest).filter(LabTest.id == result.test_id).first()
+    lab = db.query(User).filter(User.id == result.lab_id).first()
+    if test:
+        rdict["test"] = model_to_dict(test)
+    if lab:
+        rdict["lab"] = model_to_dict(lab, ["password"])
+    return rdict
+
+
+@router.get("/lab-results")
+def list_lab_results(
+    patient_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_patient_access(patient_id, current_user)
+    results = (
+        db.query(LabResult)
+        .filter(LabResult.patient_id == patient_id)
+        .order_by(LabResult.date.desc())
+        .all()
+    )
+    return [_enrich_lab_result(r, db) for r in results]
+
+
+@router.get("/lab-results/{result_id}")
+def get_lab_result(
+    result_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    result = db.query(LabResult).filter(LabResult.id == result_id).first()
+    if not result:
+        raise HTTPException(404, "النتيجة غير موجودة")
+    _ensure_patient_access(result.patient_id, current_user)
+    return _enrich_lab_result(result, db)
+
+
+@router.get("/lab-bookings")
+def list_lab_bookings(
+    patient_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_patient_access(patient_id, current_user)
+    bookings = (
+        db.query(LabBooking)
+        .filter(LabBooking.patient_id == patient_id)
+        .order_by(LabBooking.date.desc(), LabBooking.time.desc())
+        .all()
+    )
+    return [_enrich_lab_booking(b, db) for b in bookings]
+
+
+@router.post("/lab-bookings")
+def create_lab_booking(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    patient_id = data.get("patient_id")
+    if not patient_id:
+        raise HTTPException(400, "معرف المريض مطلوب")
+    if current_user["role"] == "patient" and current_user["sub"] != patient_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    booking = LabBooking(
+        id=f"lb_{uuid.uuid4().hex[:8]}",
+        patient_id=patient_id,
+        lab_id=data.get("lab_id"),
+        test_id=data.get("test_id"),
+        date=data.get("date"),
+        time=data.get("time"),
+        status=data.get("status", "booked"),
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return _enrich_lab_booking(booking, db)
 
 
 @router.get("/patients/{patient_id}/visits")

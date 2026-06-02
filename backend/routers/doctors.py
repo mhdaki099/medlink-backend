@@ -151,22 +151,124 @@ def toggle_favorite(doctor_id: str, patient_id: str, current_user: dict = Depend
     db.add(Favorite(id=f"fav_{uuid.uuid4().hex[:8]}", user_id=patient_id, target_id=doctor_id, created_at=datetime.now(timezone.utc).isoformat()))
     db.commit(); return {"is_favorite": True}
 
+def _parse_time_range(range_str: str):
+    if not range_str or "-" not in range_str:
+        return None, None
+    parts = [p.strip() for p in str(range_str).replace("–", "-").split("-", 1)]
+    if len(parts) != 2:
+        return None, None
+    return parts[0], parts[1]
+
+
+def _to_minutes(t: str) -> int:
+    from datetime import datetime as dt
+    raw = (t or "").strip().upper()
+    if not raw:
+        return 0
+    normalized = raw.replace(" ", "")
+    for fmt in ("%I:%M%p", "%I%p", "%H:%M", "%H:%M:%S"):
+        try:
+            if fmt == "%I%p":
+                spaced = normalized.replace("AM", " AM").replace("PM", " PM").strip()
+                parsed = dt.strptime(spaced, "%I %p")
+            else:
+                parsed = dt.strptime(normalized, fmt)
+            return parsed.hour * 60 + parsed.minute
+        except ValueError:
+            continue
+    if ":" in normalized:
+        h, m = normalized.split(":", 1)
+        return int(h) * 60 + int(m)
+    return 0
+
+
+def _from_minutes(mins: int) -> str:
+    h = mins // 60
+    m = mins % 60
+    return f"{h:02d}:{m:02d}"
+
+
+def _expand_time_range_to_slots(start: str, end: str, duration: int, buffer: int) -> list:
+    start_m = _to_minutes(start)
+    end_m = _to_minutes(end)
+    if end_m <= start_m:
+        return []
+    slots = []
+    cur = start_m
+    while cur + duration <= end_m:
+        slots.append(_from_minutes(cur))
+        cur += duration + buffer
+    return slots
+
+
+def _looks_like_time_range(value: str) -> bool:
+    start, end = _parse_time_range(value)
+    return bool(start and end and _to_minutes(end) > _to_minutes(start))
+
+
+def _resolve_doctor_time_slots(doctor: User) -> list:
+    wh = doctor.working_hours or {}
+    hours = (doctor.available_hours or "").strip()
+    duration = doctor.consultation_duration or (wh.get("consultation_duration") if isinstance(wh, dict) else None) or 30
+    buffer = doctor.buffer_minutes or (wh.get("buffer_minutes") if isinstance(wh, dict) else None) or 10
+
+    if isinstance(wh, dict) and wh.get("slots"):
+        slots = []
+        for item in wh.get("slots", []):
+            text = str(item).strip()
+            if _looks_like_time_range(text):
+                start, end = _parse_time_range(text)
+                slots.extend(_expand_time_range_to_slots(start, end, duration, buffer))
+            elif text:
+                slots.append(text)
+        return slots
+
+    if isinstance(wh, dict) and (wh.get("morning") or wh.get("evening")):
+        return _generate_slots_from_working_hours(doctor, wh)
+
+    if hours:
+        parts = [h.strip() for h in hours.replace("،", ",").split(",") if h.strip()]
+        if len(parts) == 1 and _looks_like_time_range(parts[0]):
+            start, end = _parse_time_range(parts[0])
+            return _expand_time_range_to_slots(start, end, duration, buffer)
+        slots = []
+        for part in parts:
+            if _looks_like_time_range(part):
+                start, end = _parse_time_range(part)
+                slots.extend(_expand_time_range_to_slots(start, end, duration, buffer))
+            else:
+                slots.append(part)
+        return slots
+
+    return []
+
+
+def _generate_slots_from_working_hours(doctor: User, wh: dict) -> list:
+    """Generate time slots from morning/evening sessions, consultation duration and buffer."""
+    duration = doctor.consultation_duration or wh.get("consultation_duration") or 30
+    buffer = doctor.buffer_minutes or wh.get("buffer_minutes") or 10
+    slots = []
+    for session in [wh.get("morning", ""), wh.get("evening", "")]:
+        start, end = _parse_time_range(session)
+        if not start or not end:
+            continue
+        slots.extend(_expand_time_range_to_slots(start, end, duration, buffer))
+    return slots
+
+
 @router.get("/{doctor_id}/availability")
 def get_availability(doctor_id: str, date: str = Query(None), db: Session = Depends(get_db)):
     d = db.query(User).filter(User.id == doctor_id, User.role == "doctor").first()
     if not d:
         raise HTTPException(404, "الطبيب غير موجود")
     active_statuses = ["confirmed", "pending", "reschedule_requested", "cancellation_requested", "patient_confirmation_pending"]
-    booked = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.status.in_(active_statuses)).all()
+    booked_q = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.status.in_(active_statuses))
+    if date:
+        booked_q = booked_q.filter(Appointment.date == date)
+    booked = booked_q.all()
     hours = d.available_hours or ""
-    generated_slots = []
     wh = d.working_hours or {}
-    if isinstance(wh, dict) and wh.get("slots"):
-        generated_slots = wh.get("slots", [])
-    elif isinstance(wh, dict) and (wh.get("morning") or wh.get("evening")):
-        generated_slots = _generate_slots_from_working_hours(d, wh)
-    elif hours:
-        generated_slots = [h.strip() for h in hours.replace("،", ",").split(",") if h.strip()]
+    generated_slots = _resolve_doctor_time_slots(d)
     off_days = wh.get("off_days", []) if isinstance(wh, dict) else []
     target_date = date
     day_off = False
@@ -186,44 +288,6 @@ def get_availability(doctor_id: str, date: str = Query(None), db: Session = Depe
         "booked_slots": [{"date": a.date, "time": a.time} for a in booked],
         "day_off": day_off,
     }
-
-
-def _generate_slots_from_working_hours(doctor: User, wh: dict) -> list:
-    """Generate time slots from morning/evening sessions, consultation duration and buffer."""
-    duration = doctor.consultation_duration or wh.get("consultation_duration") or 30
-    buffer = doctor.buffer_minutes or wh.get("buffer_minutes") or 10
-    slots = []
-
-    def parse_range(range_str: str):
-        if not range_str or "-" not in range_str:
-            return None, None
-        parts = range_str.replace(" ", "").split("-")
-        return parts[0], parts[1]
-
-    def to_minutes(t: str):
-        t = t.upper().replace(" ", "")
-        if "AM" in t or "PM" in t:
-            from datetime import datetime as dt
-            return dt.strptime(t, "%I:%M%p").hour * 60 + dt.strptime(t, "%I:%M%p").minute
-        h, m = t.split(":")
-        return int(h) * 60 + int(m)
-
-    def from_minutes(mins: int):
-        from datetime import datetime as dt
-        h = mins // 60
-        m = mins % 60
-        return dt.strptime(f"{h}:{m:02d}", "%H:%M").strftime("%I:%M %p")
-
-    for session in [wh.get("morning", ""), wh.get("evening", "")]:
-        start, end = parse_range(session)
-        if not start or not end:
-            continue
-        cur = to_minutes(start)
-        end_m = to_minutes(end)
-        while cur + duration <= end_m:
-            slots.append(from_minutes(cur))
-            cur += duration + buffer
-    return slots
 
 @router.post("/{doctor_id}/reviews")
 def add_review(doctor_id: str, req: ReviewRequest, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):

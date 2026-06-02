@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Image, ActivityIndicator, RefreshControl, Dimensions, Platform
+    Image, ActivityIndicator, RefreshControl, Dimensions, Platform, Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -39,8 +39,9 @@ export default function MyDoctorsScreen() {
         try {
             const data = await api.getMyDoctors(user.id);
             setMyDoctors(data || []);
-        } catch (e) {
+        } catch (e: any) {
             console.warn('Failed to load my doctors:', e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل قائمة أطبائي');
         } finally {
             setLoading(false);
             setRefreshing(false);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, BorderRadius, Shadow } from '../../src/theme';
 import { api } from '../../src/services/api';
@@ -28,7 +28,10 @@ export default function HistoryScreen() {
         try {
             const data = await api.getPatientHistory(user.id);
             setHistory(data);
-        } catch (e) { console.warn(e); }
+        } catch (e: any) {
+            console.warn(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل السجل');
+        }
         finally { setLoading(false); setRefreshing(false); }
     };
 
@@ -142,7 +145,7 @@ export default function HistoryScreen() {
                         </View>
                     ))
                 )}
-                <View style={{ height: 20 }} />
+                <View style={{ height: 110 }} />
             </ScrollView>
         </View>
     );

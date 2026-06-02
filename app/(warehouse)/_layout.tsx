@@ -20,7 +20,13 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
-  const activeIndex = TABS.findIndex(t => state.routes[state.index].name === t.name);
+  const activeIndexRaw = TABS.findIndex(t => {
+    const routeName = state.routes[state.index].name;
+    if (routeName === t.name) return true;
+    if (t.name === 'index' && routeName === 'inventory') return true;
+    return false;
+  });
+  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
 
   const targetX = (2 - activeIndex) * TAB_WIDTH;
 
@@ -75,7 +81,7 @@ export default function WarehouseLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard: false,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
@@ -92,6 +98,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 100,
+    elevation: 24,
   },
   background: {
     position: 'absolute',

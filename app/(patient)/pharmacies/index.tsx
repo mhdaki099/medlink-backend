@@ -7,8 +7,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { api, BASE_URL } from '../../src/services/api';
-import { useAuth } from '../../src/contexts/AuthContext';
+import { api, BASE_URL } from '../../../src/services/api';
+import { useAuth } from '../../../src/contexts/AuthContext';
 import Animated, { 
     FadeInUp, FadeInRight, FadeInDown, FadeOutDown, 
     useAnimatedStyle, withSpring, useSharedValue, withTiming, runOnJS
@@ -18,7 +18,7 @@ import { PanGestureHandler, GestureHandlerRootView } from 'react-native-gesture-
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // We use the Logo Design asset
-const LOGO_IMG = require('../../assets/Logo Design.png');
+const LOGO_IMG = require('../../../assets/Logo Design.png');
 
 const SLIDER_WIDTH = width - 80;
 const KNOB_SIZE = 50;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Dimensions, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/services/api';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { api } from '../../../src/services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -28,13 +28,16 @@ export default function PatientLabsScreen() {
     const loadData = async () => {
         if (!user?.id) return;
         try {
-            const [r, b] = await Promise.all([
-                api.getLabResults(user.id),
-                api.getLabBookingsByPatient(user.id),
-            ]);
-            setResults(r || []);
-            setBookings(b || []);
-        } catch (e) { console.error(e); }
+            const history = await api.getPatientHistory(user.id);
+            setBookings(history?.lab_bookings || []);
+            const results = await api.getLabResults(user.id);
+            setResults(results || []);
+        } catch (e: any) {
+            console.error(e);
+            setResults([]);
+            setBookings([]);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل التحاليل');
+        }
         finally { setLoading(false); }
     };
 

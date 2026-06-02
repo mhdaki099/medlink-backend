@@ -26,12 +26,20 @@ export default function NewAppointment() {
         api.getPatients()
             .then(setPatients)
             .finally(() => setLoading(false));
-        if (user?.id) {
-            api.getDoctorAvailability(user.id)
-                .then(setAvailability)
-                .catch(() => {});
-        }
     }, [user]);
+
+    useEffect(() => {
+        if (!user?.id || !date) return;
+        api.getDoctorAvailability(user.id, date)
+            .then((av) => {
+                setAvailability(av);
+                if (av.day_off) {
+                    setTime('');
+                    Alert.alert('تنبيه', 'لا توجد ساعات عمل في هذا اليوم');
+                }
+            })
+            .catch((e: any) => Alert.alert('خطأ', e.message || 'تعذر تحميل الأوقات'));
+    }, [user?.id, date]);
 
     const filteredPatients = patients.filter(p =>
         p.name?.includes(search) || p.phone?.includes(search)

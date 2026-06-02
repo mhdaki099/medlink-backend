@@ -64,29 +64,34 @@ export default function LoginScreen() {
         }
     };
 
+    const navigateAfterLogin = (loggedInUser: any) => {
+        const role = loggedInUser?.role || 'patient';
+        const allowed = ['patient', 'doctor', 'pharmacy', 'lab', 'warehouse', 'admin', 'secretary'];
+        const group = allowed.includes(role) ? `(${role})` : '(patient)';
+        router.replace(`/${group}` as any);
+    };
+
     const handleLogin = async () => {
-        if (!email || !password) {
+        const trimmedEmail = email.trim().toLowerCase();
+        if (!trimmedEmail || !password) {
             showAlert('تنبيه', 'يرجى إدخال البريد الإلكتروني وكلمة المرور');
             return;
         }
         try {
-            const loggedInUser = await login(email, password) as any;
-            if (loggedInUser && loggedInUser.role) {
-                router.replace(`/(${loggedInUser.role})` as any);
-            } else {
-                router.replace('/(patient)' as any);
-            }
+            const loggedInUser = await login(trimmedEmail, password) as any;
+            navigateAfterLogin(loggedInUser);
         } catch (e: any) {
-            showAlert('خطأ في الدخول', 'البيانات غير صحيحة، يرجى المحاولة مرة أخرى');
+            const message = e?.message || 'البيانات غير صحيحة، يرجى المحاولة مرة أخرى';
+            showAlert('خطأ في الدخول', message);
         }
     };
 
     const quickLogin = async (ql: typeof QUICK_LOGINS[0]) => {
         try {
-            await login(ql.email, '123456');
-            router.replace(`/(${ql.role})` as any);
+            const loggedInUser = await login(ql.email, '123456') as any;
+            navigateAfterLogin(loggedInUser);
         } catch (e: any) {
-            showAlert('خطأ', 'فشل تسجيل الدخول السريع');
+            showAlert('خطأ', e?.message || 'فشل تسجيل الدخول السريع');
         }
     };
 

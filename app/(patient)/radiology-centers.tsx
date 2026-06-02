@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     View, Text, StyleSheet, FlatList, TouchableOpacity, 
-    ActivityIndicator, TextInput, Platform 
+    ActivityIndicator, TextInput, Platform, Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -29,8 +29,9 @@ export default function RadiologyCentersScreen() {
             const data = await api.getRadiologyCenters();
             setCenters(data || []);
             setFilteredCenters(data || []);
-        } catch (e) { 
-            console.error(e); 
+        } catch (e: any) { 
+            console.error(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل مراكز الأشعة');
         } finally { 
             setLoading(false); 
         }

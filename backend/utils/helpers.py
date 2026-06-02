@@ -1,4 +1,5 @@
 """Shared utilities used across all routers."""
+from typing import Optional, Set
 
 
 def model_to_dict(model, exclude=None):
@@ -16,7 +17,8 @@ PROTECTED_FIELDS = frozenset({
 })
 
 
-def safe_update(model_instance, updates: dict, extra_blocked: set | None = None):
+# def safe_update(model_instance, updates: dict, extra_blocked: set | None = None):  # Python 3.10+
+def safe_update(model_instance, updates: dict, extra_blocked: Optional[Set] = None):
     """
     Apply only whitelisted fields from `updates` to the model instance.
     Silently skips protected fields and non-existent attributes.

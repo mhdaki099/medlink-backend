@@ -73,6 +73,9 @@ export default function RegisterScreen() {
 
     const timeSlots = generateTimeSlots();
 
+    const selectedGovernorate = SYRIA_GOVERNORATES.find(g => g.name === form.province);
+    const selectedDistrict = selectedGovernorate?.districts.find(d => d.name === form.district);
+
     const toggleTimeSelection = (time: string) => {
         setSelectedTimes(prev => {
             if (prev.includes(time)) {
@@ -529,20 +532,20 @@ export default function RegisterScreen() {
                             </TouchableOpacity>
                         </View>
                         <FlatList
-                            data={Object.keys(SYRIA_LOCATIONS)}
-                            keyExtractor={(item) => item}
+                            data={getGovernorates()}
+                            keyExtractor={(item) => item.id}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={styles.cityItem}
                                     onPress={() => {
-                                        update('province', item);
+                                        update('province', item.name);
                                         update('district', '');
                                         update('area', '');
                                         setGovernorateModalVisible(false);
                                     }}
                                 >
-                                    <Text style={styles.cityItemText}>{item}</Text>
-                                    {form.province === item && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+                                    <Text style={styles.cityItemText}>{item.name}</Text>
+                                    {form.province === item.name && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
@@ -562,19 +565,19 @@ export default function RegisterScreen() {
                             </TouchableOpacity>
                         </View>
                         <FlatList
-                            data={form.province ? Object.keys(SYRIA_LOCATIONS[form.province] || {}) : []}
-                            keyExtractor={(item) => item}
+                            data={selectedGovernorate ? getDistricts(selectedGovernorate.id) : []}
+                            keyExtractor={(item) => item.id}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={styles.cityItem}
                                     onPress={() => {
-                                        update('district', item);
+                                        update('district', item.name);
                                         update('area', '');
                                         setDistrictModalVisible(false);
                                     }}
                                 >
-                                    <Text style={styles.cityItemText}>{item}</Text>
-                                    {form.district === item && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+                                    <Text style={styles.cityItemText}>{item.name}</Text>
+                                    {form.district === item.name && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
@@ -594,18 +597,18 @@ export default function RegisterScreen() {
                             </TouchableOpacity>
                         </View>
                         <FlatList
-                            data={(form.province && form.district) ? (SYRIA_LOCATIONS[form.province]?.[form.district] || []) : []}
-                            keyExtractor={(item) => item}
+                            data={selectedGovernorate && selectedDistrict ? getSubDistricts(selectedGovernorate.id, selectedDistrict.id) : []}
+                            keyExtractor={(item) => item.id}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={styles.cityItem}
                                     onPress={() => {
-                                        update('area', item);
+                                        update('area', item.name);
                                         setAreaModalVisible(false);
                                     }}
                                 >
-                                    <Text style={styles.cityItemText}>{item}</Text>
-                                    {form.area === item && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+                                    <Text style={styles.cityItemText}>{item.name}</Text>
+                                    {form.area === item.name && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}

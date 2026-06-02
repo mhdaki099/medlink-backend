@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 import os
+from typing import Optional, List, Dict
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -34,25 +35,31 @@ class RegisterRequest(BaseModel):
     price_per_session: float = 0.0
     experience_years: int = 0
     available_hours: str = ""
-    working_hours: dict | None = None
+    # working_hours: dict | None = None  # Python 3.10+
+    working_hours: Optional[Dict] = None
     specialization: str = ""
-    drug_allergies: list[str] = []
+    # drug_allergies: list[str] = []  # Python 3.10+
+    drug_allergies: List[str] = []
     open_hours: str = ""
     home_service_fee: float = 0.0
     has_home_service: bool = False
-    documents: list[str] = []
+    # documents: list[str] = []  # Python 3.10+
+    documents: List[str] = []
     province: str = ""
     district: str = ""
     area: str = ""
     association_no: str = ""
     license_no: str = ""
-    lat: float | None = None
-    lng: float | None = None
+    # lat: float | None = None  # Python 3.10+
+    lat: Optional[float] = None
+    # lng: float | None = None  # Python 3.10+
+    lng: Optional[float] = None
 
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
+    email = req.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(req.password, user.password):
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
     

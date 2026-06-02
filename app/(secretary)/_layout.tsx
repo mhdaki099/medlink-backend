@@ -4,9 +4,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, View, Text, TouchableOpacity, Dimensions, Animated, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
-const TAB_BAR_HEIGHT = 80; 
+const TAB_BAR_BASE_HEIGHT = 80; 
 const FAB_SIZE = 58; 
 const TAB_WIDTH = width / 2; // Only 2 tabs for secretary
 
@@ -16,6 +17,9 @@ const TABS = [
 ];
 
 function CustomTabBar({ state, navigation }: any) {
+  const insets = useSafeAreaInsets();
+  const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
+
   const activeIndexRaw = TABS.findIndex(t => state.routes[state.index].name === t.name);
   const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 1; 
 
@@ -41,7 +45,7 @@ function CustomTabBar({ state, navigation }: any) {
   const cutoutWidth = 70;
   
   return (
-    <View style={styles.tabBarWrapper}>
+    <View style={[styles.tabBarWrapper, { height: TAB_BAR_HEIGHT }]}>
       <View style={styles.backgroundContainer}>
         <Animated.View style={[styles.cutoutSlider, { transform: [{ translateX }] }]}>
           <Svg width={TAB_WIDTH} height={TAB_BAR_HEIGHT + 20} style={{ marginTop: -10 }}>
@@ -63,7 +67,7 @@ function CustomTabBar({ state, navigation }: any) {
         <View style={styles.whiteFill} />
       </View>
 
-      <View style={styles.tabItemsWrapper}>
+      <View style={[styles.tabItemsWrapper, { paddingBottom: insets.bottom }]}>
         {TABS.map((tab, index) => {
           const isFocused = activeIndex === index;
           return (
@@ -110,7 +114,10 @@ function CustomTabBar({ state, navigation }: any) {
 
 export default function SecretaryLayout() {
   return (
-    <Tabs tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false, tabBarHideOnKeyboard: false }}
+    >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
       <Tabs.Screen name="appointments" options={{ title: 'المواعيد' }} />
     </Tabs>
@@ -118,11 +125,11 @@ export default function SecretaryLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBarWrapper: { position: 'absolute', bottom: 0, width: width, height: TAB_BAR_HEIGHT + (Platform.OS === 'ios' ? 25 : 10) },
-  backgroundContainer: { position: 'absolute', bottom: 0, width: width, height: TAB_BAR_HEIGHT, backgroundColor: '#FFFFFF' },
+  tabBarWrapper: { position: 'absolute', bottom: 0, width: width, zIndex: 100, elevation: 24 },
+  backgroundContainer: { position: 'absolute', bottom: 0, width: width, height: TAB_BAR_BASE_HEIGHT, backgroundColor: '#FFFFFF' },
   whiteFill: { ...StyleSheet.absoluteFillObject, backgroundColor: '#FFFFFF', zIndex: -1 },
-  cutoutSlider: { position: 'absolute', top: -1, width: TAB_WIDTH, height: TAB_BAR_HEIGHT + 1, zIndex: 1 },
-  tabItemsWrapper: { flexDirection: 'row-reverse', height: TAB_BAR_HEIGHT, width: width, alignItems: 'center', zIndex: 10 },
+  cutoutSlider: { position: 'absolute', top: -1, width: TAB_WIDTH, height: TAB_BAR_BASE_HEIGHT + 1, zIndex: 1 },
+  tabItemsWrapper: { flexDirection: 'row-reverse', height: TAB_BAR_BASE_HEIGHT, width: width, alignItems: 'center', zIndex: 10 },
   tabButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { fontSize: 10, fontFamily: 'Cairo_700Bold', color: '#94A3B8', marginTop: 4 },
   fabContainer: { position: 'absolute', top: -23, zIndex: 20, width: FAB_SIZE, height: FAB_SIZE },

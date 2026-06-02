@@ -1,8 +1,11 @@
 import { Platform } from 'react-native';
 
 /** Set EXPO_PUBLIC_API_URL (e.g. https://xxx.loca.lt/api) when the backend is tunneled for Expo Go. */
+// Local Expo Go (phone on same Wi‑Fi): EXPO_PUBLIC_API_URL=http://YOUR_LAN_IP:8000/api
+// Example: 'http://192.168.70.73:8000/api' — use env at start instead of uncommenting below.
 export const BASE_URL =
     process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') ||
+    // 'http://192.168.70.73:8000/api',
     'https://medlink-backend-2e7a.onrender.com/api';
 
 class ApiClient {
@@ -12,10 +15,25 @@ class ApiClient {
         this.token = token;
     }
 
+    private formatApiError(status: number, text: string): string {
+        try {
+            const json = JSON.parse(text);
+            const detail = json.detail;
+            if (typeof detail === 'string') return detail;
+            if (Array.isArray(detail)) {
+                return detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ');
+            }
+            return json.message || JSON.stringify(json);
+        } catch {
+            return text?.substring(0, 200) || `HTTP ${status}`;
+        }
+    }
+
     private async request<T>(
         method: string,
         path: string,
-        body?: any
+        body?: any,
+        options?: { silent?: boolean }
     ): Promise<T> {
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -28,28 +46,39 @@ class ApiClient {
         }
 
         console.log(`[API] ${method} ${BASE_URL}${path}`);
-        const res = await fetch(`${BASE_URL}${path}`, {
-            method,
-            headers,
-            body: body ? JSON.stringify(body) : undefined,
-        });
+        let res: Response;
+        try {
+            res = await fetch(`${BASE_URL}${path}`, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : undefined,
+            });
+        } catch (e: any) {
+            const msg = e?.message || '';
+            if (msg.includes('Network request failed') || msg.includes('Failed to fetch')) {
+                throw new Error('تعذر الاتصال بالخادم. تحقق من الإنترنت أو إعدادات API.');
+            }
+            throw new Error(msg || 'تعذر الاتصال بالخادم');
+        }
 
         if (!res.ok) {
             const text = await res.text();
-            let errDetail = 'Network error';
-            try {
-                const json = JSON.parse(text);
-                errDetail = json.detail || JSON.stringify(json);
-            } catch (e) {
-                errDetail = text.substring(0, 100) || `HTTP ${res.status}`;
+            const errDetail = this.formatApiError(res.status, text);
+            if (!options?.silent) {
+                console.error(`[API ERROR] ${method} ${BASE_URL}${path} → ${res.status}:`, errDetail);
             }
-            console.error(`[API ERROR] ${res.status}:`, errDetail);
             throw new Error(errDetail);
         }
-        return res.json();
+        try {
+            return await res.json();
+        } catch {
+            throw new Error('استجابة غير صالحة من الخادم');
+        }
     }
 
-    get<T>(path: string) { return this.request<T>('GET', path); }
+    get<T>(path: string, options?: { silent?: boolean }) {
+        return this.request<T>('GET', path, undefined, options);
+    }
     post<T>(path: string, body: any) { return this.request<T>('POST', path, body); }
     put<T>(path: string, body: any) { return this.request<T>('PUT', path, body); }
     delete<T>(path: string) { return this.request<T>('DELETE', path); }
@@ -117,7 +146,10 @@ class ApiClient {
     getDoctorFavorites(patientId: string) {
         return this.get<any[]>(`/doctors/favorites/${patientId}`);
     }
-    getDoctorAvailability(id: string) { return this.get<any>(`/doctors/${id}/availability`); }
+    getDoctorAvailability(id: string, date?: string) {
+        const q = date ? `?date=${encodeURIComponent(date)}` : '';
+        return this.get<any>(`/doctors/${id}/availability${q}`);
+    }
     getSpecializations() { return this.get<any[]>('/doctors/specializations'); }
     addDoctorReview(id: string, data: { patient_id: string; rating: number; comment?: string }) {
         return this.post<any>(`/doctors/${id}/reviews`, data);
@@ -318,13 +350,21 @@ class ApiClient {
     revokeAccess(recordId: string, doctorId: string) {
         return this.delete<any>(`/records/${recordId}/share/${doctorId}`);
     }
-    getLabResults(patientId?: string) {
-        const q = patientId ? `?patient_id=${patientId}` : '';
-        return this.get<any[]>(`/records/lab-results${q}`);
+    async getLabResults(patientId?: string) {
+        if (!patientId) return [];
+        try {
+            return await this.get<any[]>(
+                `/records/lab-results?patient_id=${patientId}`,
+                { silent: true }
+            );
+        } catch {
+            return [];
+        }
     }
     getLabResult(id: string) { return this.get<any>(`/records/lab-results/${id}`); }
-    getLabBookingsByPatient(patientId: string) {
-        return this.get<any[]>(`/records/lab-bookings?patient_id=${patientId}`);
+    async getLabBookingsByPatient(patientId: string) {
+        const history = await this.getPatientHistory(patientId);
+        return history?.lab_bookings || [];
     }
     bookLabTest(data: any) { return this.post<any>('/records/lab-bookings', data); }
 
@@ -384,10 +424,6 @@ class ApiClient {
     }
     createServiceBooking(data: any) { return this.post<any>('/labs/service-bookings', data); }
     updateServiceBookingStatus(id: string, data: any) { return this.put<any>(`/labs/service-bookings/${id}/status`, data); }
-    getRadiologyCenters(params?: { q?: string; province?: string; district?: string }) {
-        const query = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
-        return this.get<any[]>(`/labs/radiology${query ? '?' + query : ''}`);
-    }
     getLabsFiltered(params?: { q?: string; province?: string; district?: string }) {
         const query = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
         return this.get<any[]>(`/labs${query ? '?' + query : ''}`);

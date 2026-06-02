@@ -24,6 +24,7 @@ def init_db():
     )
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
+    ensure_demo_secretary()
 
 
 def ensure_sqlite_columns():
@@ -109,6 +110,38 @@ def ensure_sqlite_columns():
                         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
                     except Exception:
                         pass
+
+
+def ensure_demo_secretary():
+    """Create demo secretary on existing DBs (Render/local) if missing."""
+    from datetime import datetime, timezone
+    from models import User
+    from auth_utils import hash_password
+
+    db = SessionLocal()
+    try:
+        if db.query(User).filter(User.email == "sec.amal@medlink.sy").first():
+            return
+        db.add(
+            User(
+                id="sec_amal",
+                role="secretary",
+                name="أمل السكرتيرة",
+                email="sec.amal@medlink.sy",
+                password=hash_password("123456"),
+                phone="+963-933-445566",
+                city="دمشق",
+                supervisor_id="d1",
+                is_active=True,
+                verified=True,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 def get_db():

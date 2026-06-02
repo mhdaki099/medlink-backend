@@ -39,10 +39,10 @@ const MONTHS_AR = [
     'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'
 ];
 
-const TIME_SLOTS = [
-    '09:00 AM', '09:30 AM', '10:15 AM',
-    '11:00 AM', '01:00 PM', '02:15 PM',
-    '02:30 PM', '04:30 PM', '05:30 PM'
+const DEFAULT_TIME_SLOTS = [
+    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
 ];
 
 export default function DoctorProfile() {
@@ -60,7 +60,7 @@ export default function DoctorProfile() {
     
     const [selectedDate, setSelectedDate] = useState(now.toISOString().split('T')[0]);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
-    const [availability, setAvailability] = useState<any>({ time_slots: TIME_SLOTS, booked_slots: [] });
+    const [availability, setAvailability] = useState<any>({ time_slots: DEFAULT_TIME_SLOTS, booked_slots: [] });
     const [conditionDescription, setConditionDescription] = useState('');
     
     const [booking, setBooking] = useState(false);
@@ -77,26 +77,40 @@ export default function DoctorProfile() {
     useEffect(() => {
         const load = async () => {
             try {
-                const [data, av] = await Promise.all([
-                    api.getDoctor(id as string, user?.id),
-                    api.getDoctorAvailability(id as string).catch(() => null),
-                ]);
+                const data = await api.getDoctor(id as string, user?.id);
                 setDoctor(data);
                 setIsFavorite(data.is_favorite || false);
-                if (av) setAvailability(av);
                 setAnalytics({
                     favorites_count: data.favorites_count,
                     weekly_bookings: data.weekly_bookings,
                     monthly_bookings: data.monthly_bookings,
                 });
-            } catch (e) {
+            } catch (e: any) {
                 console.error(e);
+                Alert.alert('خطأ', e.message || 'تعذر تحميل بيانات الطبيب');
             } finally {
                 setLoading(false);
             }
         };
         load();
     }, [id, user]);
+
+    useEffect(() => {
+        if (!id) return;
+        const loadAvailability = async () => {
+            try {
+                const av = await api.getDoctorAvailability(id as string, selectedDate);
+                setAvailability(av);
+                if (av.day_off) {
+                    setSelectedTime(null);
+                }
+            } catch (e: any) {
+                console.error(e);
+                Alert.alert('خطأ', e.message || 'تعذر تحميل المواعيد المتاحة');
+            }
+        };
+        loadAvailability();
+    }, [id, selectedDate]);
 
     useEffect(() => {
         setCalendarDays(generateDaysForMonth(currentMonth, currentYear));
@@ -317,8 +331,11 @@ export default function DoctorProfile() {
                 {/* Time Slots */}
                 <View style={styles.sectionBox}>
                     <Text style={styles.sectionTitle}>اختر الوقت</Text>
+                    {availability.day_off ? (
+                        <Text style={styles.dayOffText}>الطبيب غير متاح في هذا اليوم</Text>
+                    ) : null}
                     <View style={styles.timeGrid}>
-                        {(availability.time_slots?.length ? availability.time_slots : TIME_SLOTS).map((time: string, idx: number) => {
+                        {(availability.time_slots?.length ? availability.time_slots : DEFAULT_TIME_SLOTS).map((time: string, idx: number) => {
                             const isSelected = selectedTime === time;
                             const isBooked = availability.booked_slots?.some((slot: any) => slot.date === selectedDate && slot.time === time);
                             return (
@@ -444,6 +461,7 @@ const styles = StyleSheet.create({
     bookingHeroText: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right', paddingHorizontal: 20, marginBottom: 15 },
     sectionBox: { marginBottom: 25 },
     sectionTitle: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#111827', paddingHorizontal: 20, marginBottom: 15, textAlign: 'right' },
+    dayOffText: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: '#EF4444', paddingHorizontal: 20, marginBottom: 10, textAlign: 'right' },
     monthSelectorRow: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', gap: 20, marginBottom: 15, paddingHorizontal: 20 },
     monthYearText: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
     calendarScrollContent: { paddingHorizontal: 20, gap: 15, flexDirection: 'row-reverse' },

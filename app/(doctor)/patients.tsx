@@ -59,8 +59,9 @@ export default function DoctorPatients() {
 
             setPatients(uniquePatients);
             setRequests(reqs);
-        } catch (e) {
+        } catch (e: any) {
             console.warn(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل المرضى');
         } finally {
             setLoading(false);
             setRefreshing(false);

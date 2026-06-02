@@ -14,7 +14,7 @@ interface AuthContextType {
     user: User | null;
     token: string | null;
     isLoading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<User>;
     register: (data: any) => Promise<any>;
     logout: () => void;
     updateUser: (data: Partial<User>) => void;
@@ -31,11 +31,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const login = async (email: string, password: string) => {
         setIsLoading(true);
         try {
-            const res = await api.login(email, password);
+            const res = await api.login(email.trim().toLowerCase(), password);
+            if (!res?.access_token || !res?.user) {
+                throw new Error('استجابة غير صالحة من الخادم');
+            }
             setToken(res.access_token);
             setUser(res.user);
             api.setToken(res.access_token);
-            return res.user;
+            return res.user as User;
+        } catch (e) {
+            setToken(null);
+            setUser(null);
+            api.setToken(null);
+            throw e;
         } finally {
             setIsLoading(false);
         }
@@ -72,9 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Re-fetch user data based on role
             let updatedUser;
             if (user.role === 'patient') {
-                updatedUser = await api.getPatientHistory(user.id).then(res => res.patient || res);
-                // Wait, getPatientHistory returns a summary. I'll use a more direct way if needed.
-                // For now, I'll just rely on updateUser from the profile screen.
+                updatedUser = await api.getPatientProfile(user.id);
+            } else if (user.role === 'doctor') {
+                updatedUser = await api.getDoctor(user.id);
+            }
+            if (updatedUser) {
+                setUser(prev => prev ? { ...prev, ...updatedUser } : null);
             }
         } catch (e) {
             console.error('[AUTH] Failed to refresh user', e);

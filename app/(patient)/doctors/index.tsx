@@ -6,8 +6,8 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '../../src/contexts/AuthContext';
-import { api, BASE_URL } from '../../src/services/api';
+import { useAuth } from '../../../src/contexts/AuthContext';
+import { api, BASE_URL } from '../../../src/services/api';
 
 const { width } = Dimensions.get('window');
 

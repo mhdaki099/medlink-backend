@@ -51,17 +51,31 @@ export default function AppointmentsScreen() {
         load();
     }, [user]);
 
+    const loadRescheduleSlots = async (doctorId: string, date: string) => {
+        try {
+            const av = await api.getDoctorAvailability(doctorId, date);
+            setTimeSlots(av.time_slots || []);
+            setBookedSlots(av.booked_slots || []);
+            if (av.day_off) {
+                setSelectedTime('');
+                Alert.alert('تنبيه', 'الطبيب غير متاح في هذا اليوم');
+            }
+        } catch (e: any) {
+            console.warn(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل الأوقات المتاحة');
+        }
+    };
+
     const handleRequestReschedule = async (aptId: string, doctorId: string) => {
         setRescheduleModal({ visible: true, aptId, doctorId });
         setSelectedTime('');
-        try {
-            const av = await api.getDoctorAvailability(doctorId);
-            setTimeSlots(av.time_slots || []);
-            setBookedSlots(av.booked_slots || []);
-        } catch (e) {
-            console.warn(e);
-        }
+        await loadRescheduleSlots(doctorId, selectedDate);
     };
+
+    useEffect(() => {
+        if (!rescheduleModal.visible || !rescheduleModal.doctorId) return;
+        loadRescheduleSlots(rescheduleModal.doctorId, selectedDate);
+    }, [selectedDate, rescheduleModal.visible, rescheduleModal.doctorId]);
 
     const submitReschedule = async () => {
         if (!selectedDate || !selectedTime) {

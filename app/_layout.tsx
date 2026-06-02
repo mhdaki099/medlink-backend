@@ -38,8 +38,11 @@ function RootLayoutNavigator() {
         if (!user && !inAuthGroup && !isPublicPage) {
             router.replace('/(auth)/login');
         } else if (user && inAuthGroup) {
-            // Logged in but still on login/register? 
-            // We'll let them decide to go to their role dashboard
+            const role = user.role;
+            const roleGroup = ['patient', 'doctor', 'pharmacy', 'lab', 'warehouse', 'admin', 'secretary'].includes(role)
+                ? `(${role})`
+                : '(patient)';
+            router.replace(`/${roleGroup}` as any);
         }
     }, [user, isLoading, segments]);
 

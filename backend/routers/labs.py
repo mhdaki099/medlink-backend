@@ -176,13 +176,11 @@ def get_provider_slots(provider_id: str, date: str = None, db: Session = Depends
         ServiceBooking.status.in_(["pending", "confirmed"]),
     ).all()
 
-    wh = provider.working_hours or {}
-    generated_slots = []
-    if isinstance(wh, dict) and (wh.get("morning") or wh.get("evening")):
-        from routers.doctors import _generate_slots_from_working_hours
-        generated_slots = _generate_slots_from_working_hours(provider, wh)
-    elif provider.open_hours:
-        generated_slots = [h.strip() for h in provider.open_hours.replace("،", ",").split(",") if h.strip()]
+    from routers.doctors import _resolve_doctor_time_slots
+    # Reuse doctor slot logic; open_hours maps to available_hours on User
+    if provider.open_hours and not provider.available_hours:
+        provider.available_hours = provider.open_hours
+    generated_slots = _resolve_doctor_time_slots(provider)
 
     return {
         "time_slots": generated_slots,

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, ActivityIndicator, 
-    RefreshControl, TouchableOpacity, Modal 
+    RefreshControl, TouchableOpacity, Modal, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,8 +22,9 @@ export default function PatientRecordsScreen() {
         try {
             const visits = await api.getPatientVisits(user.id);
             setData(visits);
-        } catch (e) { 
-            console.warn(e); 
+        } catch (e: any) { 
+            console.warn(e);
+            Alert.alert('خطأ', e.message || 'تعذر تحميل السجلات الطبية');
         } finally { 
             setLoading(false); 
             setRefreshing(false); 
@@ -129,7 +130,7 @@ export default function PatientRecordsScreen() {
                         </TouchableOpacity>
                     ))
                 )}
-                <View style={{ height: 20 }} />
+                <View style={{ height: 110 }} />
             </ScrollView>
 
             {/* Visit Detail Modal */}

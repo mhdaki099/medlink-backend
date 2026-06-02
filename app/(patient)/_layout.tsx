@@ -18,6 +18,24 @@ const TABS = [
   { name: 'profile', icon: 'account', label: 'البروفايل' },
 ];
 
+/** Secondary screens that belong under the "services" tab highlight */
+const SERVICE_TAB_ROUTES = new Set([
+  'services',
+  'doctors',
+  'pharmacies',
+  'records',
+  'appointments',
+  'labs',
+  'radiology',
+  'history',
+  'notifications',
+  'my-doctors',
+  'my-prescriptions',
+  'lab-centers',
+  'radiology-centers',
+  'medicines',
+]);
+
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function CustomTabBar({ state, navigation }: any) {
@@ -27,7 +45,7 @@ function CustomTabBar({ state, navigation }: any) {
   const activeIndexRaw = TABS.findIndex(t => {
     const route = state.routes[state.index];
     if (route.name === t.name) return true;
-    if (t.name === 'services' && ['doctors', 'pharmacies', 'records', 'appointments', 'labs', 'radiology'].includes(route.name)) return true;
+    if (t.name === 'services' && SERVICE_TAB_ROUTES.has(route.name)) return true;
     return false;
   });
   const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
@@ -151,7 +169,7 @@ export default function PatientLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard: false,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
@@ -165,6 +183,11 @@ export default function PatientLayout() {
       <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="radiology" options={{ href: null }} />
+      <Tabs.Screen name="my-doctors" options={{ href: null }} />
+      <Tabs.Screen name="my-prescriptions" options={{ href: null }} />
+      <Tabs.Screen name="lab-centers" options={{ href: null }} />
+      <Tabs.Screen name="radiology-centers" options={{ href: null }} />
+      <Tabs.Screen name="medicines" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -175,6 +198,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: width,
     backgroundColor: 'transparent',
+    zIndex: 100,
+    elevation: 24,
   },
   backgroundContainer: {
     position: 'absolute',

@@ -285,6 +285,15 @@ USERS: List[Dict[str, Any]] = [
         "is_active": True, "verified": True,
         "created_at": "2023-01-01T00:00:00"
     },
+    # Secretary (linked to Dr. Karim d1)
+    {
+        "id": "sec_amal", "role": "secretary", "name": "أمل السكرتيرة", "name_en": "Amal Secretary",
+        "email": "sec.amal@medlink.sy", "password": "123456",
+        "phone": "+963-933-445566",
+        "city": "دمشق", "supervisor_id": "d1",
+        "is_active": True, "verified": True,
+        "created_at": "2023-06-01T08:00:00"
+    },
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────

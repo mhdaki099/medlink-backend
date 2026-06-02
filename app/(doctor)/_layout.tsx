@@ -12,6 +12,14 @@ const TABS = [
   { name: 'profile', icon: 'account', label: 'البروفايل' },
 ];
 
+const PATIENTS_TAB_ROUTES = new Set([
+  'patients',
+  'appointments',
+  'new-appointment',
+  'new-prescription',
+  'consultation-report',
+]);
+
 const TAB_WIDTH = width / 3;
 const TAB_BAR_BASE_HEIGHT = 70;
 const FAB_SIZE = 56;
@@ -20,12 +28,14 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
-  const activeIndex = TABS.findIndex(t => {
+  const activeIndexRaw = TABS.findIndex(t => {
     const route = state.routes[state.index];
     if (route.name === t.name) return true;
-    if (t.name === 'patients' && ['appointments', 'new-appointment', 'new-prescription'].includes(route.name)) return true;
+    if (t.name === 'patients' && PATIENTS_TAB_ROUTES.has(route.name)) return true;
+    if (t.name === 'index' && route.name === 'notifications') return true;
     return false;
   });
+  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
 
   const targetX = (2 - activeIndex) * TAB_WIDTH;
 
@@ -80,7 +90,7 @@ export default function DoctorLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard: false,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
@@ -90,6 +100,7 @@ export default function DoctorLayout() {
       <Tabs.Screen name="new-appointment" options={{ href: null }} />
       <Tabs.Screen name="new-prescription" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
+      <Tabs.Screen name="consultation-report" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -100,6 +111,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 100,
+    elevation: 24,
   },
   background: {
     position: 'absolute',

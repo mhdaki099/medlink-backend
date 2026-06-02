@@ -12,6 +12,8 @@ const TABS = [
   { name: 'profile', icon: 'account', label: 'البروفايل' },
 ];
 
+const INDEX_TAB_ROUTES = new Set(['index', 'medicines', 'prescriptions', 'warehouse']);
+
 const TAB_WIDTH = width / 3;
 const TAB_BAR_BASE_HEIGHT = 70;
 const FAB_SIZE = 56;
@@ -20,7 +22,13 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
-  const activeIndex = TABS.findIndex(t => state.routes[state.index].name === t.name);
+  const activeIndexRaw = TABS.findIndex(t => {
+    const routeName = state.routes[state.index].name;
+    if (routeName === t.name) return true;
+    if (t.name === 'index' && INDEX_TAB_ROUTES.has(routeName)) return true;
+    return false;
+  });
+  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
 
   const targetX = (2 - activeIndex) * TAB_WIDTH;
 
@@ -75,7 +83,7 @@ export default function PharmacyLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard: false,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
@@ -94,6 +102,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 100,
+    elevation: 24,
   },
   background: {
     position: 'absolute',
