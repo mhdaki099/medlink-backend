@@ -1,0 +1,46 @@
+# Builds APK on GitHub servers (~10–15 min). No EAS queue, no EXPO_TOKEN needed.
+# Download from: Actions tab → this workflow run → Artifacts → medlink-debug.apk
+name: Build APK (fast, no EAS queue)
+
+on:
+  workflow_dispatch:
+
+env:
+  EXPO_PUBLIC_API_URL: https://medlink-backend-2e7a.onrender.com/api
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: medlink-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14

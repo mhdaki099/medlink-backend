@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MedLink",
-    "slug": "medlink",
+    "slug": "meddling",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,7 +21,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0A84FF"
       },
-      "package": "sy.medlink.app"
+      "package": "sy.medlink.app",
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
@@ -39,9 +40,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d742f235-40b0-4b81-b143-0ea999ead1c3"
+        "projectId": "8ee6e17d-b39f-4d30-b6e0-a1527ab33718"
       }
     },
-    "owner": "mhdaki099"
+    "owner": "mohamad_ani"
   }
 }

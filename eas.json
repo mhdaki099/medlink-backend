@@ -6,6 +6,9 @@
   "build": {
     "apk": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://medlink-backend-2e7a.onrender.com/api"
+      },
       "android": {
         "buildType": "apk"
       }

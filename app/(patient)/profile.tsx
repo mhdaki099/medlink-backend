@@ -7,8 +7,6 @@ import { api } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 
-const { width } = Dimensions.get('window');
-
 export default function PatientProfile() {
     const { user, logout, updateUser } = useAuth();
     

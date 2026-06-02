@@ -9,7 +9,6 @@ import Animated, { FadeInUp, FadeInRight, FadeInDown } from 'react-native-reanim
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import { useRouter } from 'expo-router';
 import { Colors } from '../../src/theme';
 
 export default function DoctorAppointments() {
