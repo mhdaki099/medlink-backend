@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, Alert, ActivityIndicator, Platform, Switch, Modal
@@ -38,6 +38,31 @@ export default function ConsultationReportScreen() {
     const [savingService, setSavingService] = useState(false);
     const [savedReportId, setSavedReportId] = useState<string | null>(null);
     const [serviceRequests, setServiceRequests] = useState<any[]>([]);
+    const [loadingReport, setLoadingReport] = useState(true);
+
+    useEffect(() => {
+        if (!appointmentId) {
+            setLoadingReport(false);
+            return;
+        }
+        (async () => {
+            try {
+                const report = await api.getConsultationByAppointment(appointmentId);
+                setSavedReportId(report.id);
+                setIsHealthy(!!report.is_healthy);
+                setConditionSummary(report.condition_summary || '');
+                setNotes(report.notes || '');
+                setFollowUp(report.follow_up || '');
+                if (report.service_requests?.length) {
+                    setServiceRequests(report.service_requests);
+                }
+            } catch {
+                // No saved report yet
+            } finally {
+                setLoadingReport(false);
+            }
+        })();
+    }, [appointmentId]);
 
     const handleSaveReport = async () => {
         if (!conditionSummary && !isHealthy) {
@@ -56,7 +81,11 @@ export default function ConsultationReportScreen() {
                 follow_up: followUp,
             });
             setSavedReportId(report.id);
-            Alert.alert('✅ تم حفظ التقرير', 'تم إنهاء الجلسة وحفظ التقرير بنجاح');
+            const wasUpdate = !!savedReportId;
+            Alert.alert(
+                '✅ تم حفظ التقرير',
+                wasUpdate ? 'تم تحديث التقرير بنجاح' : 'تم إنهاء الجلسة وحفظ التقرير بنجاح'
+            );
         } catch (e: any) {
             Alert.alert('خطأ', e.message || 'فشل حفظ التقرير');
         } finally {
@@ -127,7 +156,19 @@ export default function ConsultationReportScreen() {
                 <View style={{ width: 40 }} />
             </LinearGradient>
 
+            {loadingReport ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator color="#1E88E5" size="large" />
+                </View>
+            ) : (
             <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+                {savedReportId && (
+                    <View style={[styles.card, { backgroundColor: '#ECFDF5', borderColor: '#86EFAC', borderWidth: 1 }]}>
+                        <Text style={[styles.sectionTitle, { color: '#15803D', marginBottom: 0 }]}>
+                            تم حفظ تقرير سابق — يمكنك التعديل وإعادة الحفظ
+                        </Text>
+                    </View>
+                )}
                 {/* Patient Info */}
                 <View style={styles.patientCard}>
                     <MaterialCommunityIcons name="account-circle" size={40} color="#1E88E5" />
@@ -228,21 +269,30 @@ export default function ConsultationReportScreen() {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+            )}
 
             {/* Save Report Button */}
+            {!loadingReport && (
             <View style={styles.bottomBar}>
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSaveReport} disabled={saving}>
+                    <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.saveBtnGrad}>
+                        {saving ? <ActivityIndicator color="#FFF" /> : (
+                            <Text style={styles.saveBtnText}>
+                                {savedReportId ? 'تحديث التقرير' : 'حفظ التقرير وإنهاء الجلسة'}
+                            </Text>
+                        )}
+                    </LinearGradient>
+                </TouchableOpacity>
                 {savedReportId ? (
-                    <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/(doctor)/appointments' as any)}>
-                        <Text style={styles.doneBtnText}>✅ تم الحفظ — العودة للمواعيد</Text>
+                    <TouchableOpacity
+                        style={[styles.doneBtn, { marginTop: 10 }]}
+                        onPress={() => router.replace('/(doctor)/appointments' as any)}
+                    >
+                        <Text style={styles.doneBtnText}>العودة للمواعيد</Text>
                     </TouchableOpacity>
-                ) : (
-                    <TouchableOpacity style={styles.saveBtn} onPress={handleSaveReport} disabled={saving}>
-                        <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.saveBtnGrad}>
-                            {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>حفظ التقرير وإنهاء الجلسة</Text>}
-                        </LinearGradient>
-                    </TouchableOpacity>
-                )}
+                ) : null}
             </View>
+            )}
 
             {/* Prescription Modal */}
             <Modal visible={showPrescModal} transparent animationType="slide">

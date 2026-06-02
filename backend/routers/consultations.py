@@ -37,46 +37,70 @@ def create_consultation_report(data: dict, current_user: dict = Depends(require_
         raise HTTPException(404, "الموعد غير موجود")
 
     now = datetime.now(timezone.utc)
-    report_id = f"cr_{uuid.uuid4().hex[:8]}"
+    existing = db.query(ConsultationReport).filter(
+        ConsultationReport.appointment_id == appointment_id
+    ).first()
 
-    report = ConsultationReport(
-        id=report_id,
-        appointment_id=appointment_id,
-        doctor_id=doctor_id,
-        patient_id=patient_id,
-        condition_summary=data.get("condition_summary", ""),
-        is_healthy=bool(data.get("is_healthy", False)),
-        notes=data.get("notes", ""),
-        follow_up=data.get("follow_up", ""),
-        created_at=now.isoformat(),
-    )
-    db.add(report)
+    if existing:
+        existing.condition_summary = data.get("condition_summary", existing.condition_summary)
+        existing.is_healthy = bool(data.get("is_healthy", existing.is_healthy))
+        existing.notes = data.get("notes", existing.notes)
+        existing.follow_up = data.get("follow_up", existing.follow_up)
+        report = existing
+    else:
+        report_id = f"cr_{uuid.uuid4().hex[:8]}"
+        report = ConsultationReport(
+            id=report_id,
+            appointment_id=appointment_id,
+            doctor_id=doctor_id,
+            patient_id=patient_id,
+            condition_summary=data.get("condition_summary", ""),
+            is_healthy=bool(data.get("is_healthy", False)),
+            notes=data.get("notes", ""),
+            follow_up=data.get("follow_up", ""),
+            created_at=now.isoformat(),
+        )
+        db.add(report)
+
+        doctor = db.query(User).filter(User.id == doctor_id).first()
+        db.add(MedicalRecord(
+            id=f"rec_{uuid.uuid4().hex[:8]}",
+            patient_id=patient_id,
+            uploaded_by=doctor.name if doctor else "Doctor",
+            type="consultation",
+            title=f"تقرير استشارة - د. {doctor.name if doctor else ''}",
+            content=data.get("condition_summary", ""),
+            date=now.strftime("%Y-%m-%d"),
+            created_at=now.isoformat(),
+        ))
+
+        db.add(Notification(
+            id=f"ntf_{uuid.uuid4().hex[:8]}",
+            user_id=patient_id,
+            title="تقرير استشارة جديد",
+            message=f"أضاف الدكتور {doctor.name if doctor else ''} تقرير استشارتك.",
+            type="consultation_report",
+            created_at=now.isoformat(),
+        ))
 
     # Mark appointment as completed
     apt.status = "completed"
+    apt.cancel_requested = False
+    apt.reschedule_requested = False
+    apt.requested_date = None
+    apt.requested_time = None
+    apt.status_before_change = None
 
-    # Create medical record entry
-    doctor = db.query(User).filter(User.id == doctor_id).first()
-    db.add(MedicalRecord(
-        id=f"rec_{uuid.uuid4().hex[:8]}",
-        patient_id=patient_id,
-        uploaded_by=doctor.name if doctor else "Doctor",
-        type="consultation",
-        title=f"تقرير استشارة - د. {doctor.name if doctor else ''}",
-        content=data.get("condition_summary", ""),
-        date=now.strftime("%Y-%m-%d"),
-        created_at=now.isoformat(),
-    ))
-
-    # Notify patient
-    db.add(Notification(
-        id=f"ntf_{uuid.uuid4().hex[:8]}",
-        user_id=patient_id,
-        title="تقرير استشارة جديد",
-        message=f"أضاف الدكتور {doctor.name if doctor else ''} تقرير استشارتك.",
-        type="consultation_report",
-        created_at=now.isoformat(),
-    ))
+    if existing:
+        doctor = db.query(User).filter(User.id == doctor_id).first()
+        db.add(Notification(
+            id=f"ntf_{uuid.uuid4().hex[:8]}",
+            user_id=patient_id,
+            title="تحديث تقرير الاستشارة",
+            message=f"حدّث الدكتور {doctor.name if doctor else ''} تقرير استشارتك.",
+            type="consultation_report",
+            created_at=now.isoformat(),
+        ))
 
     db.commit()
     db.refresh(report)

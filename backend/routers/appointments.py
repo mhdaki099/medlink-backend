@@ -501,7 +501,7 @@ def request_cancel(
         raise HTTPException(status_code=400, detail="يجب إدخال سبب الإلغاء")
 
     if apt.status == "cancellation_requested":
-        raise HTTPException(status_code=409, detail="طلب الإلغاء قيد المراجعة بالفعل")
+        return model_to_dict(apt)
     if apt.status in ("cancelled", "rejected", "completed"):
         raise HTTPException(status_code=400, detail="لا يمكن إلغاء هذا الموعد")
     if apt.status in ("schedule_change_pending", "reschedule_requested"):

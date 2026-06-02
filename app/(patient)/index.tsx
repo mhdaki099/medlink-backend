@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Image, ActivityIndicator, RefreshControl, Dimensions,
-    TextInput, Platform, FlatList, Modal
+    Platform, FlatList, Modal, Alert
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -51,6 +51,20 @@ const generateWeekDays = () => {
 };
 const WEEK_DAYS = generateWeekDays();
 
+const ACTION_APPOINTMENT_STATUSES = new Set([
+    'cancellation_requested',
+    'schedule_change_pending',
+    'patient_confirmation_pending',
+    'reschedule_requested',
+]);
+
+const APT_STATUS_META: Record<string, { label: string; color: string; icon: string }> = {
+    cancellation_requested: { label: 'طلب إلغاء — بانتظار الطبيب', color: '#DC2626', icon: 'close-circle-outline' },
+    schedule_change_pending: { label: 'تعديل موعد من الطبيب', color: '#7C3AED', icon: 'calendar-clock' },
+    patient_confirmation_pending: { label: 'بانتظار موافقتك', color: '#7C3AED', icon: 'account-clock-outline' },
+    reschedule_requested: { label: 'طلب إعادة جدولة — بانتظار الطبيب', color: '#D97706', icon: 'calendar-edit' },
+};
+
 export default function PatientHome() {
     const { user } = useAuth();
     const router = useRouter();
@@ -64,6 +78,20 @@ export default function PatientHome() {
     const [prescriptions, setPrescriptions] = useState<any[]>([]);
     const [selectedPresc, setSelectedPresc] = useState<any>(null);
     const [showPrescModal, setShowPrescModal] = useState(false);
+    const [actionAppointments, setActionAppointments] = useState<any[]>([]);
+
+    const loadAppointments = async () => {
+        if (!user?.id) return;
+        try {
+            const data = await api.getAppointments({ patient_id: user.id });
+            const action = data
+                .filter((a: any) => ACTION_APPOINTMENT_STATUSES.has(a.status))
+                .sort((a: any, b: any) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime());
+            setActionAppointments(action);
+        } catch (e) {
+            console.warn(e);
+        }
+    };
 
     const load = async () => {
         try {
@@ -76,6 +104,7 @@ export default function PatientHome() {
                 ]);
                 setAllDoctors(docs);
                 setPrescriptions(prescs);
+                await loadAppointments();
                 
                 // Prioritize featured doctors, fallback to first 3
                 const featuredDocs = docs.filter((d: any) => d.is_featured);
@@ -102,10 +131,143 @@ export default function PatientHome() {
 
     useEffect(() => { load(); }, [user]);
 
-    useEffect(() => {
-        console.log("HOME SCREEN RENDERED - Verifying UI Reflection");
-        load(); 
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            loadAppointments();
+        }, [user?.id])
+    );
+
+    const handleWithdrawCancel = (aptId: string) => {
+        Alert.alert('سحب طلب الإلغاء', 'هل تريد التراجع عن طلب الإلغاء والإبقاء على الموعد؟', [
+            { text: 'لا', style: 'cancel' },
+            {
+                text: 'نعم',
+                onPress: async () => {
+                    try {
+                        await api.withdrawCancelRequest(aptId);
+                        Alert.alert('تم', 'تم سحب طلب الإلغاء — الموعد ما زال نشطاً');
+                        await loadAppointments();
+                    } catch (e: any) {
+                        Alert.alert('خطأ', e?.message || 'فشل سحب الطلب');
+                    }
+                },
+            },
+        ]);
+    };
+
+    const handleRespondScheduleChange = (aptId: string, action: 'approve' | 'reject') => {
+        if (action === 'reject') {
+            Alert.alert('رفض التعديل', 'هل تريد رفض التعديل المقترح من الطبيب؟', [
+                { text: 'لا', style: 'cancel' },
+                {
+                    text: 'رفض',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await api.respondScheduleChange(aptId, 'reject', 'رفض المريض تعديل الموعد');
+                            Alert.alert('تم', 'تم رفض التعديل');
+                            await loadAppointments();
+                        } catch (e: any) {
+                            Alert.alert('خطأ', e?.message || 'فشل تحديث الموعد');
+                        }
+                    },
+                },
+            ]);
+            return;
+        }
+        (async () => {
+            try {
+                await api.respondScheduleChange(aptId, 'approve');
+                Alert.alert('تم', 'تم قبول التعديل وتطبيق الموعد الجديد');
+                await loadAppointments();
+            } catch (e: any) {
+                Alert.alert('خطأ', e?.message || 'فشل تحديث الموعد');
+            }
+        })();
+    };
+
+    const handlePatientStatusUpdate = async (aptId: string, status: string, rejectionNote?: string) => {
+        try {
+            await api.updateAppointmentStatus(aptId, status, undefined, undefined, rejectionNote);
+            await loadAppointments();
+        } catch (e: any) {
+            Alert.alert('خطأ', e?.message || 'فشل تحديث الموعد');
+        }
+    };
+
+    const renderActionAppointment = (item: any) => {
+        const meta = APT_STATUS_META[item.status] || { label: item.status, color: '#6B7280', icon: 'calendar-alert' };
+        return (
+            <View key={item.id} style={styles.actionAptCard}>
+                <View style={styles.actionAptHeader}>
+                    <View style={[styles.actionAptBadge, { backgroundColor: meta.color + '18' }]}>
+                        <MaterialCommunityIcons name={meta.icon as any} size={16} color={meta.color} />
+                        <Text style={[styles.actionAptBadgeText, { color: meta.color }]}>{meta.label}</Text>
+                    </View>
+                    <Text style={styles.actionAptDate}>{item.date} — {item.time}</Text>
+                </View>
+                <Text style={styles.actionAptDoctor}>د. {item.doctor_name || item.doctor_id}</Text>
+
+                {item.status === 'cancellation_requested' && item.rejection_note ? (
+                    <Text style={styles.actionAptNote}>سبب الإلغاء: {item.rejection_note}</Text>
+                ) : null}
+
+                {item.status === 'schedule_change_pending' && item.requested_date ? (
+                    <Text style={styles.actionAptNote}>
+                        موعد مقترح: {item.requested_date} — {item.requested_time}
+                    </Text>
+                ) : null}
+
+                <View style={styles.actionAptActions}>
+                    {item.status === 'cancellation_requested' && (
+                        <TouchableOpacity
+                            style={[styles.actionAptBtn, { backgroundColor: '#F1F5F9' }]}
+                            onPress={() => handleWithdrawCancel(item.id)}
+                        >
+                            <MaterialCommunityIcons name="undo" size={14} color="#64748B" />
+                            <Text style={[styles.actionAptBtnText, { color: '#64748B' }]}>سحب طلب الإلغاء</Text>
+                        </TouchableOpacity>
+                    )}
+                    {item.status === 'schedule_change_pending' && (
+                        <>
+                            <TouchableOpacity
+                                style={[styles.actionAptBtn, { backgroundColor: '#DCFCE7' }]}
+                                onPress={() => handleRespondScheduleChange(item.id, 'approve')}
+                            >
+                                <MaterialCommunityIcons name="check" size={14} color="#16A34A" />
+                                <Text style={[styles.actionAptBtnText, { color: '#16A34A' }]}>قبول</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionAptBtn, { backgroundColor: '#FEF2F2' }]}
+                                onPress={() => handleRespondScheduleChange(item.id, 'reject')}
+                            >
+                                <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
+                                <Text style={[styles.actionAptBtnText, { color: '#EF4444' }]}>رفض</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                    {item.status === 'patient_confirmation_pending' && (
+                        <>
+                            <TouchableOpacity
+                                style={[styles.actionAptBtn, { backgroundColor: '#DCFCE7' }]}
+                                onPress={() => handlePatientStatusUpdate(item.id, 'confirmed')}
+                            >
+                                <MaterialCommunityIcons name="check" size={14} color="#16A34A" />
+                                <Text style={[styles.actionAptBtnText, { color: '#16A34A' }]}>قبول</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionAptBtn, { backgroundColor: '#FEF2F2' }]}
+                                onPress={() => handlePatientStatusUpdate(item.id, 'rejected', 'رفض المريض الموعد المقترح')}
+                            >
+                                <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
+                                <Text style={[styles.actionAptBtnText, { color: '#EF4444' }]}>رفض</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
+            </View>
+        );
+    };
 
     useEffect(() => {
         if (!search) {
@@ -233,6 +395,19 @@ export default function PatientHome() {
                             <Text style={styles.greetingSub}>كيف تشعر اليوم؟</Text>
                         </View>
                     </View>
+
+                    {/* Appointments needing patient action */}
+                    {actionAppointments.length > 0 && (
+                        <View style={styles.actionAptSection}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>مواعيد تحتاج إجراءاً</Text>
+                                <TouchableOpacity onPress={() => router.push('/(patient)/appointments' as any)}>
+                                    <Text style={styles.seeAll}>كل المواعيد</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {actionAppointments.map(renderActionAppointment)}
+                        </View>
+                    )}
 
                     {/* Service Categories — Doctors, Pharmacies, Labs, Radiology */}
                     <Text style={[styles.sectionTitle, { marginBottom: 12, textAlign: 'right' }]}>خدماتنا الطبية</Text>
@@ -743,5 +918,64 @@ const styles = StyleSheet.create({
         fontSize: 15, 
         fontFamily: 'Cairo_700Bold', 
         color: '#FFF' 
-    }
+    },
+
+    actionAptSection: { marginBottom: 8 },
+    actionAptCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#FEE2E2',
+        elevation: 3,
+        shadowColor: '#DC2626',
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+    },
+    actionAptHeader: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    actionAptBadge: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+    },
+    actionAptBadgeText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
+    actionAptDate: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#64748B' },
+    actionAptDoctor: {
+        fontSize: 16,
+        fontFamily: 'Cairo_700Bold',
+        color: '#1E293B',
+        textAlign: 'right',
+        marginBottom: 6,
+    },
+    actionAptNote: {
+        fontSize: 12,
+        fontFamily: 'Cairo_400Regular',
+        color: '#64748B',
+        textAlign: 'right',
+        marginBottom: 10,
+    },
+    actionAptActions: {
+        flexDirection: 'row-reverse',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginTop: 4,
+    },
+    actionAptBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+    },
+    actionAptBtnText: { fontSize: 12, fontFamily: 'Cairo_700Bold' },
 });

@@ -190,8 +190,15 @@ export default function AppointmentsScreen() {
             Alert.alert('تم', msg);
             await load();
         } catch (e: any) {
-            Alert.alert('خطأ', e?.message || 'فشل طلب الإلغاء');
-            if (e?.message?.includes('غير موجود')) {
+            const msg = e?.message || 'فشل طلب الإلغاء';
+            if (msg.includes('قيد المراجعة')) {
+                setCancelModal({ visible: false, aptId: '' });
+                await load();
+                Alert.alert('تنبيه', 'يوجد طلب إلغاء معلق بالفعل. يمكنك سحبه من القائمة.');
+                return;
+            }
+            Alert.alert('خطأ', msg);
+            if (msg.includes('غير موجود')) {
                 setCancelModal({ visible: false, aptId: '' });
                 await load();
             }

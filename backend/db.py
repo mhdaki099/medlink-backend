@@ -319,6 +319,21 @@ def ensure_demo_appointments():
         for row in demos:
             existing = db.query(Appointment).filter(Appointment.id == row["id"]).first()
             if existing:
+                # Reset demo appointments stuck in pending workflow states
+                if existing.status in (
+                    "cancellation_requested",
+                    "schedule_change_pending",
+                    "reschedule_requested",
+                ):
+                    existing.status = row["status"]
+                    existing.date = row["date"]
+                    existing.time = row["time"]
+                    existing.cancel_requested = False
+                    existing.reschedule_requested = False
+                    existing.requested_date = None
+                    existing.requested_time = None
+                    existing.status_before_change = None
+                    existing.rejection_note = None
                 continue
             db.add(Appointment(**row))
         db.commit()
