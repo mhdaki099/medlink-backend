@@ -19,6 +19,7 @@ ACTIVE_SLOT_STATUSES = [
     "pending",
     "confirmed",
     "reschedule_requested",
+    "schedule_change_pending",
     "cancellation_requested",
     "patient_confirmation_pending",
 ]
@@ -63,6 +64,17 @@ def ensure_slot_available(db: Session, doctor_id: str, date: str, time: str, app
         query = query.filter(Appointment.id != appointment_id)
     if query.first():
         raise HTTPException(status_code=409, detail="This appointment is already booked.")
+
+    pending_change = db.query(Appointment).filter(
+        Appointment.doctor_id == doctor_id,
+        Appointment.status == "schedule_change_pending",
+        Appointment.requested_date == date,
+        Appointment.requested_time == time,
+    )
+    if appointment_id:
+        pending_change = pending_change.filter(Appointment.id != appointment_id)
+    if pending_change.first():
+        raise HTTPException(status_code=409, detail="This appointment slot is pending approval.")
 
 
 def appointment_with_people(db: Session, apt: Appointment):
@@ -198,23 +210,30 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
     ):
         raise HTTPException(status_code=400, detail="يجب إدخال سبب الإلغاء")
 
+    # Doctor approves patient cancel request — keep patient's reason if doctor did not add one
+    if new_status == "cancelled" and is_staff and apt.status == "cancellation_requested":
+        if not note_text and apt.rejection_note:
+            rejection_note = apt.rejection_note
+            note_text = rejection_note
+
     new_date = status_update.get("date", apt.date)
     new_time = status_update.get("time", apt.time)
     date_changed = new_date != apt.date or new_time != apt.time
     modification_note = (status_update.get("modification_note") or "").strip()
 
-    if date_changed and is_staff and not modification_note:
-        raise HTTPException(status_code=400, detail="يجب إدخال سبب تعديل الموعد")
+    if date_changed and is_staff:
+        raise HTTPException(
+            status_code=400,
+            detail="لا يمكن تعديل الموعد مباشرة. أرسل طلب تعديل لموافقة المريض.",
+        )
 
     if date_changed and new_status in ACTIVE_SLOT_STATUSES:
         ensure_slot_available(db, apt.doctor_id, new_date, new_time, appointment_id=apt.id)
 
     apt.status = new_status
-    apt.date = new_date
-    apt.time = new_time
-    if modification_note and date_changed:
-        stamp = f"[سبب التعديل] {modification_note}"
-        apt.notes = f"{apt.notes}\n{stamp}".strip() if apt.notes else stamp
+    if not (date_changed and is_staff):
+        apt.date = new_date
+        apt.time = new_time
     if rejection_note:
         apt.rejection_note = rejection_note
     if rejection_reason_type:
@@ -228,6 +247,7 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
         apt.cancel_requested = False
         apt.requested_date = None
         apt.requested_time = None
+        apt.status_before_change = None
 
     doctor = db.query(User).filter(User.id == apt.doctor_id).first()
     doctor_name = doctor.name if doctor else ""
@@ -239,18 +259,142 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
         add_notification(db, apt.patient_id, "تم رفض/إلغاء الموعد", f"تم تحديث موعدك مع د. {doctor_name}.{reason_text}{rec_text}", "appointment_rejected")
     elif new_status == "completed":
         add_notification(db, apt.patient_id, "تم إكمال الموعد", f"تم إكمال جلستك مع د. {doctor_name}", "appointment_completed")
-    if date_changed and is_staff:
-        mod_text = f" السبب: {modification_note}" if modification_note else ""
-        add_notification(
-            db,
-            apt.patient_id,
-            "تعديل موعد",
-            f"تم تعديل موعدك مع د. {doctor_name} إلى {apt.date} الساعة {apt.time}.{mod_text}",
-            "appointment_modified",
-        )
-
     log_appointment_audit(db, apt.id, current_user["sub"], "status_update", old_status, new_status, rejection_note or "")
 
+    db.commit()
+    db.refresh(apt)
+    return model_to_dict(apt)
+
+
+@router.put("/{appointment_id}/propose-schedule-change")
+def propose_schedule_change(
+    appointment_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Doctor proposes new date/time; patient must approve before it applies."""
+    if current_user.get("role") not in ("doctor", "secretary", "admin"):
+        raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
+    apt = _get_appointment_or_404(db, appointment_id)
+    _assert_appointment_access(apt, current_user)
+
+    if apt.status in ("schedule_change_pending", "reschedule_requested", "cancellation_requested"):
+        raise HTTPException(status_code=409, detail="يوجد طلب تعديل معلق بالفعل")
+    if apt.status not in ("confirmed", "pending", "patient_confirmation_pending"):
+        raise HTTPException(status_code=400, detail="لا يمكن تعديل هذا الموعد في حالته الحالية")
+
+    new_date = (data.get("date") or "").strip()
+    new_time = (data.get("time") or "").strip()
+    modification_note = (data.get("modification_note") or "").strip()
+    if not new_date or not new_time or not modification_note:
+        raise HTTPException(status_code=400, detail="يجب إدخال التاريخ والوقت وسبب التعديل")
+    if new_date == apt.date and new_time == apt.time:
+        raise HTTPException(status_code=400, detail="التاريخ والوقت الجديدان مطابقان للموعد الحالي")
+
+    ensure_slot_available(db, apt.doctor_id, new_date, new_time, appointment_id=apt.id)
+
+    old_status = apt.status
+    apt.status_before_change = old_status
+    apt.requested_date = new_date
+    apt.requested_time = new_time
+    apt.status = "schedule_change_pending"
+    stamp = f"[سبب التعديل المقترح] {modification_note}"
+    apt.notes = f"{apt.notes}\n{stamp}".strip() if apt.notes else stamp
+
+    doctor = db.query(User).filter(User.id == apt.doctor_id).first()
+    doctor_name = doctor.name if doctor else ""
+    add_notification(
+        db,
+        apt.patient_id,
+        "طلب تعديل موعد",
+        f"اقترح د. {doctor_name} تغيير موعدك من {apt.date} {apt.time} إلى {new_date} {new_time}. السبب: {modification_note}",
+        "schedule_change_request",
+    )
+    log_appointment_audit(
+        db,
+        apt.id,
+        current_user["sub"],
+        "propose_schedule_change",
+        old_status,
+        "schedule_change_pending",
+        f"proposed={new_date} {new_time}",
+    )
+    db.commit()
+    db.refresh(apt)
+    return model_to_dict(apt)
+
+
+@router.put("/{appointment_id}/respond-schedule-change")
+def respond_schedule_change(
+    appointment_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Patient approves or rejects a doctor-proposed schedule change."""
+    if current_user.get("role") != "patient":
+        raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
+    apt = _get_appointment_or_404(db, appointment_id)
+    _assert_appointment_access(apt, current_user)
+    if apt.status != "schedule_change_pending":
+        raise HTTPException(status_code=400, detail="لا يوجد طلب تعديل من الطبيب")
+
+    action = data.get("action")
+    doctor = db.query(User).filter(User.id == apt.doctor_id).first()
+    doctor_name = doctor.name if doctor else ""
+    old_status = apt.status
+    restore_status = apt.status_before_change or "confirmed"
+
+    if action == "approve":
+        new_date = apt.requested_date
+        new_time = apt.requested_time
+        ensure_slot_available(db, apt.doctor_id, new_date, new_time, appointment_id=apt.id)
+        apt.date = new_date
+        apt.time = new_time
+        apt.status = (
+            restore_status
+            if restore_status in ("pending", "confirmed", "patient_confirmation_pending")
+            else "confirmed"
+        )
+        apt.requested_date = None
+        apt.requested_time = None
+        apt.status_before_change = None
+        apt.reschedule_requested = False
+        add_notification(
+            db,
+            apt.doctor_id,
+            "موافقة على التعديل",
+            f"وافق المريض على تغيير الموعد إلى {new_date} {new_time}",
+            "schedule_change_approved",
+        )
+    elif action == "reject":
+        reason = (data.get("rejection_note") or "").strip() or "رفض المريض تعديل الموعد"
+        apt.status = restore_status if restore_status != "schedule_change_pending" else "confirmed"
+        apt.requested_date = None
+        apt.requested_time = None
+        apt.status_before_change = None
+        apt.reschedule_requested = False
+        apt.rejection_note = reason
+        add_notification(
+            db,
+            apt.doctor_id,
+            "رفض تعديل الموعد",
+            f"رفض المريض تغيير الموعد المقترح. السبب: {reason}",
+            "schedule_change_rejected",
+        )
+    else:
+        raise HTTPException(status_code=400, detail="إجراء غير صالح")
+
+    log_appointment_audit(
+        db,
+        apt.id,
+        current_user["sub"],
+        f"respond_schedule_change_{action}",
+        old_status,
+        apt.status,
+        data.get("rejection_note", ""),
+    )
     db.commit()
     db.refresh(apt)
     return model_to_dict(apt)
@@ -260,7 +404,9 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
 def request_reschedule(appointment_id: str, data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     apt = _get_appointment_or_404(db, appointment_id)
     _assert_appointment_access(apt, current_user)
-    if apt.reschedule_requested or apt.status == "reschedule_requested":
+    if apt.status in ("schedule_change_pending", "reschedule_requested", "cancellation_requested"):
+        raise HTTPException(status_code=409, detail="يوجد طلب تعديل معلق بالفعل")
+    if apt.reschedule_requested:
         raise HTTPException(status_code=409, detail="يوجد طلب إعادة جدولة معلق بالفعل")
     old_status = apt.status
     new_date = data.get("date")
@@ -268,6 +414,7 @@ def request_reschedule(appointment_id: str, data: dict, current_user: dict = Dep
     if not new_date or not new_time:
         raise HTTPException(status_code=400, detail="يجب اختيار تاريخ ووقت جديدين")
     ensure_slot_available(db, apt.doctor_id, new_date, new_time, appointment_id=apt.id)
+    apt.status_before_change = old_status
     apt.reschedule_requested = True
     apt.status = "reschedule_requested"
     apt.requested_date = new_date
@@ -304,6 +451,7 @@ def respond_reschedule(appointment_id: str, data: dict, current_user: dict = Dep
         apt.reschedule_requested = False
         apt.requested_date = None
         apt.requested_time = None
+        apt.status_before_change = None
         add_notification(db, apt.patient_id, "تمت إعادة الجدولة", f"وافق د. {doctor_name} على إعادة جدولة موعدك إلى {new_date} {new_time}", "reschedule_approved")
     elif action == "suggest":
         alt_date = data.get("date")
@@ -315,10 +463,12 @@ def respond_reschedule(appointment_id: str, data: dict, current_user: dict = Dep
         apt.status = "reschedule_requested"
         add_notification(db, apt.patient_id, "اقتراح وقت بديل", f"اقترح د. {doctor_name} موعداً بديلاً: {alt_date} {alt_time}", "reschedule_suggested")
     else:
-        apt.status = "confirmed"
+        restore = apt.status_before_change or "confirmed"
+        apt.status = restore if restore in ("pending", "confirmed", "patient_confirmation_pending") else "confirmed"
         apt.reschedule_requested = False
         apt.requested_date = None
         apt.requested_time = None
+        apt.status_before_change = None
         reason = data.get("rejection_note", "تم رفض طلب إعادة الجدولة")
         add_notification(db, apt.patient_id, "رفض إعادة الجدولة", f"رفض د. {doctor_name} طلب إعادة الجدولة. {reason}", "reschedule_rejected")
 
@@ -335,15 +485,101 @@ def get_appointment_audit(appointment_id: str, current_user: dict = Depends(get_
 
 
 @router.put("/{appointment_id}/request-cancel")
-def request_cancel(appointment_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+def request_cancel(
+    appointment_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.get("role") != "patient":
+        raise HTTPException(status_code=403, detail="يمكن للمريض فقط طلب الإلغاء")
     apt = _get_appointment_or_404(db, appointment_id)
     _assert_appointment_access(apt, current_user)
+
+    reason = (data.get("reason") or data.get("cancellation_reason") or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="يجب إدخال سبب الإلغاء")
+
+    if apt.status == "cancellation_requested":
+        raise HTTPException(status_code=409, detail="طلب الإلغاء قيد المراجعة بالفعل")
+    if apt.status in ("cancelled", "rejected", "completed"):
+        raise HTTPException(status_code=400, detail="لا يمكن إلغاء هذا الموعد")
+    if apt.status in ("schedule_change_pending", "reschedule_requested"):
+        raise HTTPException(
+            status_code=409,
+            detail="يوجد طلب تعديل معلق. ألغِه أو انتظر الرد قبل طلب الإلغاء.",
+        )
+
     old_status = apt.status
-    apt.cancel_requested = True
-    apt.status = "cancellation_requested"
+    apt.rejection_note = reason
+    apt.reschedule_requested = False
+    apt.requested_date = None
+    apt.requested_time = None
     patient = db.query(User).filter(User.id == apt.patient_id).first()
-    add_notification(db, apt.doctor_id, "طلب إلغاء موعد", f"طلب {patient.name if patient else 'المريض'} إلغاء الموعد بتاريخ {apt.date}", "cancel_request")
-    log_appointment_audit(db, apt.id, current_user["sub"], "request_cancel", old_status, "cancellation_requested", "")
+    patient_name = patient.name if patient else "المريض"
+    doctor = db.query(User).filter(User.id == apt.doctor_id).first()
+    doctor_name = doctor.name if doctor else ""
+
+    # Pending appointments: cancel immediately (no doctor approval needed)
+    if old_status in ("pending", "patient_confirmation_pending"):
+        apt.status = "cancelled"
+        apt.cancel_requested = False
+        apt.status_before_change = None
+        add_notification(
+            db,
+            apt.doctor_id,
+            "إلغاء موعد",
+            f"ألغى {patient_name} الموعد بتاريخ {apt.date} الساعة {apt.time}. السبب: {reason}",
+            "appointment_cancelled",
+        )
+        log_appointment_audit(db, apt.id, current_user["sub"], "cancel_immediate", old_status, "cancelled", reason)
+    else:
+        apt.cancel_requested = True
+        apt.status = "cancellation_requested"
+        apt.status_before_change = old_status
+        add_notification(
+            db,
+            apt.doctor_id,
+            "طلب إلغاء موعد",
+            f"طلب {patient_name} إلغاء الموعد مع د. {doctor_name} بتاريخ {apt.date}. السبب: {reason}",
+            "cancel_request",
+        )
+        log_appointment_audit(db, apt.id, current_user["sub"], "request_cancel", old_status, "cancellation_requested", reason)
+
+    db.commit()
+    db.refresh(apt)
+    return model_to_dict(apt)
+
+
+@router.put("/{appointment_id}/withdraw-cancel-request")
+def withdraw_cancel_request(
+    appointment_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Patient withdraws a pending cancellation request so the appointment is not stuck."""
+    if current_user.get("role") != "patient":
+        raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
+    apt = _get_appointment_or_404(db, appointment_id)
+    _assert_appointment_access(apt, current_user)
+    if apt.status != "cancellation_requested":
+        raise HTTPException(status_code=400, detail="لا يوجد طلب إلغاء معلق")
+
+    old_status = apt.status
+    restore = apt.status_before_change or "confirmed"
+    apt.status = restore if restore in ("pending", "confirmed", "patient_confirmation_pending") else "confirmed"
+    apt.cancel_requested = False
+    apt.status_before_change = None
+    apt.rejection_note = None
+
+    add_notification(
+        db,
+        apt.doctor_id,
+        "سحب طلب الإلغاء",
+        f"تراجع المريض عن طلب إلغاء الموعد بتاريخ {apt.date}",
+        "cancel_request_withdrawn",
+    )
+    log_appointment_audit(db, apt.id, current_user["sub"], "withdraw_cancel", old_status, apt.status, "")
     db.commit()
     db.refresh(apt)
     return model_to_dict(apt)

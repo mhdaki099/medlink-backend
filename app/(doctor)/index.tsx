@@ -120,7 +120,7 @@ export default function DoctorDashboard() {
         setEditModal({ visible: true, aptId: apt.id, status: apt.status });
     };
 
-    const submitReschedule = () => {
+    const submitReschedule = async () => {
         if (!newDate.trim() || !newTime.trim()) {
             Alert.alert('تنبيه', 'يرجى إدخال التاريخ والوقت');
             return;
@@ -129,7 +129,21 @@ export default function DoctorDashboard() {
             Alert.alert('تنبيه', 'يرجى إدخال سبب تعديل الموعد');
             return;
         }
-        handleStatusUpdate(editModal.aptId, editModal.status, newDate.trim(), newTime.trim(), undefined, modificationReason.trim());
+        try {
+            await api.proposeScheduleChange(
+                editModal.aptId,
+                newDate.trim(),
+                newTime.trim(),
+                modificationReason.trim(),
+            );
+            Alert.alert('✅ تم', 'تم إرسال طلب التعديل للمريض — بانتظار موافقته');
+            setEditModal({ visible: false, aptId: '', status: 'pending' });
+            setModificationReason('');
+            loadData();
+        } catch (e: any) {
+            Alert.alert('خطأ', e?.message || 'فشل إرسال طلب التعديل');
+            if (e?.message?.includes('غير موجود')) loadData();
+        }
     };
 
 
@@ -334,7 +348,7 @@ export default function DoctorDashboard() {
                                         <Text style={styles.editModalCancelText}>إلغاء</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity style={styles.editModalConfirm} onPress={submitReschedule}>
-                                        <Text style={styles.editModalConfirmText}>تأكيد التعديل</Text>
+                                        <Text style={styles.editModalConfirmText}>إرسال للمريض</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>

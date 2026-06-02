@@ -303,11 +303,24 @@ class ApiClient {
     requestReschedule(id: string, date: string, time: string) {
         return this.put<any>(`/appointments/${id}/request-reschedule`, { date, time });
     }
-    requestCancelAppointment(id: string) {
-        return this.put<any>(`/appointments/${id}/request-cancel`, {});
+    requestCancelAppointment(id: string, reason: string) {
+        return this.put<any>(`/appointments/${id}/request-cancel`, { reason });
+    }
+    withdrawCancelRequest(id: string) {
+        return this.put<any>(`/appointments/${id}/withdraw-cancel-request`, {});
     }
     respondReschedule(id: string, data: { action: string; date?: string; time?: string; rejection_note?: string }) {
         return this.put<any>(`/appointments/${id}/respond-reschedule`, data);
+    }
+    proposeScheduleChange(id: string, date: string, time: string, modification_note: string) {
+        return this.put<any>(`/appointments/${id}/propose-schedule-change`, {
+            date,
+            time,
+            modification_note,
+        });
+    }
+    respondScheduleChange(id: string, action: 'approve' | 'reject', rejection_note?: string) {
+        return this.put<any>(`/appointments/${id}/respond-schedule-change`, { action, rejection_note });
     }
     getAppointmentAudit(id: string) {
         return this.get<any[]>(`/appointments/${id}/audit`);

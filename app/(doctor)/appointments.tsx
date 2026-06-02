@@ -115,7 +115,7 @@ export default function DoctorAppointments() {
         setEditModal({ visible: true, aptId: apt.id, status: apt.status });
     };
 
-    const submitReschedule = () => {
+    const submitReschedule = async () => {
         if (!newDate.trim() || !newTime.trim()) {
             Alert.alert('تنبيه', 'يرجى إدخال التاريخ والوقت');
             return;
@@ -124,16 +124,24 @@ export default function DoctorAppointments() {
             Alert.alert('تنبيه', 'يرجى إدخال سبب تعديل الموعد');
             return;
         }
-        handleStatusUpdate(
-            editModal.aptId,
-            editModal.status,
-            undefined,
-            undefined,
-            undefined,
-            newDate.trim(),
-            newTime.trim(),
-            modificationReason.trim(),
-        );
+        try {
+            await api.proposeScheduleChange(
+                editModal.aptId,
+                newDate.trim(),
+                newTime.trim(),
+                modificationReason.trim(),
+            );
+            Alert.alert('✅ تم', 'تم إرسال طلب التعديل للمريض — بانتظار موافقته');
+            setEditModal({ visible: false, aptId: '', status: 'pending' });
+            setModificationReason('');
+            loadData();
+        } catch (e: any) {
+            Alert.alert('خطأ', e?.message || 'فشل إرسال طلب التعديل');
+            if (e?.message?.includes('غير موجود')) {
+                setEditModal({ visible: false, aptId: '', status: 'pending' });
+                loadData();
+            }
+        }
     };
 
     const openReasonModal = (aptId: string, targetStatus: 'rejected' | 'cancelled') => {
@@ -198,6 +206,7 @@ export default function DoctorAppointments() {
             case 'pending': return 'قيد الانتظار';
             case 'completed': return 'مكتمل';
             case 'cancelled': return 'ملغى';
+            case 'schedule_change_pending': return 'بانتظار المريض';
             default: return status;
         }
     };
@@ -266,10 +275,18 @@ export default function DoctorAppointments() {
 
 
                             {/* Reschedule/Cancel request indicators */}
-                            {apt.reschedule_requested && (
+                            {apt.status === 'schedule_change_pending' && (
+                                <View style={[styles.dateTimePill, { backgroundColor: '#EDE9FE' }]}>
+                                    <MaterialCommunityIcons name="account-clock" size={14} color="#7C3AED" />
+                                    <Text style={[styles.dateText, { color: '#7C3AED' }]}>
+                                        تعديل مقترح: {apt.requested_date} {apt.requested_time} — بانتظار المريض
+                                    </Text>
+                                </View>
+                            )}
+                            {apt.status === 'reschedule_requested' && (
                                 <View style={[styles.dateTimePill, { backgroundColor: '#FEF3C7' }]}>
                                     <MaterialCommunityIcons name="calendar-edit" size={14} color="#D97706" />
-                                    <Text style={[styles.dateText, { color: '#D97706' }]}>طلب إعادة جدولة</Text>
+                                    <Text style={[styles.dateText, { color: '#D97706' }]}>طلب إعادة جدولة من المريض</Text>
                                 </View>
                             )}
                             {apt.cancel_requested && (
@@ -291,13 +308,36 @@ export default function DoctorAppointments() {
                             )}
 
                             {apt.status === 'cancellation_requested' && (
-                                <View style={styles.actions}>
-                                    <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]} onPress={() => handleStatusUpdate(apt.id, 'confirmed')}>
-                                        <Text style={styles.cancelBtnText}>رفض الإلغاء</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={[styles.actionBtn, styles.confirmBtn]} onPress={() => handleStatusUpdate(apt.id, 'cancelled')}>
-                                        <Text style={styles.confirmBtnText}>تأكيد الإلغاء</Text>
-                                    </TouchableOpacity>
+                                <>
+                                    {apt.rejection_note ? (
+                                        <View style={[styles.dateTimePill, { backgroundColor: '#FEF2F2', marginBottom: 8 }]}>
+                                            <Text style={[styles.dateText, { color: '#991B1B', textAlign: 'right' }]}>
+                                                سبب المريض: {apt.rejection_note}
+                                            </Text>
+                                        </View>
+                                    ) : null}
+                                    <View style={styles.actions}>
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.cancelBtn]}
+                                            onPress={() => handleStatusUpdate(apt.id, apt.status_before_change || 'confirmed')}
+                                        >
+                                            <Text style={styles.cancelBtnText}>رفض الإلغاء</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.confirmBtn]}
+                                            onPress={() => handleStatusUpdate(apt.id, 'cancelled', apt.rejection_note)}
+                                        >
+                                            <Text style={styles.confirmBtnText}>تأكيد الإلغاء</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            )}
+
+                            {apt.status === 'schedule_change_pending' && (
+                                <View style={[styles.dateTimePill, { backgroundColor: '#F3F4F6', marginBottom: 8 }]}>
+                                    <Text style={[styles.dateText, { color: '#6B7280', textAlign: 'right' }]}>
+                                        الموعد الحالي: {apt.date} {apt.time}
+                                    </Text>
                                 </View>
                             )}
 
@@ -309,12 +349,14 @@ export default function DoctorAppointments() {
                                     >
                                         <Text style={styles.cancelBtnText}>رفض</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, { backgroundColor: '#6366F1' }]}
-                                        onPress={() => openEditModal(apt)}
-                                    >
-                                        <Text style={styles.confirmBtnText}>تعديل</Text>
-                                    </TouchableOpacity>
+                                    {apt.status !== 'schedule_change_pending' && (
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, { backgroundColor: '#6366F1' }]}
+                                            onPress={() => openEditModal(apt)}
+                                        >
+                                            <Text style={styles.confirmBtnText}>تعديل</Text>
+                                        </TouchableOpacity>
+                                    )}
                                     <TouchableOpacity 
                                         style={[styles.actionBtn, styles.confirmBtn]}
                                         onPress={() => handleStatusUpdate(apt.id, 'confirmed')}
@@ -376,7 +418,7 @@ export default function DoctorAppointments() {
                                         <Text style={{ fontFamily: 'Cairo_700Bold', color: '#6B7280' }}>إلغاء</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity style={{ flex: 1.5, paddingVertical: 12, backgroundColor: '#6366F1', borderRadius: 12, alignItems: 'center' }} onPress={submitReschedule}>
-                                        <Text style={{ fontFamily: 'Cairo_700Bold', color: '#FFF' }}>تأكيد التعديل</Text>
+                                        <Text style={{ fontFamily: 'Cairo_700Bold', color: '#FFF' }}>إرسال للمريض</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>

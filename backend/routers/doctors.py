@@ -261,10 +261,11 @@ def get_availability(doctor_id: str, date: str = Query(None), db: Session = Depe
     d = db.query(User).filter(User.id == doctor_id, User.role == "doctor").first()
     if not d:
         raise HTTPException(404, "الطبيب غير موجود")
-    active_statuses = ["confirmed", "pending", "reschedule_requested", "cancellation_requested", "patient_confirmation_pending"]
+    active_statuses = [
+        "confirmed", "pending", "reschedule_requested", "schedule_change_pending",
+        "cancellation_requested", "patient_confirmation_pending",
+    ]
     booked_q = db.query(Appointment).filter(Appointment.doctor_id == doctor_id, Appointment.status.in_(active_statuses))
-    if date:
-        booked_q = booked_q.filter(Appointment.date == date)
     booked = booked_q.all()
     hours = d.available_hours or ""
     wh = d.working_hours or {}
@@ -285,7 +286,18 @@ def get_availability(doctor_id: str, date: str = Query(None), db: Session = Depe
         "available_hours": hours,
         "working_hours": wh,
         "time_slots": [] if day_off else generated_slots,
-        "booked_slots": [{"date": a.date, "time": a.time} for a in booked],
+        "booked_slots": [
+            {
+                "date": (a.requested_date if a.status in ("schedule_change_pending", "reschedule_requested") and a.requested_date else a.date),
+                "time": (a.requested_time if a.status in ("schedule_change_pending", "reschedule_requested") and a.requested_time else a.time),
+            }
+            for a in booked
+            if not date
+            or (
+                (a.status in ("schedule_change_pending", "reschedule_requested") and a.requested_date == date)
+                or a.date == date
+            )
+        ],
         "day_off": day_off,
     }
 

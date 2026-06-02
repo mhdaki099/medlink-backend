@@ -80,6 +80,7 @@ def ensure_sqlite_columns():
             "cancel_requested": "BOOLEAN DEFAULT 0",
             "requested_date": "TEXT",
             "requested_time": "TEXT",
+            "status_before_change": "TEXT",
             "reason": "TEXT",
             "rejection_reason_type": "TEXT",
             "recommended_specialty": "TEXT",

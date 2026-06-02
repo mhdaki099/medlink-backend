@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert, Modal, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert, Modal, ScrollView, KeyboardAvoidingView, TextInput } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
@@ -18,6 +18,7 @@ const STATUS_MAP: Record<string, { label: string, color: string, icon: string }>
     'reschedule_requested': { label: 'طلب إعادة جدولة', color: '#D97706', icon: 'calendar-edit' },
     'cancellation_requested': { label: 'طلب إلغاء', color: '#EF4444', icon: 'close-circle-outline' },
     'patient_confirmation_pending': { label: 'بانتظار موافقتك', color: '#7C3AED', icon: 'account-clock-outline' },
+    'schedule_change_pending': { label: 'تعديل من الطبيب', color: '#7C3AED', icon: 'calendar-clock' },
 };
 
 export default function AppointmentsScreen() {
@@ -32,6 +33,17 @@ export default function AppointmentsScreen() {
     const [currentYear, setCurrentYear] = useState(now.getFullYear());
     const [timeSlots, setTimeSlots] = useState<string[]>([]);
     const [bookedSlots, setBookedSlots] = useState<any[]>([]);
+    const [cancelModal, setCancelModal] = useState<{ visible: boolean; aptId: string }>({ visible: false, aptId: '' });
+    const [cancelReasonType, setCancelReasonType] = useState('');
+    const [cancelCustomNote, setCancelCustomNote] = useState('');
+
+    const CANCEL_REASONS = [
+        { type: 'cannot_attend', label: 'لا أستطيع الحضور' },
+        { type: 'scheduling_conflict', label: 'تعارض في الموعد' },
+        { type: 'found_other_doctor', label: 'وجدت طبيباً آخر' },
+        { type: 'symptoms_improved', label: 'تحسنت الحالة' },
+        { type: 'other', label: 'سبب آخر' },
+    ];
 
     const load = async () => {
         try {
@@ -104,6 +116,37 @@ export default function AppointmentsScreen() {
         }
     };
 
+    const handleRespondScheduleChange = async (aptId: string, action: 'approve' | 'reject') => {
+        if (action === 'reject') {
+            Alert.alert('رفض التعديل', 'هل تريد رفض التعديل المقترح من الطبيب؟', [
+                { text: 'لا', style: 'cancel' },
+                {
+                    text: 'رفض',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await api.respondScheduleChange(aptId, 'reject', 'رفض المريض تعديل الموعد');
+                            Alert.alert('تم', 'تم رفض التعديل — يبقى الموعد كما هو');
+                            await load();
+                        } catch (e: any) {
+                            Alert.alert('خطأ', e?.message || 'فشل تحديث الموعد');
+                            if (e?.message?.includes('غير موجود')) await load();
+                        }
+                    },
+                },
+            ]);
+            return;
+        }
+        try {
+            await api.respondScheduleChange(aptId, 'approve');
+            Alert.alert('تم', 'تم قبول التعديل وتطبيق الموعد الجديد');
+            await load();
+        } catch (e: any) {
+            Alert.alert('خطأ', e?.message || 'فشل تحديث الموعد');
+            if (e?.message?.includes('غير موجود')) await load();
+        }
+    };
+
     const handlePatientStatusUpdate = async (
         aptId: string,
         status: string,
@@ -121,16 +164,55 @@ export default function AppointmentsScreen() {
         }
     };
 
-    const handleRequestCancel = (aptId: string) => {
-        Alert.alert('طلب إلغاء', 'هل تريد طلب إلغاء هذا الموعد؟', [
+    const openCancelModal = (aptId: string) => {
+        setCancelReasonType('');
+        setCancelCustomNote('');
+        setCancelModal({ visible: true, aptId });
+    };
+
+    const submitCancelRequest = async () => {
+        if (!cancelReasonType) {
+            Alert.alert('تنبيه', 'يرجى اختيار سبب الإلغاء');
+            return;
+        }
+        const preset = CANCEL_REASONS.find(r => r.type === cancelReasonType)?.label || '';
+        const reason = cancelReasonType === 'other' ? cancelCustomNote.trim() : preset;
+        if (!reason) {
+            Alert.alert('تنبيه', 'يرجى كتابة سبب الإلغاء');
+            return;
+        }
+        try {
+            const result = await api.requestCancelAppointment(cancelModal.aptId, reason);
+            setCancelModal({ visible: false, aptId: '' });
+            const msg = result?.status === 'cancelled'
+                ? 'تم إلغاء الموعد'
+                : 'تم إرسال طلب الإلغاء للطبيب';
+            Alert.alert('تم', msg);
+            await load();
+        } catch (e: any) {
+            Alert.alert('خطأ', e?.message || 'فشل طلب الإلغاء');
+            if (e?.message?.includes('غير موجود')) {
+                setCancelModal({ visible: false, aptId: '' });
+                await load();
+            }
+        }
+    };
+
+    const handleWithdrawCancel = async (aptId: string) => {
+        Alert.alert('سحب طلب الإلغاء', 'هل تريد التراجع عن طلب الإلغاء والإبقاء على الموعد؟', [
             { text: 'لا', style: 'cancel' },
-            { text: 'نعم', style: 'destructive', onPress: async () => {
-                try {
-                    await api.requestCancelAppointment(aptId);
-                    Alert.alert('تم', 'تم إرسال طلب الإلغاء للطبيب');
-                    load();
-                } catch (e: any) { Alert.alert('خطأ', e.message); }
-            }},
+            {
+                text: 'نعم',
+                onPress: async () => {
+                    try {
+                        await api.withdrawCancelRequest(aptId);
+                        Alert.alert('تم', 'تم سحب طلب الإلغاء — الموعد ما زال نشطاً');
+                        await load();
+                    } catch (e: any) {
+                        Alert.alert('خطأ', e?.message || 'فشل سحب الطلب');
+                    }
+                },
+            },
         ]);
     };
 
@@ -180,15 +262,33 @@ export default function AppointmentsScreen() {
                     </View>
                 )}
 
-                {item.reschedule_requested && (
-                    <View style={[styles.notesBox, { backgroundColor: '#FEF3C7' }]}>
-                        <Text style={[styles.notesText, { color: '#D97706' }]}>إعادة جدولة معلقة ✈️</Text>
+                {item.status === 'schedule_change_pending' && item.requested_date && (
+                    <View style={[styles.notesBox, { backgroundColor: '#EDE9FE' }]}>
+                        <Text style={[styles.notesText, { color: '#5B21B6', textAlign: 'right' }]}>
+                            اقترح الطبيب موعداً جديداً: {item.requested_date} — {item.requested_time}
+                        </Text>
+                        <Text style={[styles.notesText, { color: '#6B7280', textAlign: 'right', marginTop: 4 }]}>
+                            الموعد الحالي: {item.date} — {item.time}
+                        </Text>
                     </View>
                 )}
 
-                {item.cancel_requested && (
+                {item.status === 'reschedule_requested' && (
+                    <View style={[styles.notesBox, { backgroundColor: '#FEF3C7' }]}>
+                        <Text style={[styles.notesText, { color: '#D97706' }]}>طلب إعادة جدولة — بانتظار الطبيب</Text>
+                    </View>
+                )}
+
+                {item.status === 'cancellation_requested' && (
                     <View style={[styles.notesBox, { backgroundColor: '#FEF2F2' }]}>
-                        <Text style={[styles.notesText, { color: '#DC2626' }]}>إلغاء معلق ❌</Text>
+                        <Text style={[styles.notesText, { color: '#DC2626', textAlign: 'right' }]}>
+                            طلب إلغاء — بانتظار الطبيب
+                        </Text>
+                        {item.rejection_note ? (
+                            <Text style={[styles.notesText, { color: '#991B1B', textAlign: 'right', marginTop: 4 }]}>
+                                السبب: {item.rejection_note}
+                            </Text>
+                        ) : null}
                     </View>
                 )}
 
@@ -208,13 +308,36 @@ export default function AppointmentsScreen() {
                             </TouchableOpacity>
                         </View>
                     )}
-                    {(item.status === 'pending' || item.status === 'confirmed') && (
+                    {item.status === 'schedule_change_pending' && (
                         <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
-                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleRequestReschedule(item.id, item.doctor_id)}>
-                                <MaterialCommunityIcons name="calendar-edit" size={14} color="#D97706" />
-                                <Text style={[styles.detailsBtnText, { color: '#D97706' }]}>إعادة جدولة</Text>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#DCFCE7' }]} onPress={() => handleRespondScheduleChange(item.id, 'approve')}>
+                                <MaterialCommunityIcons name="check" size={14} color="#16A34A" />
+                                <Text style={[styles.detailsBtnText, { color: '#16A34A' }]}>قبول التعديل</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => handleRequestCancel(item.id)}>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => handleRespondScheduleChange(item.id, 'reject')}>
+                                <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
+                                <Text style={[styles.detailsBtnText, { color: '#EF4444' }]}>رفض</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                    {item.status === 'cancellation_requested' && (
+                        <TouchableOpacity
+                            style={[styles.detailsBtn, { backgroundColor: '#F1F5F9' }]}
+                            onPress={() => handleWithdrawCancel(item.id)}
+                        >
+                            <MaterialCommunityIcons name="undo" size={14} color="#64748B" />
+                            <Text style={[styles.detailsBtnText, { color: '#64748B' }]}>سحب طلب الإلغاء</Text>
+                        </TouchableOpacity>
+                    )}
+                    {(item.status === 'pending' || item.status === 'confirmed' || item.status === 'patient_confirmation_pending') && (
+                        <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                            {item.status !== 'patient_confirmation_pending' && (
+                                <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF3C7' }]} onPress={() => handleRequestReschedule(item.id, item.doctor_id)}>
+                                    <MaterialCommunityIcons name="calendar-edit" size={14} color="#D97706" />
+                                    <Text style={[styles.detailsBtnText, { color: '#D97706' }]}>إعادة جدولة</Text>
+                                </TouchableOpacity>
+                            )}
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => openCancelModal(item.id)}>
                                 <MaterialCommunityIcons name="close-circle-outline" size={14} color="#EF4444" />
                                 <Text style={[styles.detailsBtnText, { color: '#EF4444' }]}>إلغاء</Text>
                             </TouchableOpacity>
@@ -259,6 +382,77 @@ export default function AppointmentsScreen() {
                     refreshing={loading}
                 />
             )}
+            <Modal visible={cancelModal.visible} transparent animationType="slide">
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+                            <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Platform.OS === 'ios' ? 32 : 24 }}>
+                                <Text style={{ fontSize: 18, fontFamily: 'Cairo_700Bold', textAlign: 'center', marginBottom: 16 }}>سبب الإلغاء</Text>
+                                {CANCEL_REASONS.map((reason) => (
+                                    <TouchableOpacity
+                                        key={reason.type}
+                                        style={{
+                                            paddingVertical: 14,
+                                            borderBottomWidth: 1,
+                                            borderBottomColor: '#F3F4F6',
+                                            flexDirection: 'row-reverse',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                            backgroundColor: cancelReasonType === reason.type ? '#FEF2F2' : 'transparent',
+                                            paddingHorizontal: 8,
+                                            borderRadius: 8,
+                                        }}
+                                        onPress={() => setCancelReasonType(reason.type)}
+                                    >
+                                        <MaterialCommunityIcons
+                                            name={cancelReasonType === reason.type ? 'radiobox-marked' : 'radiobox-blank'}
+                                            size={20}
+                                            color={cancelReasonType === reason.type ? '#EF4444' : '#6B7280'}
+                                        />
+                                        <Text style={{ flex: 1, fontSize: 15, fontFamily: 'Cairo_400Regular', textAlign: 'right' }}>{reason.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                                {cancelReasonType === 'other' && (
+                                    <TextInput
+                                        style={{
+                                            backgroundColor: '#F8FAFC',
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: '#E2E8F0',
+                                            minHeight: 80,
+                                            padding: 14,
+                                            marginTop: 12,
+                                            fontFamily: 'Cairo_400Regular',
+                                            textAlign: 'right',
+                                            textAlignVertical: 'top',
+                                        }}
+                                        placeholder="اكتب سبب الإلغاء..."
+                                        value={cancelCustomNote}
+                                        onChangeText={setCancelCustomNote}
+                                        multiline
+                                    />
+                                )}
+                                <View style={{ flexDirection: 'row-reverse', gap: 10, marginTop: 16 }}>
+                                    <TouchableOpacity
+                                        style={{ flex: 1, paddingVertical: 12, backgroundColor: '#F3F4F6', borderRadius: 12, alignItems: 'center' }}
+                                        onPress={() => setCancelModal({ visible: false, aptId: '' })}
+                                    >
+                                        <Text style={{ fontFamily: 'Cairo_700Bold', color: '#6B7280' }}>رجوع</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={{ flex: 1.5, paddingVertical: 12, backgroundColor: cancelReasonType ? '#EF4444' : '#D1D5DB', borderRadius: 12, alignItems: 'center' }}
+                                        onPress={submitCancelRequest}
+                                        disabled={!cancelReasonType}
+                                    >
+                                        <Text style={{ fontFamily: 'Cairo_700Bold', color: '#FFF' }}>تأكيد الإلغاء</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
             <Modal visible={rescheduleModal.visible} animationType="slide" transparent>
                 <KeyboardAvoidingView
                     style={{ flex: 1 }}

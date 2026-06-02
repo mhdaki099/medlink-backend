@@ -199,6 +199,7 @@ class Appointment(Base):
     cancel_requested = Column(Boolean, default=False)
     requested_date = Column(String, nullable=True)
     requested_time = Column(String, nullable=True)
+    status_before_change = Column(String, nullable=True)  # restored if patient rejects doctor reschedule
 
 
 class Order(Base):
