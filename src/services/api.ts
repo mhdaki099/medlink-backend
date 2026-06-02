@@ -453,7 +453,9 @@ class ApiClient {
 
     // ── Consultation Reports ──────────────────────────────────────────────────
     createConsultationReport(data: any) { return this.post<any>('/consultations', data); }
-    getConsultationByAppointment(appointmentId: string) { return this.get<any>(`/consultations/appointment/${appointmentId}`); }
+    getConsultationByAppointment(appointmentId: string) {
+        return this.get<any | null>(`/consultations/appointment/${appointmentId}`, { silent: true });
+    }
     getPatientConsultations(patientId: string) { return this.get<any[]>(`/consultations/patient/${patientId}`); }
     addServiceRequest(reportId: string, data: any) { return this.post<any>(`/consultations/${reportId}/service-requests`, data); }
     getPatientServiceRequests(patientId: string) { return this.get<any[]>(`/consultations/service-requests/patient/${patientId}`); }

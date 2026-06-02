@@ -111,7 +111,7 @@ def create_consultation_report(data: dict, current_user: dict = Depends(require_
 def get_report_by_appointment(appointment_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     report = db.query(ConsultationReport).filter(ConsultationReport.appointment_id == appointment_id).first()
     if not report:
-        raise HTTPException(404, "لا يوجد تقرير لهذا الموعد")
+        return None
     result = model_to_dict(report)
     # Attach service requests
     requests = db.query(ServiceRequest).filter(ServiceRequest.consultation_report_id == report.id).all()

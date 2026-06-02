@@ -1,20 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, Alert, ActivityIndicator, Platform, Switch, Modal
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
+const param = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || '';
+
 export default function ConsultationReportScreen() {
-    const { appointmentId, patientId, patientName } = useLocalSearchParams<{
+    const params = useLocalSearchParams<{
         appointmentId: string;
         patientId: string;
         patientName: string;
     }>();
+    const appointmentId = param(params.appointmentId);
+    const patientId = param(params.patientId);
+    const patientName = param(params.patientName);
     const router = useRouter();
     const { user } = useAuth();
 
@@ -39,30 +44,44 @@ export default function ConsultationReportScreen() {
     const [savedReportId, setSavedReportId] = useState<string | null>(null);
     const [serviceRequests, setServiceRequests] = useState<any[]>([]);
     const [loadingReport, setLoadingReport] = useState(true);
+    const [showSavedSummary, setShowSavedSummary] = useState(false);
 
-    useEffect(() => {
+    const applyReportToForm = (report: any) => {
+        if (!report?.id) return;
+        setSavedReportId(report.id);
+        setShowSavedSummary(true);
+        setIsHealthy(!!report.is_healthy);
+        setConditionSummary(report.condition_summary || '');
+        setNotes(report.notes || '');
+        setFollowUp(report.follow_up || '');
+        if (report.service_requests?.length) {
+            setServiceRequests(report.service_requests);
+        }
+    };
+
+    const loadExistingReport = useCallback(async () => {
         if (!appointmentId) {
             setLoadingReport(false);
             return;
         }
-        (async () => {
-            try {
-                const report = await api.getConsultationByAppointment(appointmentId);
-                setSavedReportId(report.id);
-                setIsHealthy(!!report.is_healthy);
-                setConditionSummary(report.condition_summary || '');
-                setNotes(report.notes || '');
-                setFollowUp(report.follow_up || '');
-                if (report.service_requests?.length) {
-                    setServiceRequests(report.service_requests);
-                }
-            } catch {
-                // No saved report yet
-            } finally {
-                setLoadingReport(false);
+        setLoadingReport(true);
+        try {
+            const report = await api.getConsultationByAppointment(appointmentId);
+            if (report?.id) {
+                applyReportToForm(report);
             }
-        })();
+        } catch {
+            // No report on server yet
+        } finally {
+            setLoadingReport(false);
+        }
     }, [appointmentId]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadExistingReport();
+        }, [loadExistingReport])
+    );
 
     const handleSaveReport = async () => {
         if (!conditionSummary && !isHealthy) {
@@ -75,13 +94,13 @@ export default function ConsultationReportScreen() {
                 appointment_id: appointmentId,
                 doctor_id: user?.id,
                 patient_id: patientId,
-                condition_summary: conditionSummary,
+                condition_summary: isHealthy ? 'المريض بصحة جيدة' : conditionSummary,
                 is_healthy: isHealthy,
                 notes,
                 follow_up: followUp,
             });
-            setSavedReportId(report.id);
             const wasUpdate = !!savedReportId;
+            applyReportToForm(report);
             Alert.alert(
                 '✅ تم حفظ التقرير',
                 wasUpdate ? 'تم تحديث التقرير بنجاح' : 'تم إنهاء الجلسة وحفظ التقرير بنجاح'
@@ -162,11 +181,24 @@ export default function ConsultationReportScreen() {
                 </View>
             ) : (
             <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-                {savedReportId && (
-                    <View style={[styles.card, { backgroundColor: '#ECFDF5', borderColor: '#86EFAC', borderWidth: 1 }]}>
-                        <Text style={[styles.sectionTitle, { color: '#15803D', marginBottom: 0 }]}>
-                            تم حفظ تقرير سابق — يمكنك التعديل وإعادة الحفظ
-                        </Text>
+                {showSavedSummary && savedReportId && (
+                    <View style={styles.savedSummaryCard}>
+                        <View style={styles.savedSummaryHeader}>
+                            <MaterialCommunityIcons name="check-circle" size={28} color="#16A34A" />
+                            <Text style={styles.savedSummaryTitle}>تم حفظ التقرير</Text>
+                        </View>
+                        {isHealthy ? (
+                            <Text style={styles.savedSummaryText}>المريض بصحة جيدة — لا توجد مشكلة صحية مسجلة</Text>
+                        ) : conditionSummary ? (
+                            <Text style={styles.savedSummaryText}>{conditionSummary}</Text>
+                        ) : null}
+                        {notes ? (
+                            <Text style={styles.savedSummaryMeta}>ملاحظات: {notes}</Text>
+                        ) : null}
+                        {followUp ? (
+                            <Text style={styles.savedSummaryMeta}>متابعة: {followUp}</Text>
+                        ) : null}
+                        <Text style={styles.savedSummaryHint}>يمكنك التعديل أدناه ثم الضغط على «تحديث التقرير»</Text>
                     </View>
                 )}
                 {/* Patient Info */}
@@ -403,4 +435,45 @@ const styles = StyleSheet.create({
     medLabel: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#6366F1', textAlign: 'right', marginBottom: 6 },
     addMedBtn: { alignItems: 'center', paddingVertical: 10 },
     addMedText: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
+    savedSummaryCard: {
+        backgroundColor: '#ECFDF5',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#86EFAC',
+    },
+    savedSummaryHeader: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 12,
+    },
+    savedSummaryTitle: {
+        fontSize: 17,
+        fontFamily: 'Cairo_700Bold',
+        color: '#15803D',
+    },
+    savedSummaryText: {
+        fontSize: 14,
+        fontFamily: 'Cairo_400Regular',
+        color: '#1E293B',
+        textAlign: 'right',
+        lineHeight: 22,
+        marginBottom: 8,
+    },
+    savedSummaryMeta: {
+        fontSize: 13,
+        fontFamily: 'Cairo_400Regular',
+        color: '#475569',
+        textAlign: 'right',
+        marginBottom: 4,
+    },
+    savedSummaryHint: {
+        fontSize: 11,
+        fontFamily: 'Cairo_400Regular',
+        color: '#64748B',
+        textAlign: 'right',
+        marginTop: 8,
+    },
 });
