@@ -64,6 +64,9 @@ export default function DoctorDashboard() {
 
     const activeApts = appointments.filter(a => a.status === 'confirmed').length;
     const pendingApts = appointments.filter(a => a.status === 'pending').length;
+    const actionAppointments = appointments.filter(a =>
+        a.status === 'cancellation_requested' || a.status === 'reschedule_requested'
+    );
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -71,6 +74,8 @@ export default function DoctorDashboard() {
             case 'pending': return '#F59E0B';
             case 'completed': return '#3B82F6';
             case 'cancelled': return '#EF4444';
+            case 'cancellation_requested': return '#DC2626';
+            case 'reschedule_requested': return '#D97706';
             default: return '#64748B';
         }
     };
@@ -81,6 +86,8 @@ export default function DoctorDashboard() {
             case 'pending': return 'قيد الانتظار';
             case 'completed': return 'مكتمل';
             case 'cancelled': return 'ملغى';
+            case 'cancellation_requested': return 'طلب إلغاء';
+            case 'reschedule_requested': return 'طلب إعادة جدولة';
             default: return status;
         }
     };
@@ -212,6 +219,73 @@ export default function DoctorDashboard() {
                     <Text style={styles.statLabelSmall}>دخل الشهر الحالي</Text>
                 </View>
             </Animated.View>
+
+            {/* Patient requests needing doctor action */}
+            {actionAppointments.length > 0 && (
+                <View style={{ marginTop: 24, paddingHorizontal: 20 }}>
+                    <View style={styles.sectionHeader}>
+                        <TouchableOpacity onPress={() => router.push('/(doctor)/appointments' as any)}>
+                            <Text style={styles.viewAll}>عرض الكل</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.sectionTitle}>طلبات تحتاج إجراءاً</Text>
+                    </View>
+                    {actionAppointments.map((apt) => (
+                        <View key={apt.id} style={styles.actionRequestCard}>
+                            <View style={styles.actionRequestHeader}>
+                                <View style={[styles.statusTag, { backgroundColor: getStatusColor(apt.status) + '22' }]}>
+                                    <Text style={[styles.statusText, { color: getStatusColor(apt.status) }]}>
+                                        {getStatusLabel(apt.status)}
+                                    </Text>
+                                </View>
+                                <Text style={styles.actionPatientName}>{apt.patient?.name || 'مريض'}</Text>
+                            </View>
+                            <Text style={styles.actionMeta}>{apt.date} — {apt.time}</Text>
+                            {apt.status === 'cancellation_requested' && apt.rejection_note ? (
+                                <Text style={styles.actionReason}>سبب المريض: {apt.rejection_note}</Text>
+                            ) : null}
+                            {apt.status === 'reschedule_requested' && apt.requested_date ? (
+                                <Text style={styles.actionReason}>
+                                    موعد مقترح: {apt.requested_date} — {apt.requested_time}
+                                </Text>
+                            ) : null}
+                            <View style={styles.aptActionsRow}>
+                                {apt.status === 'cancellation_requested' && (
+                                    <>
+                                        <TouchableOpacity
+                                            style={[styles.aptActionBtn, styles.rejectBtn]}
+                                            onPress={() => handleStatusUpdate(apt.id, apt.status_before_change || 'confirmed')}
+                                        >
+                                            <Text style={styles.aptActionText}>رفض الإلغاء</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.aptActionBtn, styles.approveBtn]}
+                                            onPress={() => handleStatusUpdate(apt.id, 'cancelled', undefined, undefined, apt.rejection_note)}
+                                        >
+                                            <Text style={styles.aptActionText}>تأكيد الإلغاء</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                                {apt.status === 'reschedule_requested' && (
+                                    <>
+                                        <TouchableOpacity
+                                            style={[styles.aptActionBtn, styles.rejectBtn]}
+                                            onPress={() => api.respondReschedule(apt.id, { action: 'reject', rejection_note: 'تم رفض طلب إعادة الجدولة' }).then(loadData)}
+                                        >
+                                            <Text style={styles.aptActionText}>رفض</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.aptActionBtn, styles.approveBtn]}
+                                            onPress={() => api.respondReschedule(apt.id, { action: 'approve' }).then(() => { Alert.alert('تم', 'تمت الموافقة'); loadData(); })}
+                                        >
+                                            <Text style={styles.aptActionText}>موافقة</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            )}
 
             {/* Today's Schedule */}
             <View style={{ marginTop: 25 }}>
@@ -525,4 +599,47 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     editModalConfirmText: { fontFamily: 'Cairo_700Bold', color: '#FFF' },
+
+    actionRequestCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        elevation: 4,
+        shadowColor: '#DC2626',
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+    },
+    actionRequestHeader: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    actionPatientName: {
+        fontSize: 16,
+        fontFamily: 'Cairo_700Bold',
+        color: '#1E293B',
+        flex: 1,
+        textAlign: 'right',
+    },
+    actionMeta: {
+        fontSize: 13,
+        fontFamily: 'Cairo_600SemiBold',
+        color: '#64748B',
+        textAlign: 'right',
+        marginBottom: 6,
+    },
+    actionReason: {
+        fontSize: 12,
+        fontFamily: 'Cairo_400Regular',
+        color: '#991B1B',
+        textAlign: 'right',
+        marginBottom: 10,
+        backgroundColor: '#FEF2F2',
+        padding: 10,
+        borderRadius: 10,
+    },
 });

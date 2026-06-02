@@ -15,7 +15,7 @@ export default function DoctorAppointments() {
     const { user } = useAuth();
     const router = useRouter();
     const [appointments, setAppointments] = useState<any[]>([]);
-    const [filter, setFilter] = useState<string>('all');
+    const [filter, setFilter] = useState<string>('needs_action');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [actionModal, setActionModal] = useState<{
@@ -49,11 +49,22 @@ export default function DoctorAppointments() {
             return;
         }
         try {
-            const apts = await api.getAppointments({ 
-                doctor_id: user.id, 
-                ...(filter !== 'all' ? { status: filter } : {}) 
-            });
-            setAppointments(apts);
+            const apts = await api.getAppointments({ doctor_id: user.id });
+            const UPCOMING = new Set([
+                'pending', 'confirmed', 'cancellation_requested',
+                'reschedule_requested', 'schedule_change_pending',
+                'patient_confirmation_pending',
+            ]);
+            const NEEDS_ACTION = new Set(['cancellation_requested', 'reschedule_requested']);
+            let filtered = apts;
+            if (filter === 'needs_action') {
+                filtered = apts.filter((a: any) => NEEDS_ACTION.has(a.status));
+            } else if (filter === 'pending') {
+                filtered = apts.filter((a: any) => UPCOMING.has(a.status));
+            } else if (filter !== 'all') {
+                filtered = apts.filter((a: any) => a.status === filter);
+            }
+            setAppointments(filtered);
         } catch (e: any) {
             console.warn(e);
             Alert.alert('خطأ', e.message || 'تعذر تحميل المواعيد');
@@ -184,6 +195,7 @@ export default function DoctorAppointments() {
     };
 
     const FILTERS = [
+        { key: 'needs_action', label: 'طلبات' },
         { key: 'pending', label: 'القادمة' },
         { key: 'completed', label: 'المكتملة' },
         { key: 'cancelled', label: 'الملغاة' },
@@ -196,6 +208,9 @@ export default function DoctorAppointments() {
             case 'pending': return '#F59E0B';
             case 'completed': return '#3B82F6';
             case 'cancelled': return '#EF4444';
+            case 'cancellation_requested': return '#DC2626';
+            case 'reschedule_requested': return '#D97706';
+            case 'schedule_change_pending': return '#7C3AED';
             default: return '#64748B';
         }
     };
@@ -206,6 +221,8 @@ export default function DoctorAppointments() {
             case 'pending': return 'قيد الانتظار';
             case 'completed': return 'مكتمل';
             case 'cancelled': return 'ملغى';
+            case 'cancellation_requested': return 'طلب إلغاء';
+            case 'reschedule_requested': return 'طلب إعادة جدولة';
             case 'schedule_change_pending': return 'بانتظار المريض';
             default: return status;
         }
