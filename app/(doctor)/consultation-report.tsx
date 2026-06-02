@@ -12,6 +12,13 @@ import { useAuth } from '../../src/contexts/AuthContext';
 
 const param = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || '';
 
+type PendingServiceRequest = {
+    localId: string;
+    request_type: 'lab' | 'radiology';
+    service_name: string;
+    notes: string;
+};
+
 export default function ConsultationReportScreen() {
     const params = useLocalSearchParams<{
         appointmentId: string;
@@ -45,6 +52,7 @@ export default function ConsultationReportScreen() {
     const [savingService, setSavingService] = useState(false);
     const [savedReportId, setSavedReportId] = useState<string | null>(null);
     const [serviceRequests, setServiceRequests] = useState<any[]>([]);
+    const [pendingServiceRequests, setPendingServiceRequests] = useState<PendingServiceRequest[]>([]);
     const [loadingReport, setLoadingReport] = useState(true);
     const [showSavedSummary, setShowSavedSummary] = useState(false);
 
@@ -85,6 +93,23 @@ export default function ConsultationReportScreen() {
         }, [loadExistingReport])
     );
 
+    const uploadPendingServiceRequests = async (reportId: string) => {
+        const created: any[] = [];
+        for (const pending of pendingServiceRequests) {
+            const sr = await api.addServiceRequest(reportId, {
+                request_type: pending.request_type,
+                service_name: pending.service_name,
+                notes: pending.notes,
+            });
+            created.push(sr);
+        }
+        if (created.length) {
+            setServiceRequests(prev => [...prev, ...created]);
+            setPendingServiceRequests([]);
+        }
+        return created;
+    };
+
     const handleSaveReport = async () => {
         if (!conditionSummary && !isHealthy) {
             Alert.alert('تنبيه', 'يرجى إدخال ملخص الحالة أو تحديد أن المريض بصحة جيدة');
@@ -102,10 +127,19 @@ export default function ConsultationReportScreen() {
                 follow_up: followUp,
             });
             const wasUpdate = !!savedReportId;
+            const pendingCount = pendingServiceRequests.length;
             applyReportToForm(report);
+            const reportId = report.id;
+            if (pendingCount > 0 && reportId) {
+                await uploadPendingServiceRequests(reportId);
+            }
             Alert.alert(
                 '✅ تم حفظ التقرير',
-                wasUpdate ? 'تم تحديث التقرير بنجاح' : 'تم إنهاء الجلسة وحفظ التقرير بنجاح'
+                wasUpdate
+                    ? 'تم تحديث التقرير بنجاح'
+                    : pendingCount > 0
+                        ? `تم إنهاء الجلسة وإرسال ${pendingCount} طلب فحوصات للمريض`
+                        : 'تم إنهاء الجلسة وحفظ التقرير بنجاح',
             );
         } catch (e: any) {
             Alert.alert('خطأ', e.message || 'فشل حفظ التقرير');
@@ -140,17 +174,6 @@ export default function ConsultationReportScreen() {
     };
 
     const openServiceModal = (type: 'lab' | 'radiology') => {
-        if (!savedReportId) {
-            Alert.alert(
-                'حفظ التقرير أولاً',
-                'يجب حفظ تقرير الاستشارة قبل إضافة طلب تحليل أو أشعة.',
-                [
-                    { text: 'إلغاء', style: 'cancel' },
-                    { text: 'حفظ التقرير الآن', onPress: () => handleSaveReport() },
-                ],
-            );
-            return;
-        }
         setServiceType(type);
         setShowServiceModal(true);
     };
@@ -161,7 +184,22 @@ export default function ConsultationReportScreen() {
             return;
         }
         if (!savedReportId) {
-            Alert.alert('تنبيه', 'يرجى حفظ التقرير أولاً قبل إضافة طلبات الفحوصات');
+            setPendingServiceRequests(prev => [
+                ...prev,
+                {
+                    localId: `pending_${Date.now()}`,
+                    request_type: serviceType,
+                    service_name: serviceName.trim(),
+                    notes: serviceNotes.trim(),
+                },
+            ]);
+            setShowServiceModal(false);
+            setServiceName('');
+            setServiceNotes('');
+            Alert.alert(
+                '✅ تمت الإضافة',
+                `تمت إضافة طلب ${serviceType === 'lab' ? 'التحليل' : 'الأشعة'} — سيُرسل للمريض عند حفظ التقرير في النهاية`,
+            );
             return;
         }
         setSavingService(true);
@@ -181,6 +219,10 @@ export default function ConsultationReportScreen() {
         } finally {
             setSavingService(false);
         }
+    };
+
+    const removePendingRequest = (localId: string) => {
+        setPendingServiceRequests(prev => prev.filter(p => p.localId !== localId));
     };
 
     return (
@@ -220,7 +262,7 @@ export default function ConsultationReportScreen() {
                         {followUp ? (
                             <Text style={styles.savedSummaryMeta}>متابعة: {followUp}</Text>
                         ) : null}
-                        <Text style={styles.savedSummaryHint}>يمكنك التعديل أدناه ثم الضغط على «تحديث التقرير»</Text>
+                        <Text style={styles.savedSummaryHint}>يمكنك التعديل أو إضافة فحوصات ثم «تحديث التقرير» في الأسفل</Text>
                     </View>
                 )}
                 {/* Patient Info */}
@@ -231,6 +273,8 @@ export default function ConsultationReportScreen() {
                         <Text style={styles.patientSub}>تقرير الزيارة</Text>
                     </View>
                 </View>
+
+                <Text style={[styles.stepLabel, { marginBottom: 10, paddingHorizontal: 0 }]}>الخطوة ١ — التقرير الطبي</Text>
 
                 {/* Healthy Toggle */}
                 <View style={styles.card}>
@@ -287,9 +331,72 @@ export default function ConsultationReportScreen() {
                     />
                 </View>
 
-                {/* Step 1: Save report — always above lab/radiology */}
+                {/* Step 2: Prescription, lab, radiology — before final save */}
+                <View style={styles.card}>
+                    <Text style={styles.stepLabel}>الخطوة ٢ — وصفة وفحوصات (تحليل / أشعة)</Text>
+                    <Text style={styles.stepHint}>
+                        أضف الوصفة والفحوصات الآن — تُرسل للمريض عند حفظ التقرير في الخطوة الأخيرة
+                    </Text>
+
+                    {(serviceRequests.length > 0 || pendingServiceRequests.length > 0) && (
+                        <View style={{ marginBottom: 12 }}>
+                            <Text style={[styles.sectionTitle, { fontSize: 13, marginBottom: 8 }]}>قائمة الفحوصات</Text>
+                            {serviceRequests.map((sr, i) => (
+                                <View key={sr.id || i} style={styles.srItem}>
+                                    <MaterialCommunityIcons
+                                        name={sr.request_type === 'lab' ? 'flask' : 'radiology-box-outline'}
+                                        size={20}
+                                        color="#1E88E5"
+                                    />
+                                    <View style={{ flex: 1, alignItems: 'flex-end', marginRight: 8 }}>
+                                        <Text style={styles.srName}>{sr.service_name}</Text>
+                                        <Text style={styles.srCode}>رمز: {sr.reference_code}</Text>
+                                    </View>
+                                </View>
+                            ))}
+                            {pendingServiceRequests.map((sr) => (
+                                <View key={sr.localId} style={[styles.srItem, styles.srItemPending]}>
+                                    <TouchableOpacity onPress={() => removePendingRequest(sr.localId)} hitSlop={8}>
+                                        <MaterialCommunityIcons name="close-circle" size={20} color="#94A3B8" />
+                                    </TouchableOpacity>
+                                    <MaterialCommunityIcons
+                                        name={sr.request_type === 'lab' ? 'flask' : 'radiology-box-outline'}
+                                        size={20}
+                                        color="#0EA5E9"
+                                    />
+                                    <View style={{ flex: 1, alignItems: 'flex-end', marginRight: 8 }}>
+                                        <Text style={styles.srName}>{sr.service_name}</Text>
+                                        <Text style={styles.srCodePending}>بانتظار حفظ التقرير</Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    <View style={styles.actionsGrid}>
+                        <TouchableOpacity style={styles.actionCard} onPress={() => setShowPrescModal(true)}>
+                            <MaterialCommunityIcons name="prescription" size={28} color="#8B5CF6" />
+                            <Text style={styles.actionCardText}>وصفة طبية</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionCard} onPress={() => openServiceModal('lab')}>
+                            <MaterialCommunityIcons name="flask" size={28} color="#0EA5E9" />
+                            <Text style={styles.actionCardText}>طلب تحليل</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.actionCard} onPress={() => openServiceModal('radiology')}>
+                            <MaterialCommunityIcons name="radiology-box-outline" size={28} color="#8E24AA" />
+                            <Text style={styles.actionCardText}>طلب أشعة</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Step 3: Final save */}
                 <View style={styles.saveSection}>
-                    <Text style={styles.stepLabel}>الخطوة ١ — حفظ التقرير</Text>
+                    <Text style={styles.stepLabel}>الخطوة ٣ — حفظ التقرير وإنهاء الجلسة</Text>
+                    {pendingServiceRequests.length > 0 && !savedReportId ? (
+                        <Text style={styles.savePendingNote}>
+                            {pendingServiceRequests.length} طلب فحوصات سيُرسل عند الحفظ
+                        </Text>
+                    ) : null}
                     <TouchableOpacity style={styles.saveBtn} onPress={handleSaveReport} disabled={saving}>
                         <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.saveBtnGrad}>
                             {saving ? <ActivityIndicator color="#FFF" /> : (
@@ -307,61 +414,6 @@ export default function ConsultationReportScreen() {
                             <Text style={styles.doneBtnText}>العودة للمواعيد</Text>
                         </TouchableOpacity>
                     ) : null}
-                </View>
-
-                {/* Step 2: Tests & extras — only after save */}
-                <View style={[styles.card, !savedReportId && styles.lockedSection]}>
-                    <Text style={styles.sectionTitle}>الخطوة ٢ — بعد الحفظ</Text>
-                    {!savedReportId ? (
-                        <View style={styles.lockBanner}>
-                            <MaterialCommunityIcons name="lock-outline" size={20} color="#B45309" />
-                            <Text style={styles.lockBannerText}>
-                                احفظ التقرير أولاً لتفعيل طلب التحليل والأشعة
-                            </Text>
-                        </View>
-                    ) : null}
-
-                    {serviceRequests.length > 0 && (
-                        <View style={{ marginBottom: 12 }}>
-                            <Text style={[styles.sectionTitle, { fontSize: 13, marginBottom: 8 }]}>الفحوصات المطلوبة</Text>
-                            {serviceRequests.map((sr, i) => (
-                                <View key={i} style={styles.srItem}>
-                                    <MaterialCommunityIcons
-                                        name={sr.request_type === 'lab' ? 'flask' : 'radiology-box-outline'}
-                                        size={20}
-                                        color="#1E88E5"
-                                    />
-                                    <View style={{ flex: 1, alignItems: 'flex-end', marginRight: 8 }}>
-                                        <Text style={styles.srName}>{sr.service_name}</Text>
-                                        <Text style={styles.srCode}>رمز: {sr.reference_code}</Text>
-                                    </View>
-                                </View>
-                            ))}
-                        </View>
-                    )}
-
-                    <View style={styles.actionsGrid}>
-                        <TouchableOpacity style={styles.actionCard} onPress={() => setShowPrescModal(true)}>
-                            <MaterialCommunityIcons name="prescription" size={28} color="#8B5CF6" />
-                            <Text style={styles.actionCardText}>وصفة طبية</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.actionCard, !savedReportId && styles.actionCardDisabled]}
-                            onPress={() => openServiceModal('lab')}
-                            disabled={!savedReportId}
-                        >
-                            <MaterialCommunityIcons name="flask" size={28} color={savedReportId ? '#0EA5E9' : '#CBD5E1'} />
-                            <Text style={[styles.actionCardText, !savedReportId && styles.actionCardTextDisabled]}>طلب تحليل</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.actionCard, !savedReportId && styles.actionCardDisabled]}
-                            onPress={() => openServiceModal('radiology')}
-                            disabled={!savedReportId}
-                        >
-                            <MaterialCommunityIcons name="radiology-box-outline" size={28} color={savedReportId ? '#8E24AA' : '#CBD5E1'} />
-                            <Text style={[styles.actionCardText, !savedReportId && styles.actionCardTextDisabled]}>طلب أشعة</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
             </ScrollView>
             )}
@@ -429,7 +481,11 @@ export default function ConsultationReportScreen() {
                         />
                         <TouchableOpacity style={[styles.saveBtn, { marginTop: 16 }]} onPress={handleAddServiceRequest} disabled={savingService}>
                             <LinearGradient colors={serviceType === 'lab' ? ['#0EA5E9', '#0284C7'] : ['#8E24AA', '#6A1B9A']} style={styles.saveBtnGrad}>
-                                {savingService ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>إصدار الطلب</Text>}
+                                {savingService ? <ActivityIndicator color="#FFF" /> : (
+                                    <Text style={styles.saveBtnText}>
+                                        {savedReportId ? 'إصدار الطلب' : 'إضافة للقائمة'}
+                                    </Text>
+                                )}
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>
@@ -455,33 +511,29 @@ const styles = StyleSheet.create({
     sectionTitle: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right', marginBottom: 10 },
     textArea: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', minHeight: 100, padding: 12, fontFamily: 'Cairo_400Regular', fontSize: 14, color: '#1E293B' },
     input: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', height: 48, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular', fontSize: 14, color: '#1E293B', marginBottom: 8 },
-    lockedSection: { opacity: 0.92, backgroundColor: '#F8FAFC' },
-    lockBanner: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: '#FFFBEB',
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 14,
-        borderWidth: 1,
-        borderColor: '#FDE68A',
-    },
-    lockBannerText: {
-        flex: 1,
-        fontSize: 13,
-        fontFamily: 'Cairo_600SemiBold',
-        color: '#B45309',
+    stepHint: {
+        fontSize: 12,
+        fontFamily: 'Cairo_400Regular',
+        color: '#64748B',
         textAlign: 'right',
+        marginBottom: 14,
+        lineHeight: 18,
+    },
+    savePendingNote: {
+        fontSize: 12,
+        fontFamily: 'Cairo_600SemiBold',
+        color: '#0369A1',
+        textAlign: 'right',
+        marginBottom: 10,
     },
     actionsGrid: { flexDirection: 'row-reverse', gap: 12, marginBottom: 4 },
     actionCard: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 16, padding: 16, alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#E2E8F0' },
-    actionCardDisabled: { backgroundColor: '#F1F5F9', borderColor: '#E2E8F0' },
     actionCardText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#374151', textAlign: 'center' },
-    actionCardTextDisabled: { color: '#94A3B8' },
     srItem: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#F0F9FF', borderRadius: 10, padding: 10, marginBottom: 8 },
+    srItemPending: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BAE6FD', borderStyle: 'dashed' },
     srName: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
     srCode: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#6B7280' },
+    srCodePending: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#0284C7' },
     saveSection: {
         marginBottom: 16,
         padding: 16,
