@@ -1,11 +1,17 @@
+import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./medlink.db"
-# Using check_same_thread=False for SQLite to allow FastAPI to handle requests efficiently
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+_raw_db_url = os.environ.get("DATABASE_URL", "sqlite:///./medlink.db")
+if _raw_db_url.startswith("postgres://"):
+    _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+SQLALCHEMY_DATABASE_URL = _raw_db_url
+
+_engine_kwargs = {}
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **_engine_kwargs)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -26,6 +32,8 @@ def init_db():
     ensure_sqlite_columns()
     ensure_demo_secretary()
     ensure_demo_radiology_centers()
+    ensure_demo_core_users()
+    ensure_demo_appointments()
 
 
 def ensure_sqlite_columns():
@@ -192,6 +200,126 @@ def ensure_demo_radiology_centers():
             if db.query(User).filter(User.id == row["id"]).first():
                 continue
             db.add(User(**row))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_demo_core_users():
+    """Ensure demo patient (p1) and doctor (d1) exist for booking/login on partial DBs."""
+    from datetime import datetime, timezone
+    from models import User
+    from auth_utils import hash_password
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        demos = [
+            {
+                "id": "p1",
+                "role": "patient",
+                "name": "أحمد محمد الخليل",
+                "email": "ahmed@medlink.sy",
+                "password": hash_password("123456"),
+                "phone": "+963-911-123456",
+                "city": "دمشق",
+                "is_active": True,
+                "verified": True,
+                "created_at": now,
+            },
+            {
+                "id": "d1",
+                "role": "doctor",
+                "name": "د. كريم نصر الله",
+                "email": "dr.karim@medlink.sy",
+                "password": hash_password("123456"),
+                "phone": "+963-912-111222",
+                "city": "دمشق",
+                "specialization": "قلبية",
+                "specialization_en": "Cardiology",
+                "price_per_session": 95000,
+                "available_hours": "10:00 - 18:00",
+                "is_active": True,
+                "verified": True,
+                "created_at": now,
+            },
+        ]
+        for row in demos:
+            if db.query(User).filter(User.id == row["id"]).first():
+                continue
+            if db.query(User).filter(User.email == row["email"]).first():
+                continue
+            db.add(User(**row))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_demo_appointments():
+    """Ensure at least one demo appointment exists (Render DB resets / seed skip)."""
+    from datetime import date, timedelta, datetime, timezone
+    from models import Appointment, User
+
+    db = SessionLocal()
+    try:
+        patient = db.query(User).filter(User.id == "p1").first()
+        if not patient:
+            patient = (
+                db.query(User)
+                .filter(User.role == "patient", User.is_active == True)
+                .order_by(User.created_at.asc())
+                .first()
+            )
+        doctor = db.query(User).filter(User.id == "d1").first()
+        if not doctor:
+            doctor = (
+                db.query(User)
+                .filter(User.role == "doctor", User.is_active == True)
+                .order_by(User.created_at.asc())
+                .first()
+            )
+        if not patient or not doctor:
+            return
+
+        now = datetime.now(timezone.utc).isoformat()
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        day_after = (date.today() + timedelta(days=2)).isoformat()
+
+        demos = [
+            {
+                "id": "apt1",
+                "patient_id": patient.id,
+                "doctor_id": doctor.id,
+                "date": tomorrow,
+                "time": "10:00",
+                "status": "pending",
+                "notes": "موعد تجريبي — بانتظار تأكيد الطبيب",
+                "price": 25000,
+                "record_access_granted": False,
+                "created_at": now,
+            },
+            {
+                "id": "apt2",
+                "patient_id": patient.id,
+                "doctor_id": doctor.id,
+                "date": day_after,
+                "time": "11:00",
+                "status": "confirmed",
+                "notes": "موعد مؤكد تجريبي",
+                "price": 25000,
+                "record_access_granted": True,
+                "created_at": now,
+            },
+        ]
+        for row in demos:
+            existing = db.query(Appointment).filter(Appointment.id == row["id"]).first()
+            if existing:
+                continue
+            db.add(Appointment(**row))
         db.commit()
     except Exception:
         db.rollback()

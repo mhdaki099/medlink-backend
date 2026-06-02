@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert, Modal, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 import ArabicCalendar from '../../src/components/ArabicCalendar';
@@ -51,6 +52,12 @@ export default function AppointmentsScreen() {
         load();
     }, [user]);
 
+    useFocusEffect(
+        useCallback(() => {
+            load();
+        }, [user?.id])
+    );
+
     const loadRescheduleSlots = async (doctorId: string, date: string) => {
         try {
             const av = await api.getDoctorAvailability(doctorId, date);
@@ -93,6 +100,23 @@ export default function AppointmentsScreen() {
             if (msg.includes('غير موجود')) {
                 setRescheduleModal({ visible: false, aptId: '', doctorId: '' });
                 load();
+            }
+        }
+    };
+
+    const handlePatientStatusUpdate = async (
+        aptId: string,
+        status: string,
+        rejectionNote?: string,
+    ) => {
+        try {
+            await api.updateAppointmentStatus(aptId, status, undefined, undefined, rejectionNote);
+            await load();
+        } catch (e: any) {
+            const msg = e?.message || 'فشل تحديث الموعد';
+            Alert.alert('خطأ', msg);
+            if (msg.includes('غير موجود')) {
+                await load();
             }
         }
     };
@@ -174,11 +198,11 @@ export default function AppointmentsScreen() {
                     </View>
                     {item.status === 'patient_confirmation_pending' && (
                         <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
-                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#DCFCE7' }]} onPress={async () => { await api.updateAppointmentStatus(item.id, 'confirmed'); load(); }}>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#DCFCE7' }]} onPress={() => handlePatientStatusUpdate(item.id, 'confirmed')}>
                                 <MaterialCommunityIcons name="check" size={14} color="#16A34A" />
                                 <Text style={[styles.detailsBtnText, { color: '#16A34A' }]}>قبول</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={async () => { await api.updateAppointmentStatus(item.id, 'rejected', undefined, undefined, 'رفض المريض الموعد المقترح'); load(); }}>
+                            <TouchableOpacity style={[styles.detailsBtn, { backgroundColor: '#FEF2F2' }]} onPress={() => handlePatientStatusUpdate(item.id, 'rejected', 'رفض المريض الموعد المقترح')}>
                                 <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
                                 <Text style={[styles.detailsBtnText, { color: '#EF4444' }]}>رفض</Text>
                             </TouchableOpacity>

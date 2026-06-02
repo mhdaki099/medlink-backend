@@ -9,8 +9,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import ProviderStatsBar from '../../../src/components/ProviderStatsBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
+/** Must match app/(patient)/_layout.tsx TAB_BAR_BASE_HEIGHT */
+const TAB_BAR_BASE_HEIGHT = 85;
+const BOOKING_BTN_HEIGHT = 64;
 
 // Slider Width Constants
 const SLIDER_WIDTH = width - 40;
@@ -49,7 +53,10 @@ export default function DoctorProfile() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const { user } = useAuth();
-    
+    const insets = useSafeAreaInsets();
+    /** Space below last scroll item so content clears the tab bar */
+    const scrollBottomPad = TAB_BAR_BASE_HEIGHT + insets.bottom + 24;
+
     const [doctor, setDoctor] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     
@@ -258,7 +265,13 @@ export default function DoctorProfile() {
             </View>
 
             {/* Content Area */}
-            <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+                style={styles.contentScroll}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: scrollBottomPad }}
+            >
                 <ProviderStatsBar stats={analytics} rating={doctor.rating} />
                 {/* Stats */}
                 <View style={styles.statsContainer}>
@@ -402,34 +415,32 @@ export default function DoctorProfile() {
                         )}
                     </View>
                 </View>
-                
-                <View style={{ height: 250 }} />
-            </ScrollView>
 
-            {/* Premium Press to Confirm Button */}
-            <View style={styles.bottomBar}>
-                <TouchableOpacity 
-                    style={[styles.bookingBtn, !selectedTime && { opacity: 0.6, backgroundColor: '#94A3B8' }]}
-                    onPress={handleBook}
-                    disabled={booking || !selectedTime}
-                >
-                    <LinearGradient
-                        colors={selectedTime ? ['#1E88E5', '#1565C0'] : ['#94A3B8', '#64748B']}
-                        style={StyleSheet.absoluteFillObject}
-                        start={{x:0,y:0}} end={{x:1,y:1}}
-                    />
-                    {booking ? (
-                        <ActivityIndicator color="#FFF" />
-                    ) : (
-                        <View style={styles.btnContent}>
-                            <Ionicons name="checkmark-circle" size={24} color="#FFF" />
-                            <Text style={styles.bookingBtnText}>
-                                {selectedTime ? "تأكيد الحجز الآن" : "يرجى اختيار الوقت أولاً"}
-                            </Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-            </View>
+                {/* Confirm booking — in scroll flow so the page can scroll to the end */}
+                <View style={styles.bookingFooter}>
+                    <TouchableOpacity 
+                        style={[styles.bookingBtn, !selectedTime && styles.bookingBtnDisabled]}
+                        onPress={handleBook}
+                        disabled={booking || !selectedTime}
+                    >
+                        <LinearGradient
+                            colors={selectedTime ? ['#1E88E5', '#1565C0'] : ['#94A3B8', '#64748B']}
+                            style={StyleSheet.absoluteFillObject}
+                            start={{x:0,y:0}} end={{x:1,y:1}}
+                        />
+                        {booking ? (
+                            <ActivityIndicator color="#FFF" />
+                        ) : (
+                            <View style={styles.btnContent}>
+                                <Ionicons name="checkmark-circle" size={24} color="#FFF" />
+                                <Text style={styles.bookingBtnText}>
+                                    {selectedTime ? "تأكيد الحجز الآن" : "يرجى اختيار الوقت أولاً"}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
         </View>
     );
 }
@@ -452,6 +463,11 @@ const styles = StyleSheet.create({
     locationText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'right' },
     heroPhoto: { width: 140, height: 210, position: 'absolute', bottom: -50, left: 10, zIndex: 1 },
     contentScroll: { flex: 1, zIndex: 2, paddingTop: 30 },
+    bookingFooter: {
+        marginHorizontal: 20,
+        marginTop: 12,
+        marginBottom: 8,
+    },
     statsContainer: { paddingHorizontal: 20, marginBottom: 20 },
     statsInner: { flexDirection: 'row-reverse', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 18, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 4 },
     statItem: { alignItems: 'center', flex: 1 },
@@ -512,19 +528,8 @@ const styles = StyleSheet.create({
     submitReviewBtn: { backgroundColor: '#43A047', borderRadius: 12, paddingVertical: 12, marginTop: 15, alignItems: 'center' },
     submitReviewBtnText: { color: '#FFF', fontFamily: 'Cairo_700Bold', fontSize: 14 },
     
-    /* Swipe Slider Styles */
-    bottomBar: { 
-        position: 'absolute', 
-        bottom: 90, 
-        left: 0, 
-        right: 0, 
-        backgroundColor: 'transparent',
-        paddingHorizontal: 20, 
-        zIndex: 1000
-    },
-    /* New Booking Button Styles */
     bookingBtn: {
-        height: 64,
+        height: BOOKING_BTN_HEIGHT,
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
@@ -533,6 +538,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 10,
         elevation: 8,
+    },
+    bookingBtnDisabled: {
+        opacity: 0.6,
     },
     btnContent: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
     bookingBtnText: {

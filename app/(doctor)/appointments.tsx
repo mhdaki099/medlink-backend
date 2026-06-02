@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, ActivityIndicator, 
     RefreshControl, TouchableOpacity, Alert, Platform, Image, Modal, TextInput, KeyboardAvoidingView,
@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeInRight, FadeInDown } from 'react-native-reanimated';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/theme';
 
 export default function DoctorAppointments() {
@@ -63,7 +63,13 @@ export default function DoctorAppointments() {
         }
     };
 
-    useEffect(() => { loadData(); }, [filter, user]);
+    useEffect(() => { loadData(); }, [filter]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadData();
+        }, [filter, user?.id])
+    );
 
     const handleStatusUpdate = async (
         id: string,
