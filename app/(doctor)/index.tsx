@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Image, ActivityIndicator, RefreshControl, Dimensions,
-    Platform, Pressable, TextInput
+    Platform, Pressable, TextInput, Modal, KeyboardAvoidingView, Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -32,9 +32,12 @@ export default function DoctorDashboard() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-    const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+    const [editModal, setEditModal] = useState<{ visible: boolean; aptId: string; status: string }>({
+        visible: false, aptId: '', status: 'pending',
+    });
     const [newDate, setNewDate] = useState('');
     const [newTime, setNewTime] = useState('');
+    const [modificationReason, setModificationReason] = useState('');
 
     const loadData = async () => {
         if (!user?.id) return;
@@ -82,14 +85,51 @@ export default function DoctorDashboard() {
         }
     };
 
-    const handleStatusUpdate = async (appointmentId: string, newStatus: string, date?: string, time?: string) => {
+    const handleStatusUpdate = async (
+        appointmentId: string,
+        newStatus: string,
+        date?: string,
+        time?: string,
+        rejectionNote?: string,
+        modificationNote?: string,
+    ) => {
         try {
-            await api.updateAppointmentStatus(appointmentId, newStatus, date, time);
-            setReschedulingId(null);
+            await api.put(`/appointments/${appointmentId}/status`, {
+                status: newStatus,
+                date,
+                time,
+                rejection_note: rejectionNote,
+                modification_note: modificationNote,
+            });
+            setEditModal({ visible: false, aptId: '', status: 'pending' });
+            setModificationReason('');
             loadData();
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            const msg = e?.message || 'فشل تحديث الموعد';
+            Alert.alert('خطأ', msg);
+            if (msg.includes('غير موجود')) {
+                loadData();
+            }
         }
+    };
+
+    const openEditModal = (apt: any) => {
+        setNewDate(apt.date || '');
+        setNewTime(apt.time || '');
+        setModificationReason('');
+        setEditModal({ visible: true, aptId: apt.id, status: apt.status });
+    };
+
+    const submitReschedule = () => {
+        if (!newDate.trim() || !newTime.trim()) {
+            Alert.alert('تنبيه', 'يرجى إدخال التاريخ والوقت');
+            return;
+        }
+        if (!modificationReason.trim()) {
+            Alert.alert('تنبيه', 'يرجى إدخال سبب تعديل الموعد');
+            return;
+        }
+        handleStatusUpdate(editModal.aptId, editModal.status, newDate.trim(), newTime.trim(), undefined, modificationReason.trim());
     };
 
 
@@ -224,18 +264,14 @@ export default function DoctorDashboard() {
                                             </TouchableOpacity>
                                             <TouchableOpacity 
                                                 style={[styles.aptActionBtn, styles.rescheduleBtn]}
-                                                onPress={() => {
-                                                    setReschedulingId(apt.id);
-                                                    setNewDate(apt.date);
-                                                    setNewTime(apt.time);
-                                                }}
+                                                onPress={() => openEditModal(apt)}
                                             >
                                                 <Ionicons name="time-outline" size={18} color="#FFF" />
                                                 <Text style={styles.aptActionText}>تعديل</Text>
                                             </TouchableOpacity>
                                             <TouchableOpacity 
                                                 style={[styles.aptActionBtn, styles.rejectBtn]}
-                                                onPress={() => handleStatusUpdate(apt.id, 'cancelled')}
+                                                onPress={() => router.push('/(doctor)/appointments' as any)}
                                             >
                                                 <Ionicons name="close" size={18} color="#FFF" />
                                                 <Text style={styles.aptActionText}>رفض</Text>
@@ -243,45 +279,6 @@ export default function DoctorDashboard() {
                                         </View>
                                     )}
 
-                                    {reschedulingId === apt.id && (
-                                        <Animated.View entering={FadeInDown} style={styles.rescheduleContainer}>
-                                            <Text style={styles.rescheduleTitle}>تعديل موعد {apt.patient?.name}</Text>
-                                            <View style={styles.rescheduleInputs}>
-                                                <View style={styles.rescheduleInputGroup}>
-                                                    <Text style={styles.rescheduleLabel}>التاريخ</Text>
-                                                    <TextInput 
-                                                        style={styles.rescheduleInput} 
-                                                        value={newDate} 
-                                                        onChangeText={setNewDate}
-                                                        placeholder="YYYY-MM-DD"
-                                                    />
-                                                </View>
-                                                <View style={styles.rescheduleInputGroup}>
-                                                    <Text style={styles.rescheduleLabel}>الوقت</Text>
-                                                    <TextInput 
-                                                        style={styles.rescheduleInput} 
-                                                        value={newTime} 
-                                                        onChangeText={setNewTime}
-                                                        placeholder="HH:MM AM/PM"
-                                                    />
-                                                </View>
-                                            </View>
-                                            <View style={styles.rescheduleButtons}>
-                                                <TouchableOpacity 
-                                                    style={[styles.confirmRescheduleBtn]}
-                                                    onPress={() => handleStatusUpdate(apt.id, apt.status, newDate, newTime)}
-                                                >
-                                                    <Text style={styles.confirmRescheduleText}>تأكيد التعديل</Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity 
-                                                    style={styles.cancelRescheduleBtn}
-                                                    onPress={() => setReschedulingId(null)}
-                                                >
-                                                    <Text style={styles.cancelRescheduleText}>إلغاء</Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        </Animated.View>
-                                    )}
                                 </Animated.View>
                             ))
                     )}
@@ -291,6 +288,60 @@ export default function DoctorDashboard() {
             <View style={{ height: 60 }} />
 
             <View style={{ height: 100 }} />
+
+            <Modal visible={editModal.visible} transparent animationType="slide">
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+                        <ScrollView
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+                        >
+                            <View style={styles.editModalSheet}>
+                                <Text style={styles.editModalTitle}>تعديل الموعد</Text>
+                                <Text style={styles.editModalLabel}>التاريخ (YYYY-MM-DD)</Text>
+                                <TextInput
+                                    style={styles.editModalInput}
+                                    value={newDate}
+                                    onChangeText={setNewDate}
+                                    placeholder="2026-06-15"
+                                    textAlign="right"
+                                />
+                                <Text style={styles.editModalLabel}>الوقت</Text>
+                                <TextInput
+                                    style={styles.editModalInput}
+                                    value={newTime}
+                                    onChangeText={setNewTime}
+                                    placeholder="10:00"
+                                    textAlign="right"
+                                />
+                                <Text style={styles.editModalLabel}>سبب التعديل *</Text>
+                                <TextInput
+                                    style={[styles.editModalInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                                    value={modificationReason}
+                                    onChangeText={setModificationReason}
+                                    placeholder="مثال: ظرف طارئ، تأجيل بسبب عملية..."
+                                    multiline
+                                    textAlign="right"
+                                />
+                                <View style={styles.editModalActions}>
+                                    <TouchableOpacity
+                                        style={styles.editModalCancel}
+                                        onPress={() => setEditModal({ visible: false, aptId: '', status: 'pending' })}
+                                    >
+                                        <Text style={styles.editModalCancelText}>إلغاء</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.editModalConfirm} onPress={submitReschedule}>
+                                        <Text style={styles.editModalConfirmText}>تأكيد التعديل</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </ScrollView>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
         </ScrollView>
     );
 }
@@ -406,71 +457,58 @@ const styles = StyleSheet.create({
         fontFamily: 'Cairo_700Bold',
         fontSize: 13
     },
-    rescheduleContainer: {
-        marginTop: 20,
-        padding: 15,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)'
+    editModalSheet: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        paddingBottom: Platform.OS === 'ios' ? 36 : 24,
     },
-    rescheduleTitle: {
-        fontSize: 14,
+    editModalTitle: {
+        fontSize: 18,
         fontFamily: 'Cairo_700Bold',
-        color: '#FFF',
-        marginBottom: 12,
-        textAlign: 'right'
+        color: '#111827',
+        textAlign: 'center',
+        marginBottom: 16,
     },
-    rescheduleInputs: {
+    editModalLabel: {
+        fontSize: 13,
+        fontFamily: 'Cairo_700Bold',
+        color: '#374151',
+        textAlign: 'right',
+        marginBottom: 6,
+        marginTop: 10,
+    },
+    editModalInput: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontFamily: 'Cairo_400Regular',
+        fontSize: 14,
+        color: '#111827',
+    },
+    editModalActions: {
         flexDirection: 'row-reverse',
         gap: 10,
-        marginBottom: 15
+        marginTop: 20,
     },
-    rescheduleInputGroup: {
-        flex: 1
-    },
-    rescheduleLabel: {
-        fontSize: 11,
-        fontFamily: 'Cairo_600SemiBold',
-        color: 'rgba(255,255,255,0.8)',
-        marginBottom: 4,
-        textAlign: 'right'
-    },
-    rescheduleInput: {
-        backgroundColor: '#FFF',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        fontSize: 13,
-        fontFamily: 'Cairo_600SemiBold',
-        color: '#1E293B'
-    },
-    rescheduleButtons: {
-        flexDirection: 'row-reverse',
-        gap: 10
-    },
-    confirmRescheduleBtn: {
-        flex: 2,
-        height: 40,
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center'
-    },
-    confirmRescheduleText: {
-        color: '#5D5FEF',
-        fontFamily: 'Cairo_700Bold',
-        fontSize: 13
-    },
-    cancelRescheduleBtn: {
+    editModalCancel: {
         flex: 1,
-        height: 40,
-        justifyContent: 'center',
-        alignItems: 'center'
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
     },
-    cancelRescheduleText: {
-        color: '#FFF',
-        fontFamily: 'Cairo_600SemiBold',
-        fontSize: 13
-    }
+    editModalCancelText: { fontFamily: 'Cairo_700Bold', color: '#64748B' },
+    editModalConfirm: {
+        flex: 1.5,
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: '#6366F1',
+        alignItems: 'center',
+    },
+    editModalConfirmText: { fontFamily: 'Cairo_700Bold', color: '#FFF' },
 });

@@ -30,7 +30,7 @@ SPECIALIZATIONS = [
     {"id": "sp17", "name": "طب الروماتيزم",            "name_en": "Rheumatology",            "icon": "hand-back-right"},
     {"id": "sp18", "name": "طب الكلى",                 "name_en": "Nephrology",              "icon": "kidney"},
     {"id": "sp19", "name": "طب الأمراض المعدية",       "name_en": "Infectious Diseases",     "icon": "virus"},
-    {"id": "sp20", "name": "جراحة عامة",               "name_en": "General Surgery",         "icon": "scalpel"},
+    {"id": "sp20", "name": "جراحة عامة",               "name_en": "General Surgery",         "icon": "knife"},
     {"id": "sp21", "name": "جراحة العظام",             "name_en": "Orthopedic Surgery",      "icon": "bone"},
     {"id": "sp22", "name": "جراحة القلب",              "name_en": "Cardiac Surgery",         "icon": "heart-pulse"},
     {"id": "sp23", "name": "جراحة الأعصاب",            "name_en": "Neurosurgery",            "icon": "brain"},

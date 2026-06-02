@@ -160,17 +160,40 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
     recommended_specialty = status_update.get("recommended_specialty")
     recommended_doctor_id = status_update.get("recommended_doctor_id")
 
-    if new_status == "rejected" and not rejection_note and not rejection_reason_type:
+    role = current_user.get("role")
+    is_staff = role in ("doctor", "secretary", "admin")
+    note_text = (rejection_note or "").strip()
+
+    if new_status == "rejected" and is_staff and not note_text and not rejection_reason_type:
         raise HTTPException(status_code=400, detail="يجب إدخال سبب رفض الموعد")
+
+    # Doctor/secretary cancelling (not approving a patient cancel request)
+    if (
+        new_status == "cancelled"
+        and is_staff
+        and not apt.cancel_requested
+        and not note_text
+        and not rejection_reason_type
+    ):
+        raise HTTPException(status_code=400, detail="يجب إدخال سبب الإلغاء")
 
     new_date = status_update.get("date", apt.date)
     new_time = status_update.get("time", apt.time)
-    if (new_date != apt.date or new_time != apt.time) and new_status in ACTIVE_SLOT_STATUSES:
+    date_changed = new_date != apt.date or new_time != apt.time
+    modification_note = (status_update.get("modification_note") or "").strip()
+
+    if date_changed and is_staff and not modification_note:
+        raise HTTPException(status_code=400, detail="يجب إدخال سبب تعديل الموعد")
+
+    if date_changed and new_status in ACTIVE_SLOT_STATUSES:
         ensure_slot_available(db, apt.doctor_id, new_date, new_time, appointment_id=apt.id)
 
     apt.status = new_status
     apt.date = new_date
     apt.time = new_time
+    if modification_note and date_changed:
+        stamp = f"[سبب التعديل] {modification_note}"
+        apt.notes = f"{apt.notes}\n{stamp}".strip() if apt.notes else stamp
     if rejection_note:
         apt.rejection_note = rejection_note
     if rejection_reason_type:
@@ -195,8 +218,15 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
         add_notification(db, apt.patient_id, "تم رفض/إلغاء الموعد", f"تم تحديث موعدك مع د. {doctor_name}.{reason_text}{rec_text}", "appointment_rejected")
     elif new_status == "completed":
         add_notification(db, apt.patient_id, "تم إكمال الموعد", f"تم إكمال جلستك مع د. {doctor_name}", "appointment_completed")
-    if (status_update.get("date") or status_update.get("time")) and old_status == "confirmed" and new_status == "confirmed":
-        add_notification(db, apt.patient_id, "تعديل موعد", f"تم تعديل موعدك مع د. {doctor_name} إلى {apt.date} الساعة {apt.time}", "appointment_modified")
+    if date_changed and is_staff:
+        mod_text = f" السبب: {modification_note}" if modification_note else ""
+        add_notification(
+            db,
+            apt.patient_id,
+            "تعديل موعد",
+            f"تم تعديل موعدك مع د. {doctor_name} إلى {apt.date} الساعة {apt.time}.{mod_text}",
+            "appointment_modified",
+        )
 
     log_appointment_audit(db, apt.id, current_user["sub"], "status_update", old_status, new_status, rejection_note or "")
 

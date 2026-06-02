@@ -14,6 +14,10 @@ const { width } = Dimensions.get('window');
 
 const getCatColor = (idx: number) => ['#1E88E5', '#43A047', '#FB8C00', '#E91E63', '#8E24AA', '#00ACC1'][idx % 6];
 
+/** MaterialCommunityIcons names that are invalid in @expo/vector-icons */
+const SPEC_ICON_ALIASES: Record<string, string> = { scalpel: 'knife' };
+const specIcon = (icon?: string) => (icon && SPEC_ICON_ALIASES[icon]) || icon || 'stethoscope';
+
 const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const currentMonthYear = `${ARABIC_MONTHS[new Date().getMonth()]} ${new Date().getFullYear()}`;
 
@@ -246,7 +250,7 @@ export default function PatientHome() {
                                 onPress={() => router.push(cat.route as any)}
                             >
                                 <LinearGradient colors={[cat.color, cat.color + 'CC']} style={styles.serviceCategoryIcon}>
-                                    <MaterialCommunityIcons name={cat.icon as any} size={28} color="#FFF" />
+                                    <MaterialCommunityIcons name={specIcon(cat.icon) as any} size={28} color="#FFF" />
                                 </LinearGradient>
                                 <Text style={styles.serviceCategoryTitle}>{cat.title}</Text>
                             </TouchableOpacity>
@@ -280,7 +284,7 @@ export default function PatientHome() {
                                     end={{ x: 1, y: 1 }}
                                 >
                                     <MaterialCommunityIcons
-                                        name={cat.icon as any}
+                                        name={specIcon(cat.icon) as any}
                                         size={26}
                                         color="#FFF"
                                     />

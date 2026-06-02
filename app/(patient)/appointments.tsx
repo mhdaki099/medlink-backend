@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Platform, Dimensions, Alert, Modal, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -88,7 +88,12 @@ export default function AppointmentsScreen() {
             setRescheduleModal({ visible: false, aptId: '', doctorId: '' });
             load();
         } catch (e: any) {
-            Alert.alert('خطأ', e.message);
+            const msg = e?.message || 'فشل إرسال الطلب';
+            Alert.alert('خطأ', msg);
+            if (msg.includes('غير موجود')) {
+                setRescheduleModal({ visible: false, aptId: '', doctorId: '' });
+                load();
+            }
         }
     };
 
@@ -145,7 +150,9 @@ export default function AppointmentsScreen() {
 
                 {item.rejection_note && (
                     <View style={[styles.notesBox, { backgroundColor: '#FEF2F2' }]}>
-                        <Text style={[styles.notesText, { color: '#EF4444' }]}>سبب الرفض: {item.rejection_note}</Text>
+                        <Text style={[styles.notesText, { color: '#EF4444' }]}>
+                            {item.status === 'cancelled' ? 'سبب الإلغاء' : 'سبب الرفض'}: {item.rejection_note}
+                        </Text>
                     </View>
                 )}
 
@@ -229,8 +236,16 @@ export default function AppointmentsScreen() {
                 />
             )}
             <Modal visible={rescheduleModal.visible} animationType="slide" transparent>
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
                 <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' }}>
+                    <ScrollView
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+                    >
+                    <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: Platform.OS === 'ios' ? 32 : 20, maxHeight: '85%' }}>
                         <Text style={{ fontFamily: 'Cairo_700Bold', fontSize: 18, textAlign: 'center', marginBottom: 16 }}>اختر موعداً جديداً</Text>
                         <ArabicCalendar
                             month={currentMonth}
@@ -263,7 +278,9 @@ export default function AppointmentsScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
+                    </ScrollView>
                 </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );

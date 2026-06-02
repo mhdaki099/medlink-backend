@@ -286,8 +286,15 @@ class ApiClient {
     }
     createAppointment(data: any) { return this.post<any>('/appointments', data); }
     createManualAppointment(data: any) { return this.post<any>('/appointments/manual', data); }
-    async updateAppointmentStatus(id: string, status: string, date?: string, time?: string, rejection_note?: string) {
-        return this.put(`/appointments/${id}/status`, { status, date, time, rejection_note });
+    async updateAppointmentStatus(
+        id: string,
+        status: string,
+        date?: string,
+        time?: string,
+        rejection_note?: string,
+        modification_note?: string,
+    ) {
+        return this.put(`/appointments/${id}/status`, { status, date, time, rejection_note, modification_note });
     }
     toggleRecordAccess(id: string, granted: boolean) {
         return this.put<any>(`/appointments/${id}/access`, { granted });
