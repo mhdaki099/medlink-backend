@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import uuid
+import re
 
 from db import get_db
 from models import Order, WarehouseOrder, User, Medicine, WarehouseInventory, AuditLog, Notification, Prescription
@@ -66,6 +67,89 @@ def _restore_pharmacy_stock(db: Session, items: list, pharmacy_id: str) -> None:
             continue
         med.quantity = (med.quantity or 0) + _order_item_qty(item)
         _sync_medicine_stock_status(med)
+
+
+def _normalize_warehouse_med_name(name: str) -> str:
+    return (name or "").split("(")[0].strip()
+
+
+def _units_per_bulk_pack(name: str, unit: str) -> int:
+    pack_match = re.search(r"حزم\s*(\d+)", name or "")
+    if pack_match:
+        return max(1, int(pack_match.group(1)))
+    unit_match = re.search(r"(\d+)", unit or "")
+    if unit_match:
+        return max(1, int(unit_match.group(1)))
+    return 1
+
+
+def _find_pharmacy_medicine(db: Session, pharmacy_id: str, base_name: str):
+    med = db.query(Medicine).filter(
+        Medicine.pharmacy_id == pharmacy_id,
+        Medicine.name == base_name,
+    ).first()
+    if med:
+        return med
+    for candidate in db.query(Medicine).filter(Medicine.pharmacy_id == pharmacy_id).all():
+        cand_base = _normalize_warehouse_med_name(candidate.name)
+        if cand_base == base_name or base_name in candidate.name or candidate.name in base_name:
+            return candidate
+    return None
+
+
+def _apply_warehouse_delivery_to_pharmacy(db: Session, order: WarehouseOrder) -> list:
+    """Add received warehouse items to the pharmacy medicine stock on confirm."""
+    stock_updates = []
+    enriched_items = _enrich_warehouse_order_items(db, order.items or [])
+    for item in enriched_items:
+        qty_packs = _order_item_qty(item)
+        full_name = item.get("name") or ""
+        base_name = _normalize_warehouse_med_name(full_name) or full_name
+        units = qty_packs * _units_per_bulk_pack(full_name, item.get("unit") or "")
+        med = _find_pharmacy_medicine(db, order.pharmacy_id, base_name)
+        if med:
+            med.quantity = (med.quantity or 0) + units
+            _sync_medicine_stock_status(med)
+            stock_updates.append({
+                "medicine_id": med.id,
+                "name": med.name,
+                "added": units,
+                "total": med.quantity,
+                "created": False,
+            })
+            continue
+        inv = None
+        if item.get("item_id"):
+            inv = db.query(WarehouseInventory).filter(WarehouseInventory.id == item["item_id"]).first()
+        bulk_price = float(item.get("bulk_price") or (inv.bulk_price if inv else 0) or 0)
+        pack_units = _units_per_bulk_pack(full_name, item.get("unit") or "")
+        retail_price = round(bulk_price / pack_units) if bulk_price and pack_units else 0
+        med_id = f"m_{uuid.uuid4().hex[:8]}"
+        new_med = Medicine(
+            id=med_id,
+            pharmacy_id=order.pharmacy_id,
+            name=base_name,
+            name_en="",
+            category=(inv.category if inv else None),
+            price=retail_price,
+            description="",
+            manufacturer="",
+            stock_status="in_stock" if units > 0 else "out_of_stock",
+            quantity=units,
+            dosage=(inv.strength if inv else None),
+            strength=(inv.strength if inv else None),
+            requires_prescription=False,
+            alternatives=[],
+        )
+        db.add(new_med)
+        stock_updates.append({
+            "medicine_id": med_id,
+            "name": base_name,
+            "added": units,
+            "total": units,
+            "created": True,
+        })
+    return stock_updates
 
 
 def _enrich_order_items(db: Session, raw_items: list) -> list:
@@ -223,6 +307,11 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
 
 @router.get("/warehouse")
 def list_warehouse_orders(warehouse_id: str = Query(None), pharmacy_id: str = Query(None), current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    role = current_user.get("role")
+    if role == "pharmacy":
+        pharmacy_id = current_user.get("sub")
+    elif role == "warehouse":
+        warehouse_id = current_user.get("sub")
     query = db.query(WarehouseOrder)
     if warehouse_id:
         query = query.filter(WarehouseOrder.warehouse_id == warehouse_id)
@@ -251,10 +340,14 @@ def pharmacy_confirm_warehouse_order(order_id: str, current_user: dict = Depends
         raise HTTPException(404, "الطلب غير موجود")
     if current_user.get("role") == "pharmacy" and current_user.get("sub") != order.pharmacy_id:
         raise HTTPException(403, "هذا الطلب لا يخص صيدليتك")
+    if order.status == "delivered":
+        raise HTTPException(400, "تم تأكيد استلام هذا الطلب مسبقاً")
     if order.status != "shipped":
         raise HTTPException(400, "لا يمكن التأكيد إلا بعد شحن المستودع للطلب")
     now = datetime.now(timezone.utc).isoformat()
+    stock_updates = _apply_warehouse_delivery_to_pharmacy(db, order)
     order.status = "delivered"
+    order.delivery_time = now
     pharmacy = db.query(User).filter(User.id == order.pharmacy_id).first()
     db.add(Notification(
         id=f"ntf_{uuid.uuid4().hex[:8]}",
@@ -268,6 +361,10 @@ def pharmacy_confirm_warehouse_order(order_id: str, current_user: dict = Depends
     db.refresh(order)
     result = model_to_dict(order)
     result["items"] = _enrich_warehouse_order_items(db, result.get("items") or [])
+    result["stock_updates"] = stock_updates
+    wh = db.query(User).filter(User.id == order.warehouse_id).first()
+    if wh:
+        result["warehouse"] = model_to_dict(wh, ["password"])
     return result
 
 @router.post("/warehouse")

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,6 +21,23 @@ const STATUS_LABELS: Record<string, string> = {
     delivered: 'تم الاستلام', cancelled: 'ملغى',
 };
 
+type FilterKey = 'all' | 'active' | 'completed';
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+    { key: 'all', label: 'الكل' },
+    { key: 'active', label: 'نشطة' },
+    { key: 'completed', label: 'مكتملة' },
+];
+
+const ACTIVE_STATUSES = new Set(['pending', 'processing', 'shipped']);
+
+function formatStockMessage(updates: any[]): string {
+    if (!updates?.length) return 'تم تأكيد استلام الشحنة.';
+    const lines = updates.slice(0, 3).map((u: any) => `• ${u.name}: +${u.added} (المجموع ${u.total})`);
+    const extra = updates.length > 3 ? `\n(+${updates.length - 3} أصناف أخرى)` : '';
+    return `تم تأكيد الاستلام وإضافة الأدوية للمخزون:\n${lines.join('\n')}${extra}`;
+}
+
 export default function PharmacyWarehouseOrders() {
     const { user } = useAuth();
     const router = useRouter();
@@ -28,34 +45,101 @@ export default function PharmacyWarehouseOrders() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [filter, setFilter] = useState<FilterKey>('all');
+    const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
     const load = async () => {
         if (!user?.id) return;
         try {
+            setLoadError(null);
             const ords = await api.getPharmacyWarehouseOrders(user.id);
-            setOrders(ords.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || '')));
-        } catch (e) { console.warn(e); }
-        finally { setLoading(false); setRefreshing(false); }
+            setOrders((ords || []).sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || '')));
+        } catch (e: any) {
+            setLoadError(e?.message || 'تعذر تحميل الطلبات');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
     };
 
     useEffect(() => { load(); }, [user]);
 
+    const filteredOrders = useMemo(() => {
+        if (filter === 'active') return orders.filter(o => ACTIVE_STATUSES.has(o.status));
+        if (filter === 'completed') return orders.filter(o => o.status === 'delivered');
+        return orders;
+    }, [orders, filter]);
+
+    const awaitingConfirm = orders.filter(o => o.status === 'shipped').length;
+
     const confirmReceipt = (ord: any) => {
-        Alert.alert('تأكيد الاستلام', `هل استلمت شحنة "${ord.warehouse?.name || 'المستودع'}" بالكامل؟`, [
+        Alert.alert('تأكيد الاستلام', `هل استلمت شحنة "${ord.warehouse?.name || 'المستودع'}" بالكامل؟\n\nسيتم إضافة الكميات إلى مخزون الصيدلية.`, [
             { text: 'ليس بعد', style: 'cancel' },
             {
                 text: 'نعم، استلمت', onPress: async () => {
+                    setConfirmingId(ord.id);
                     try {
-                        await api.confirmPharmacyWarehouseOrder(ord.id);
-                        load();
-                        Alert.alert('✅ تم', 'تم تأكيد استلام الشحنة');
-                    } catch (e: any) { Alert.alert('خطأ', e.message); }
+                        const updated = await api.confirmPharmacyWarehouseOrder(ord.id);
+                        setOrders(prev => {
+                            const next = prev.map(o => o.id === updated.id ? { ...o, ...updated } : o);
+                            if (!next.some(o => o.id === updated.id)) next.unshift(updated);
+                            return next.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+                        });
+                        Alert.alert('✅ تم', formatStockMessage(updated.stock_updates));
+                    } catch (e: any) {
+                        Alert.alert('خطأ', e.message || 'تعذر تأكيد الاستلام');
+                    } finally {
+                        setConfirmingId(null);
+                    }
                 },
             },
         ]);
     };
 
-    const awaitingConfirm = orders.filter(o => o.status === 'shipped').length;
+    const renderOrderCard = (ord: any) => (
+        <View key={ord.id} style={[styles.card, ord.status === 'shipped' && styles.cardHighlight, ord.status === 'delivered' && styles.cardDelivered]}>
+            <View style={styles.cardTop}>
+                <View style={[styles.badge, { backgroundColor: (STATUS_COLORS[ord.status] || C.primary) + '18' }]}>
+                    <Text style={[styles.badgeText, { color: STATUS_COLORS[ord.status] || C.primary }]}>
+                        {STATUS_LABELS[ord.status] || ord.status}
+                    </Text>
+                </View>
+                <Text style={styles.whName}>{ord.warehouse?.name || 'المستودع'}</Text>
+            </View>
+            <Text style={styles.date}>📅 {ord.created_at?.split('T')[0] || 'اليوم'}</Text>
+            {ord.status === 'delivered' && (
+                <View style={styles.deliveredNote}>
+                    <MaterialCommunityIcons name="check-circle" size={16} color={C.success} />
+                    <Text style={styles.deliveredNoteText}>تم الاستلام — الأدوية أُضيفت للمخزون</Text>
+                </View>
+            )}
+            <View style={styles.itemsBox}>
+                {(ord.items || []).map((item: any, i: number) => (
+                    <Text key={i} style={styles.itemLine}>• {item.name || item.item_id} × {item.qty}</Text>
+                ))}
+            </View>
+            <View style={styles.footer}>
+                <Text style={styles.total}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                {ord.status === 'shipped' && (
+                    <TouchableOpacity
+                        style={[styles.confirmBtn, confirmingId === ord.id && { opacity: 0.7 }]}
+                        onPress={() => confirmReceipt(ord)}
+                        disabled={confirmingId === ord.id}
+                    >
+                        {confirmingId === ord.id ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                            <>
+                                <MaterialCommunityIcons name="check-circle" size={18} color="#FFF" />
+                                <Text style={styles.confirmText}>تأكيد الاستلام</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+    );
 
     return (
         <View style={styles.container}>
@@ -76,6 +160,18 @@ export default function PharmacyWarehouseOrders() {
                 </View>
             </LinearGradient>
 
+            <View style={styles.filterRow}>
+                {FILTERS.map(f => (
+                    <TouchableOpacity
+                        key={f.key}
+                        style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+                        onPress={() => setFilter(f.key)}
+                    >
+                        <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
             <ScrollView
                 style={styles.list}
                 contentContainerStyle={{ paddingBottom: bottomPad }}
@@ -83,7 +179,15 @@ export default function PharmacyWarehouseOrders() {
                 showsVerticalScrollIndicator={false}
             >
                 {loading ? <ActivityIndicator color="#EA580C" style={{ marginTop: 40 }} size="large" /> :
-                    orders.length === 0 ? (
+                    loadError ? (
+                        <View style={styles.empty}>
+                            <MaterialCommunityIcons name="alert-circle-outline" size={48} color={C.danger} />
+                            <Text style={styles.emptyText}>{loadError}</Text>
+                            <TouchableOpacity style={styles.orderBtn} onPress={load}>
+                                <Text style={styles.orderBtnText}>إعادة المحاولة</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : orders.length === 0 ? (
                         <View style={styles.empty}>
                             <MaterialCommunityIcons name="truck-outline" size={48} color={C.textSec} />
                             <Text style={styles.emptyText}>لا توجد طلبات من المستودع بعد</Text>
@@ -91,33 +195,24 @@ export default function PharmacyWarehouseOrders() {
                                 <Text style={styles.orderBtnText}>طلب من المستودع</Text>
                             </TouchableOpacity>
                         </View>
-                    ) : orders.map((ord: any) => (
-                        <View key={ord.id} style={[styles.card, ord.status === 'shipped' && styles.cardHighlight]}>
-                            <View style={styles.cardTop}>
-                                <View style={[styles.badge, { backgroundColor: (STATUS_COLORS[ord.status] || C.primary) + '18' }]}>
-                                    <Text style={[styles.badgeText, { color: STATUS_COLORS[ord.status] || C.primary }]}>
-                                        {STATUS_LABELS[ord.status] || ord.status}
-                                    </Text>
-                                </View>
-                                <Text style={styles.whName}>{ord.warehouse?.name || 'المستودع'}</Text>
-                            </View>
-                            <Text style={styles.date}>📅 {ord.created_at?.split('T')[0] || 'اليوم'}</Text>
-                            <View style={styles.itemsBox}>
-                                {(ord.items || []).map((item: any, i: number) => (
-                                    <Text key={i} style={styles.itemLine}>• {item.name || item.item_id} × {item.qty}</Text>
-                                ))}
-                            </View>
-                            <View style={styles.footer}>
-                                <Text style={styles.total}>{(ord.total || 0).toLocaleString()} ل.س</Text>
-                                {ord.status === 'shipped' && (
-                                    <TouchableOpacity style={styles.confirmBtn} onPress={() => confirmReceipt(ord)}>
-                                        <MaterialCommunityIcons name="check-circle" size={18} color="#FFF" />
-                                        <Text style={styles.confirmText}>تأكيد الاستلام</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
+                    ) : filteredOrders.length === 0 ? (
+                        <View style={styles.empty}>
+                            <MaterialCommunityIcons name="filter-outline" size={48} color={C.textSec} />
+                            <Text style={styles.emptyText}>
+                                {filter === 'active' ? 'لا توجد طلبات نشطة' : 'لا توجد طلبات مكتملة بعد'}
+                            </Text>
+                            <TouchableOpacity style={styles.orderBtn} onPress={() => setFilter('all')}>
+                                <Text style={styles.orderBtnText}>عرض كل الطلبات</Text>
+                            </TouchableOpacity>
                         </View>
-                    ))}
+                    ) : (
+                        <>
+                            {filter === 'all' && awaitingConfirm > 0 && (
+                                <Text style={styles.sectionTitle}>بانتظار التأكيد ({awaitingConfirm})</Text>
+                            )}
+                            {filteredOrders.map(renderOrderCard)}
+                        </>
+                    )}
             </ScrollView>
         </View>
     );
@@ -131,22 +226,31 @@ const styles = StyleSheet.create({
     headerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#FFF', textAlign: 'right' },
     headerSub: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.85)', textAlign: 'right', marginTop: 2 },
+    filterRow: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+    filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: C.white, borderWidth: 1, borderColor: C.border },
+    filterChipActive: { backgroundColor: '#EA580C', borderColor: '#EA580C' },
+    filterText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
+    filterTextActive: { color: '#FFF' },
     list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
+    sectionTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: C.purple, textAlign: 'right', marginBottom: 8 },
     empty: { alignItems: 'center', marginTop: 60, gap: 12 },
-    emptyText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: C.textSec },
+    emptyText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'center' },
     orderBtn: { backgroundColor: '#EA580C', borderRadius: 14, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
     orderBtnText: { color: '#FFF', fontFamily: 'Cairo_700Bold', fontSize: 14 },
     card: { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 },
     cardHighlight: { borderWidth: 2, borderColor: C.purple + '40' },
+    cardDelivered: { borderWidth: 1, borderColor: C.success + '30' },
     cardTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     whName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.text },
     badge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
     badgeText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     date: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 8 },
+    deliveredNote: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success + '12', borderRadius: 10, padding: 8, marginBottom: 8 },
+    deliveredNoteText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.success },
     itemsBox: { backgroundColor: C.bg, borderRadius: 12, padding: 10, marginBottom: 10 },
     itemLine: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 2 },
     footer: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
     total: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#EA580C' },
-    confirmBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
+    confirmBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, minWidth: 130, justifyContent: 'center' },
     confirmText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
 });
