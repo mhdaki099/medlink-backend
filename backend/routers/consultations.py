@@ -22,6 +22,129 @@ def _generate_ref_code(prefix: str = "REF") -> str:
     return f"{prefix}-{''.join(random.choices(string.digits + string.ascii_uppercase, k=8))}"
 
 
+def _generate_rx_code() -> str:
+    return "RX-" + "".join(random.choices(string.digits, k=8))
+
+
+def _init_fulfillment_items(medications: list) -> list:
+    items = []
+    for idx, med in enumerate(medications):
+        items.append({
+            "index": idx,
+            "name": med.get("name", ""),
+            "dosage": med.get("dosage", ""),
+            "frequency": med.get("frequency", med.get("duration", "")),
+            "duration": med.get("duration", ""),
+            "status": "pending",
+            "dispensed_at": None,
+            "substitution": None,
+            "unavailable_reason": None,
+        })
+    return items
+
+
+def _create_service_request(db: Session, report, doctor_id: str, patient_id: str, item: dict, now):
+    request_type = item.get("request_type", "lab")
+    if request_type not in ("lab", "radiology"):
+        return None
+    prefix = "LAB" if request_type == "lab" else "RAD"
+    ref_code = _generate_ref_code(prefix)
+    sr = ServiceRequest(
+        id=f"sr_{uuid.uuid4().hex[:8]}",
+        consultation_report_id=report.id,
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        request_type=request_type,
+        service_name=item.get("service_name", ""),
+        reference_code=ref_code,
+        notes=item.get("notes", ""),
+        status="pending",
+        created_at=now.isoformat(),
+    )
+    db.add(sr)
+    doctor = db.query(User).filter(User.id == doctor_id).first()
+    db.add(Notification(
+        id=f"ntf_{uuid.uuid4().hex[:8]}",
+        user_id=patient_id,
+        title=f"طلب {'تحليل' if request_type == 'lab' else 'أشعة'} جديد",
+        message=f"أصدر الدكتور {doctor.name if doctor else ''} طلب {item.get('service_name', '')}. رمز الطلب: {ref_code}",
+        type="service_request",
+        created_at=now.isoformat(),
+    ))
+    return sr
+
+
+def _create_prescription_for_appointment(
+    db: Session,
+    appointment_id: str,
+    doctor_id: str,
+    patient_id: str,
+    medications: list,
+    notes: str,
+    now,
+):
+    valid = [m for m in medications if (m.get("name") or "").strip()]
+    if not valid:
+        return None
+    existing = db.query(Prescription).filter(Prescription.appointment_id == appointment_id).first()
+    if existing:
+        existing.medications = valid
+        existing.fulfillment_items = _init_fulfillment_items(valid)
+        existing.notes = notes or existing.notes
+        return existing
+    code = _generate_rx_code()
+    while db.query(Prescription).filter(Prescription.prescription_code == code).first():
+        code = _generate_rx_code()
+    presc = Prescription(
+        id=f"pre_{uuid.uuid4().hex[:8]}",
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        appointment_id=appointment_id,
+        prescription_code=code,
+        medications=valid,
+        fulfillment_items=_init_fulfillment_items(valid),
+        notes=notes or "",
+        status="pending",
+        is_dispensed=False,
+        created_at=now.isoformat(),
+    )
+    db.add(presc)
+    doctor = db.query(User).filter(User.id == doctor_id).first()
+    db.add(MedicalRecord(
+        id=f"rec_{uuid.uuid4().hex[:8]}",
+        patient_id=patient_id,
+        uploaded_by=doctor.name if doctor else "Doctor",
+        type="prescription",
+        title=f"وصفة طبية - د. {doctor.name if doctor else ''}",
+        content=str(valid),
+        date=now.strftime("%Y-%m-%d"),
+        created_at=now.isoformat(),
+    ))
+    db.add(Notification(
+        id=f"ntf_{uuid.uuid4().hex[:8]}",
+        user_id=patient_id,
+        title="وصفة طبية جديدة",
+        message=f"وصفة جديدة من د. {doctor.name if doctor else ''}. رمز الوصفة: {code}",
+        type="prescription",
+        created_at=now.isoformat(),
+    ))
+    return presc
+
+
+def _report_payload(db: Session, report: ConsultationReport) -> dict:
+    result = model_to_dict(report)
+    requests = db.query(ServiceRequest).filter(
+        ServiceRequest.consultation_report_id == report.id
+    ).all()
+    result["service_requests"] = [model_to_dict(r) for r in requests]
+    presc = db.query(Prescription).filter(
+        Prescription.appointment_id == report.appointment_id
+    ).first()
+    if presc:
+        result["prescription"] = model_to_dict(presc)
+    return result
+
+
 @router.post("")
 def create_consultation_report(data: dict, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
     """Create a consultation report after ending a session."""
@@ -102,9 +225,24 @@ def create_consultation_report(data: dict, current_user: dict = Depends(require_
             created_at=now.isoformat(),
         ))
 
+    medications = data.get("medications") or []
+    prescription_notes = data.get("prescription_notes") or ""
+    service_items = data.get("service_requests") or []
+
+    presc = _create_prescription_for_appointment(
+        db, appointment_id, doctor_id, patient_id, medications, prescription_notes, now
+    )
+    for item in service_items:
+        if (item.get("service_name") or "").strip():
+            _create_service_request(db, report, doctor_id, patient_id, item, now)
+
     db.commit()
     db.refresh(report)
-    return model_to_dict(report)
+    result = _report_payload(db, report)
+    if presc:
+        db.refresh(presc)
+        result["prescription"] = model_to_dict(presc)
+    return result
 
 
 @router.get("/appointment/{appointment_id}")
@@ -112,11 +250,7 @@ def get_report_by_appointment(appointment_id: str, current_user: dict = Depends(
     report = db.query(ConsultationReport).filter(ConsultationReport.appointment_id == appointment_id).first()
     if not report:
         return None
-    result = model_to_dict(report)
-    # Attach service requests
-    requests = db.query(ServiceRequest).filter(ServiceRequest.consultation_report_id == report.id).all()
-    result["service_requests"] = [model_to_dict(r) for r in requests]
-    return result
+    return _report_payload(db, report)
 
 
 @router.get("/patient/{patient_id}")

@@ -90,6 +90,7 @@ def ensure_sqlite_columns():
             "record_owner": "TEXT DEFAULT 'self'",
         },
         "prescriptions": {
+            "appointment_id": "TEXT",
             "prescription_code": "TEXT",
             "status": "TEXT DEFAULT 'pending'",
             "pharmacy_id": "TEXT",

@@ -293,6 +293,7 @@ class Prescription(Base):
     id = Column(String, primary_key=True, index=True)
     doctor_id = Column(String, ForeignKey("users.id"))
     patient_id = Column(String, ForeignKey("users.id"))
+    appointment_id = Column(String, ForeignKey("appointments.id"), nullable=True)
     pharmacy_id = Column(String, ForeignKey("users.id"), nullable=True)
     prescription_code = Column(String, unique=True, index=True, nullable=True)
     medications = Column(JSON)
