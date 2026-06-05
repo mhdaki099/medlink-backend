@@ -43,8 +43,8 @@ export default function WarehouseDashboard() {
     const pendingOrders = orders.filter((o: any) => o.status === 'pending').length;
     const lowStock = inventory.filter((i: any) => i.stock < i.min_order * 2).length;
 
-    const STATUS_COLORS: Record<string, string> = { pending: Colors.warning, processing: Colors.primary, delivered: Colors.confirmed, cancelled: Colors.danger };
-    const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'جاري التوصيل', delivered: 'تم', cancelled: 'ملغى' };
+    const STATUS_COLORS: Record<string, string> = { pending: Colors.warning, processing: Colors.primary, shipped: '#8B5CF6', delivered: Colors.confirmed, cancelled: Colors.danger };
+    const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'قيد التجهيز', shipped: 'تم الشحن', delivered: 'مُستلم', cancelled: 'ملغى' };
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}
@@ -130,7 +130,10 @@ export default function WarehouseDashboard() {
                                 </View>
                             )}
                             {ord.status === 'processing' && (
-                                <TouchableOpacity style={styles.deliveredBtn} onPress={() => updateOrderStatus(ord.id, 'delivered')}><Text style={styles.deliveredText}>✅ تأكيد الاستلام</Text></TouchableOpacity>
+                                <TouchableOpacity style={styles.deliveredBtn} onPress={() => updateOrderStatus(ord.id, 'shipped')}><Text style={styles.deliveredText}>🚚 تم الشحن للصيدلية</Text></TouchableOpacity>
+                            )}
+                            {ord.status === 'shipped' && (
+                                <Text style={styles.waitingText}>بانتظار تأكيد الصيدلية</Text>
                             )}
                         </View>
                     ))}
@@ -180,4 +183,5 @@ const styles = StyleSheet.create({
     acceptText: { color: '#fff', fontFamily: 'Cairo_700Bold', fontSize: 13 },
     deliveredBtn: { backgroundColor: '#D1FAE5', borderRadius: 14, padding: 12, alignItems: 'center' },
     deliveredText: { color: '#10B981', fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    waitingText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#6B7280', textAlign: 'center', marginTop: 4 },
 });

@@ -13,7 +13,7 @@ const TABS = [
   { name: 'profile', icon: 'account', label: 'البروفايل', path: '/(pharmacy)/profile' },
 ];
 
-const HIDE_TAB_BAR_ROUTES = new Set(['medicines', 'prescriptions', 'warehouse']);
+const HIDE_TAB_BAR_ROUTES = new Set(['medicines', 'prescriptions', 'warehouse', 'warehouse-orders']);
 
 const TAB_WIDTH = width / 3;
 const TAB_BAR_BASE_HEIGHT = PROVIDER_TAB_BAR_BASE_HEIGHT;
@@ -101,6 +101,7 @@ export default function PharmacyLayout() {
       <Tabs.Screen name="medicines" options={{ href: null }} />
       <Tabs.Screen name="prescriptions" options={{ href: null }} />
       <Tabs.Screen name="warehouse" options={{ href: null }} />
+      <Tabs.Screen name="warehouse-orders" options={{ href: null }} />
     </Tabs>
   );
 }

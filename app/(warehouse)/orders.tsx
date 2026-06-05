@@ -10,9 +10,9 @@ const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', blue: '#3B82F6',
     bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
 };
-const STATUS_COLORS: Record<string, string> = { pending: C.warning, processing: C.blue, delivered: C.success, cancelled: C.danger };
-const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'جاري الشحن', delivered: 'تم التسليم', cancelled: 'ملغى' };
-const STATUS_ICONS: Record<string, string> = { pending: 'clock-outline', processing: 'truck-fast-outline', delivered: 'check-circle-outline', cancelled: 'close-circle-outline' };
+const STATUS_COLORS: Record<string, string> = { pending: C.warning, processing: C.blue, shipped: '#8B5CF6', delivered: C.success, cancelled: C.danger };
+const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'قيد التجهيز', shipped: 'تم الشحن', delivered: 'استلمته الصيدلية', cancelled: 'ملغى' };
+const STATUS_ICONS: Record<string, string> = { pending: 'clock-outline', processing: 'package-variant', shipped: 'truck-fast-outline', delivered: 'check-circle-outline', cancelled: 'close-circle-outline' };
 
 export default function WarehouseOrders() {
     const { user } = useAuth();
@@ -39,8 +39,9 @@ export default function WarehouseOrders() {
     const FILTERS = [
         { key: 'all', label: 'الكل', count: orders.length },
         { key: 'pending', label: 'جديدة', count: orders.filter(o => o.status === 'pending').length },
-        { key: 'processing', label: 'جاري', count: orders.filter(o => o.status === 'processing').length },
-        { key: 'delivered', label: 'تم', count: orders.filter(o => o.status === 'delivered').length },
+        { key: 'processing', label: 'تجهيز', count: orders.filter(o => o.status === 'processing').length },
+        { key: 'shipped', label: 'شُحن', count: orders.filter(o => o.status === 'shipped').length },
+        { key: 'delivered', label: 'مُستلم', count: orders.filter(o => o.status === 'delivered').length },
     ];
 
     return (
@@ -112,16 +113,19 @@ export default function WarehouseOrders() {
                                             <MaterialCommunityIcons name="close" size={16} color={C.danger} />
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.acceptBtn} onPress={() => update(ord.id, 'processing')}>
-                                            <MaterialCommunityIcons name="truck-fast-outline" size={16} color="#FFF" />
-                                            <Text style={styles.acceptText}>شحن</Text>
+                                            <MaterialCommunityIcons name="package-variant" size={16} color="#FFF" />
+                                            <Text style={styles.acceptText}>قبول وتجهيز</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
                                 {ord.status === 'processing' && (
-                                    <TouchableOpacity style={styles.deliveredBtn} onPress={() => update(ord.id, 'delivered')}>
-                                        <MaterialCommunityIcons name="check-all" size={16} color={C.success} />
-                                        <Text style={styles.deliveredText}>تأكيد التسليم</Text>
+                                    <TouchableOpacity style={styles.deliveredBtn} onPress={() => update(ord.id, 'shipped')}>
+                                        <MaterialCommunityIcons name="truck-fast-outline" size={16} color="#8B5CF6" />
+                                        <Text style={[styles.deliveredText, { color: '#8B5CF6' }]}>تم الشحن للصيدلية</Text>
                                     </TouchableOpacity>
+                                )}
+                                {ord.status === 'shipped' && (
+                                    <Text style={styles.waitingText}>بانتظار تأكيد الصيدلية</Text>
                                 )}
                             </View>
                         </View>
@@ -165,4 +169,5 @@ const styles = StyleSheet.create({
     acceptText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
     deliveredBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.success + '12', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     deliveredText: { color: C.success, fontSize: 13, fontFamily: 'Cairo_700Bold' },
+    waitingText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
 });

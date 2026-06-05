@@ -283,6 +283,8 @@ class ApiClient {
         return this.put<any>(`/warehouses/orders/${id}/status`, { status, delivery_time: deliveryTime });
     }
     createWarehouseOrder(data: any) { return this.post<any>('/orders/warehouse', data); }
+    getPharmacyWarehouseOrders(pharmacyId: string) { return this.get<any[]>(`/orders/warehouse?pharmacy_id=${pharmacyId}`); }
+    confirmPharmacyWarehouseOrder(orderId: string) { return this.put<any>(`/orders/warehouse/${orderId}/confirm`, {}); }
 
     // ── Appointments ─────────────────────────────────────────────────────────
     getAppointments(params: { patient_id?: string; doctor_id?: string; status?: string } = {}) {

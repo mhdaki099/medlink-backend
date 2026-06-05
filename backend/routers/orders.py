@@ -233,10 +233,42 @@ def list_warehouse_orders(warehouse_id: str = Query(None), pharmacy_id: str = Qu
         odict = model_to_dict(wo)
         odict["items"] = _enrich_warehouse_order_items(db, odict.get("items") or [])
         ph = db.query(User).filter(User.id == wo.pharmacy_id).first()
+        wh = db.query(User).filter(User.id == wo.warehouse_id).first()
         if ph:
             odict["pharmacy"] = model_to_dict(ph, ["password"])
+        if wh:
+            odict["warehouse"] = model_to_dict(wh, ["password"])
         results.append(odict)
     return results
+
+
+@router.put("/warehouse/{order_id}/confirm")
+def pharmacy_confirm_warehouse_order(order_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.get("role") not in ("pharmacy", "admin"):
+        raise HTTPException(403, "تأكيد الاستلام للصيدلية فقط")
+    order = db.query(WarehouseOrder).filter(WarehouseOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "الطلب غير موجود")
+    if current_user.get("role") == "pharmacy" and current_user.get("sub") != order.pharmacy_id:
+        raise HTTPException(403, "هذا الطلب لا يخص صيدليتك")
+    if order.status != "shipped":
+        raise HTTPException(400, "لا يمكن التأكيد إلا بعد شحن المستودع للطلب")
+    now = datetime.now(timezone.utc).isoformat()
+    order.status = "delivered"
+    pharmacy = db.query(User).filter(User.id == order.pharmacy_id).first()
+    db.add(Notification(
+        id=f"ntf_{uuid.uuid4().hex[:8]}",
+        user_id=order.warehouse_id,
+        title="تم استلام الشحنة ✅",
+        message=f"أكدت {pharmacy.name if pharmacy else 'الصيدلية'} استلام الطلب",
+        type="warehouse_order",
+        created_at=now,
+    ))
+    db.commit()
+    db.refresh(order)
+    result = model_to_dict(order)
+    result["items"] = _enrich_warehouse_order_items(db, result.get("items") or [])
+    return result
 
 @router.post("/warehouse")
 def create_warehouse_order(order: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):

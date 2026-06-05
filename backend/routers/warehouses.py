@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import uuid
 
 from db import get_db
-from models import User, WarehouseInventory, WarehouseOrder
+from models import User, WarehouseInventory, WarehouseOrder, Notification
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict
 
@@ -38,9 +38,34 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
     order = db.query(WarehouseOrder).filter(WarehouseOrder.id == order_id).first()
     if not order:
         raise HTTPException(404, "الطلب غير موجود")
-    order.status = status_update.get("status", order.status)
+    if current_user.get("role") == "warehouse" and current_user.get("sub") != order.warehouse_id:
+        raise HTTPException(403, "غير مصرح لك بتحديث هذا الطلب")
+    new_status = status_update.get("status", order.status)
+    if new_status == "delivered":
+        raise HTTPException(403, "تأكيد الاستلام يتم من الصيدلية فقط")
+    allowed = {"processing", "shipped", "cancelled"}
+    if new_status not in allowed:
+        raise HTTPException(400, "حالة غير صالحة للمستودع")
+    if new_status == "processing" and order.status not in ("pending",):
+        raise HTTPException(400, "لا يمكن قبول هذا الطلب")
+    if new_status == "shipped" and order.status not in ("processing",):
+        raise HTTPException(400, "يجب تجهيز الطلب قبل الشحن")
+    if new_status == "cancelled" and order.status not in ("pending", "processing"):
+        raise HTTPException(400, "لا يمكن إلغاء هذا الطلب")
+    now = datetime.now(timezone.utc).isoformat()
+    order.status = new_status
     if "delivery_time" in status_update:
         order.delivery_time = status_update["delivery_time"]
+    if new_status == "shipped":
+        pharmacy = db.query(User).filter(User.id == order.pharmacy_id).first()
+        db.add(Notification(
+            id=f"ntf_{uuid.uuid4().hex[:8]}",
+            user_id=order.pharmacy_id,
+            title="شحنة من المستودع 🚚",
+            message=f"تم شحن طلبك من المستودع — يرجى تأكيد الاستلام عند الوصول",
+            type="warehouse_order",
+            created_at=now,
+        ))
     db.commit(); db.refresh(order)
     return model_to_dict(order)
 

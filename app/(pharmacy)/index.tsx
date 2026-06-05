@@ -126,6 +126,12 @@ export default function PharmacyDashboard() {
                 </TouchableOpacity>
             </View>
 
+            <TouchableOpacity style={styles.whOrdersBtn} onPress={() => router.push('/(pharmacy)/warehouse-orders' as any)}>
+                <MaterialCommunityIcons name="truck-delivery-outline" size={22} color="#EA580C" />
+                <Text style={styles.whOrdersText}>طلباتي من المستودع — تأكيد الاستلام</Text>
+                <MaterialCommunityIcons name="chevron-left" size={20} color="#EA580C" />
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.rxBtn} onPress={() => router.push('/(pharmacy)/prescriptions' as any)}>
                 <LinearGradient colors={[C.accent, C.primary]} style={styles.rxBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                     <MaterialCommunityIcons name="file-document-outline" size={24} color="#FFF" />
@@ -275,7 +281,9 @@ const styles = StyleSheet.create({
     quickIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
     quickTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: C.text, textAlign: 'center' },
     quickSub: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'center', marginTop: 2 },
-    rxBtn: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, overflow: 'hidden' },
+    whOrdersBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, marginTop: 12, backgroundColor: C.white, borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#EA580C30', gap: 8 },
+    whOrdersText: { flex: 1, fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#EA580C', textAlign: 'right' },
+    rxBtn: { marginHorizontal: 16, marginTop: 10, borderRadius: 16, overflow: 'hidden' },
     rxBtnGrad: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
     rxBtnText: { fontFamily: 'Cairo_700Bold', fontSize: 15, color: '#FFF' },
 });

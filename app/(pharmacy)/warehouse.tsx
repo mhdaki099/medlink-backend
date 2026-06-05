@@ -62,7 +62,10 @@ export default function PharmacyWarehouse() {
         try {
             await api.createWarehouseOrder({ pharmacy_id: user.id, warehouse_id: selectedWh, items, total });
             setCart({});
-            Alert.alert('✅ تم الطلب!', 'تم إرسال الطلب للمستودع بنجاح');
+            Alert.alert('✅ تم الطلب!', 'تم إرسال الطلب للمستودع — ستؤكد الاستلام عند وصول الشحنة', [
+                { text: 'متابعة', style: 'cancel' },
+                { text: 'طلباتي', onPress: () => router.push('/(pharmacy)/warehouse-orders' as any) },
+            ]);
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
@@ -74,6 +77,9 @@ export default function PharmacyWarehouse() {
                 <View style={styles.headerRow}>
                     <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
                         <MaterialCommunityIcons name="arrow-right" size={22} color="#FFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(pharmacy)/warehouse-orders' as any)}>
+                        <MaterialCommunityIcons name="truck-delivery" size={20} color="#FFF" />
                     </TouchableOpacity>
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
                         <Text style={styles.headerTitle}>الطلب من المستودع</Text>
