@@ -154,6 +154,14 @@ def get_medicine(medicine_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "الدواء غير موجود")
     return model_to_dict(med)
 
+def _sync_medicine_stock_status(med: Medicine) -> None:
+    qty = med.quantity or 0
+    if qty <= 0:
+        med.stock_status = "out_of_stock"
+    elif med.stock_status == "out_of_stock":
+        med.stock_status = "in_stock"
+
+
 @router.put("/medicines/{medicine_id}")
 def update_medicine(medicine_id: str, updates: dict, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
     med = db.query(Medicine).filter(Medicine.id == medicine_id).first()
@@ -164,6 +172,28 @@ def update_medicine(medicine_id: str, updates: dict, current_user: dict = Depend
     for key, value in updates.items():
         if hasattr(med, key):
             setattr(med, key, value)
+    if "quantity" in updates:
+        med.quantity = max(0, int(med.quantity or 0))
+        _sync_medicine_stock_status(med)
+    db.commit(); db.refresh(med)
+    return model_to_dict(med)
+
+
+@router.post("/medicines/{medicine_id}/stock-adjust")
+def adjust_medicine_stock(medicine_id: str, body: dict, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
+    med = db.query(Medicine).filter(Medicine.id == medicine_id).first()
+    if not med:
+        raise HTTPException(404, "الدواء غير موجود")
+    if current_user.get("role") == "pharmacy" and current_user.get("sub") != med.pharmacy_id:
+        raise HTTPException(403, "غير مصرح لك بتعديل مخزون هذا الدواء")
+    if "quantity" in body:
+        med.quantity = max(0, int(body.get("quantity") or 0))
+    else:
+        delta = int(body.get("delta") or 0)
+        if delta == 0:
+            raise HTTPException(400, "أدخل كمية للتعديل")
+        med.quantity = max(0, (med.quantity or 0) + delta)
+    _sync_medicine_stock_status(med)
     db.commit(); db.refresh(med)
     return model_to_dict(med)
 
@@ -198,6 +228,8 @@ def add_medicine(medicine: dict, current_user: dict = Depends(require_role("phar
         side_effects=medicine.get("side_effects"),
         warnings=medicine.get("warnings"),
     )
+    new_med.quantity = max(0, int(new_med.quantity or 0))
+    _sync_medicine_stock_status(new_med)
     db.add(new_med); db.commit(); db.refresh(new_med)
     return model_to_dict(new_med)
 
@@ -227,6 +259,8 @@ async def bulk_upload_medicines(pharmacy_id: str = Query(...), file: UploadFile 
             side_effects=str(data.get("side_effects", "") or ""),
             warnings=str(data.get("warnings", "") or ""),
         )
+        med.quantity = max(0, int(med.quantity or 0))
+        _sync_medicine_stock_status(med)
         db.add(med); added += 1
     db.commit()
     return {"message": f"تم إضافة {added} دواء بنجاح", "count": added}

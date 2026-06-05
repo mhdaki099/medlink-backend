@@ -54,11 +54,13 @@ export default function PharmacyDashboard() {
         processing: orders.filter((o: any) => ['processing', 'preparing'].includes(o.status)).length,
         delivered: orders.filter((o: any) => o.status === 'delivered').length,
     };
-    const listedMeds = medicines.filter((m: any) => m.stock_status !== 'out_of_stock').length;
+    const listedMeds = medicines.filter((m: any) => m.stock_status !== 'out_of_stock' && (m.quantity || 0) > 0).length;
+    const totalStock = medicines.reduce((s: number, m: any) => s + (m.quantity || 0), 0);
 
     const STATS = [
         { label: 'أدوية معروضة', val: listedMeds, icon: 'pill', color: C.success },
         { label: 'إجمالي الأدوية', val: medicines.length, icon: 'format-list-bulleted', color: C.accent },
+        { label: 'وحدات المخزون', val: totalStock, icon: 'package-variant', color: C.blue },
         { label: 'طلبات جديدة', val: counts.pending, icon: 'bell-ring-outline', color: C.primary },
         { label: 'قيد التجهيز', val: counts.processing, icon: 'package-variant', color: C.blue },
         { label: 'تم التسليم', val: counts.delivered, icon: 'check-circle-outline', color: C.success },

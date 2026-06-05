@@ -20,6 +20,7 @@ type MedForm = {
     name: string;
     category: string;
     price: string;
+    quantity: string;
     description: string;
     dosage: string;
     manufacturer: string;
@@ -28,7 +29,7 @@ type MedForm = {
 };
 
 const EMPTY_FORM: MedForm = {
-    name: '', category: '', price: '', description: '', dosage: '', manufacturer: '',
+    name: '', category: '', price: '', quantity: '0', description: '', dosage: '', manufacturer: '',
     available: true, requires_prescription: false,
 };
 
@@ -43,6 +44,7 @@ export default function PharmacyMedicines() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [form, setForm] = useState<MedForm>(EMPTY_FORM);
+    const [stockModal, setStockModal] = useState<{ id: string; name: string; qty: string } | null>(null);
 
     const load = async () => {
         if (!user?.id) return;
@@ -75,14 +77,16 @@ export default function PharmacyMedicines() {
 
     const saveMedicine = async () => {
         if (!form.name || !form.price) { Alert.alert('تنبيه', 'أدخل اسم الدواء والسعر'); return; }
+        const qty = Math.max(0, parseInt(form.quantity) || 0);
         const payload = {
             name: form.name,
             category: form.category || null,
             price: parseInt(form.price) || 0,
+            quantity: qty,
             description: form.description || null,
             dosage: form.dosage || null,
             manufacturer: form.manufacturer || null,
-            stock_status: form.available ? 'in_stock' : 'out_of_stock',
+            stock_status: form.available && qty > 0 ? 'in_stock' : 'out_of_stock',
             requires_prescription: form.requires_prescription,
         };
         try {
@@ -108,6 +112,23 @@ export default function PharmacyMedicines() {
                 },
             },
         ]);
+    };
+
+    const adjustStock = async (medId: string, delta: number) => {
+        try {
+            await api.adjustMedicineStock(medId, delta);
+            load();
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
+
+    const saveStockQuantity = async () => {
+        if (!stockModal) return;
+        const qty = Math.max(0, parseInt(stockModal.qty) || 0);
+        try {
+            await api.setMedicineQuantity(stockModal.id, qty);
+            setStockModal(null);
+            load();
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
     const uploadExcel = async () => {
@@ -190,6 +211,24 @@ export default function PharmacyMedicines() {
                             {med.manufacturer ? <Text style={styles.medMeta}>الشركة: {med.manufacturer}</Text> : null}
                             {med.description ? <Text style={styles.medDesc} numberOfLines={2}>{med.description}</Text> : null}
 
+                            <View style={styles.stockRow}>
+                                <Text style={styles.stockLabel}>المخزون</Text>
+                                <View style={styles.stockControls}>
+                                    <TouchableOpacity style={styles.stockBtn} onPress={() => adjustStock(med.id, -1)}>
+                                        <MaterialCommunityIcons name="minus" size={18} color={C.danger} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setStockModal({ id: med.id, name: med.name, qty: String(med.quantity || 0) })}>
+                                        <Text style={[styles.stockQty, (med.quantity || 0) <= 0 && { color: C.danger }]}>{med.quantity || 0}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.stockBtn} onPress={() => adjustStock(med.id, 1)}>
+                                        <MaterialCommunityIcons name="plus" size={18} color={C.success} />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.stockSetBtn} onPress={() => setStockModal({ id: med.id, name: med.name, qty: String(med.quantity || 0) })}>
+                                        <Text style={styles.stockSetText}>تعيين</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
                             <View style={styles.medFooter}>
                                 <View style={styles.tagsRow}>
                                     {med.requires_prescription && (
@@ -198,9 +237,9 @@ export default function PharmacyMedicines() {
                                             <Text style={styles.rxTagText}>يتطلب وصفة</Text>
                                         </View>
                                     )}
-                                    <View style={[styles.availTag, { backgroundColor: (med.stock_status === 'out_of_stock' ? C.danger : C.success) + '15' }]}>
-                                        <Text style={[styles.availTagText, { color: med.stock_status === 'out_of_stock' ? C.danger : C.success }]}>
-                                            {med.stock_status === 'out_of_stock' ? 'غير معروض' : 'معروض للمرضى'}
+                                    <View style={[styles.availTag, { backgroundColor: ((med.quantity || 0) > 0 && med.stock_status !== 'out_of_stock' ? C.success : C.danger) + '15' }]}>
+                                        <Text style={[styles.availTagText, { color: (med.quantity || 0) > 0 && med.stock_status !== 'out_of_stock' ? C.success : C.danger }]}>
+                                            {(med.quantity || 0) > 0 && med.stock_status !== 'out_of_stock' ? 'معروض للمرضى' : 'نفد المخزون'}
                                         </Text>
                                     </View>
                                 </View>
@@ -221,6 +260,7 @@ export default function PharmacyMedicines() {
                                 { field: 'name', label: 'اسم الدواء *', placeholder: 'باراسيتامول 500mg', icon: 'pill' },
                                 { field: 'category', label: 'التصنيف', placeholder: 'مسكنات', icon: 'tag-outline' },
                                 { field: 'price', label: 'سعر البيع (ل.س) *', placeholder: '5000', icon: 'cash' },
+                                { field: 'quantity', label: 'الكمية في المخزون', placeholder: '200', icon: 'package-variant' },
                                 { field: 'dosage', label: 'الجرعة', placeholder: '500mg — قرص كل 8 ساعات', icon: 'medical-bag' },
                                 { field: 'manufacturer', label: 'الشركة المصنّعة', placeholder: 'شركة دواء سورية', icon: 'factory' },
                                 { field: 'description', label: 'الوصف', placeholder: 'وصف الدواء للمريض...', icon: 'text', multiline: true },
@@ -236,7 +276,7 @@ export default function PharmacyMedicines() {
                                             onChangeText={v => setForm(f => ({ ...f, [field]: v }))}
                                             textAlign="right"
                                             multiline={multiline}
-                                            keyboardType={field === 'price' ? 'numeric' : 'default'}
+                                            keyboardType={field === 'price' || field === 'quantity' ? 'numeric' : 'default'}
                                             placeholderTextColor={C.textMuted}
                                         />
                                     </View>
@@ -268,6 +308,38 @@ export default function PharmacyMedicines() {
                     </ScrollView>
                 </View>
             </Modal>
+
+            <Modal visible={!!stockModal} transparent animationType="fade">
+                <View style={styles.overlay}>
+                    <View style={[styles.modal, { marginHorizontal: 24, borderRadius: 20 }]}>
+                        <Text style={styles.modalTitle}>تعيين المخزون</Text>
+                        <Text style={styles.stockModalName}>{stockModal?.name}</Text>
+                        <Text style={styles.fieldLabel}>الكمية الحالية</Text>
+                        <View style={styles.inputWrap}>
+                            <MaterialCommunityIcons name="package-variant" size={18} color={C.textMuted} style={{ marginLeft: 8 }} />
+                            <TextInput
+                                style={styles.input}
+                                value={stockModal?.qty || ''}
+                                onChangeText={v => stockModal && setStockModal({ ...stockModal, qty: v })}
+                                keyboardType="numeric"
+                                textAlign="right"
+                                placeholder="212"
+                                placeholderTextColor={C.textMuted}
+                            />
+                        </View>
+                        <View style={styles.modalBtns}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setStockModal(null)}>
+                                <Text style={styles.cancelBtnText}>إلغاء</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.saveBtn} onPress={saveStockQuantity}>
+                                <LinearGradient colors={[C.primary, C.accent]} style={styles.saveBtnGrad}>
+                                    <Text style={styles.saveBtnText}>حفظ</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -297,6 +369,14 @@ const styles = StyleSheet.create({
     medCat: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.primary, textAlign: 'right', marginBottom: 4 },
     medMeta: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 2 },
     medDesc: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 6, lineHeight: 18 },
+    stockRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.bg, borderRadius: 12, padding: 10, marginBottom: 8 },
+    stockLabel: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: C.text },
+    stockControls: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+    stockBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.white, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border },
+    stockQty: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: C.primary, minWidth: 48, textAlign: 'center' },
+    stockSetBtn: { backgroundColor: C.primary + '12', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+    stockSetText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: C.primary },
+    stockModalName: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: C.textSec, textAlign: 'center', marginBottom: 12 },
     medFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.border },
     medPrice: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.primary },
     medActions: { flexDirection: 'row', gap: 6 },

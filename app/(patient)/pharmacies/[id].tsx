@@ -104,8 +104,8 @@ export default function PharmacyProfileScreen() {
                         </View>
                     ) : (
                         medicines.map((med, idx) => {
-                            const isListed = med.stock_status === 'in_stock';
-                            const statusLabel = med.stock_status === 'coming_soon' ? 'قريباً' : isListed ? 'متوفر' : 'غير متوفر';
+                            const isListed = med.stock_status === 'in_stock' && (med.quantity || 0) > 0;
+                            const statusLabel = med.stock_status === 'coming_soon' ? 'قريباً' : isListed ? 'متوفر' : 'نَفِد';
                             return (
                             <View key={med.id || idx} style={styles.medCard}>
                                 <View style={styles.medImageWrap}>

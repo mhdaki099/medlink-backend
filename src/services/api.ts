@@ -192,6 +192,8 @@ class ApiClient {
     }
     addMedicine(data: any) { return this.post<any>('/pharmacies/medicines', data); }
     updateMedicine(id: string, data: any) { return this.put<any>(`/pharmacies/medicines/${id}`, data); }
+    adjustMedicineStock(id: string, delta: number) { return this.post<any>(`/pharmacies/medicines/${id}/stock-adjust`, { delta }); }
+    setMedicineQuantity(id: string, quantity: number) { return this.post<any>(`/pharmacies/medicines/${id}/stock-adjust`, { quantity }); }
     deleteMedicine(id: string) { return this.delete<any>(`/pharmacies/medicines/${id}`); }
     async uploadMedicineExcel(pharmacyId: string, asset: { uri: string; name?: string }) {
         const formData = new FormData();

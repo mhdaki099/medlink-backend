@@ -28,6 +28,46 @@ def _enrich_warehouse_order_items(db: Session, raw_items: list) -> list:
     return enriched
 
 
+def _order_item_qty(item: dict) -> int:
+    return max(1, int(item.get("qty") or item.get("quantity") or 1))
+
+
+def _sync_medicine_stock_status(med: Medicine) -> None:
+    qty = med.quantity or 0
+    if qty <= 0:
+        med.stock_status = "out_of_stock"
+    elif med.stock_status == "out_of_stock":
+        med.stock_status = "in_stock"
+
+
+def _deduct_pharmacy_stock(db: Session, items: list, pharmacy_id: str) -> None:
+    for item in items or []:
+        med_id = item.get("medicine_id")
+        if not med_id:
+            continue
+        med = db.query(Medicine).filter(Medicine.id == med_id).first()
+        if not med or med.pharmacy_id != pharmacy_id:
+            continue
+        qty = _order_item_qty(item)
+        available = med.quantity or 0
+        if available < qty:
+            raise HTTPException(400, f"الكمية غير كافية للدواء {med.name} (متوفر: {available})")
+        med.quantity = available - qty
+        _sync_medicine_stock_status(med)
+
+
+def _restore_pharmacy_stock(db: Session, items: list, pharmacy_id: str) -> None:
+    for item in items or []:
+        med_id = item.get("medicine_id")
+        if not med_id:
+            continue
+        med = db.query(Medicine).filter(Medicine.id == med_id).first()
+        if not med or med.pharmacy_id != pharmacy_id:
+            continue
+        med.quantity = (med.quantity or 0) + _order_item_qty(item)
+        _sync_medicine_stock_status(med)
+
+
 def _enrich_order_items(db: Session, raw_items: list) -> list:
     enriched = []
     for item in raw_items or []:
@@ -138,6 +178,7 @@ def create_order(order: dict, current_user: dict = Depends(get_current_user), db
         created_at=now,
         delivered_at=None,
     )
+    _deduct_pharmacy_stock(db, stored_items, pharmacy_id)
     db.add(new_order)
     if new_order.patient_id:
         db.add(AuditLog(id=f"al_{uuid.uuid4().hex[:8]}", user_id=new_order.patient_id, action="order_medicine", details="طلب أدوية جديد", timestamp=now))
@@ -167,7 +208,10 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
     if not order:
         raise HTTPException(404, "الطلب غير موجود")
     aliases = {"pending": "pending_confirmation", "processing": "preparing"}
+    old_status = order.status
     new_status = aliases.get(status_update.get("status", order.status), status_update.get("status", order.status))
+    if new_status == "cancelled" and old_status != "cancelled":
+        _restore_pharmacy_stock(db, order.items or [], order.pharmacy_id)
     order.status = new_status
     if new_status == "delivered":
         order.delivered_at = datetime.now(timezone.utc).isoformat()
