@@ -1,10 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Platform, Modal, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Platform, Modal, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import ArabicCalendar from '../../../src/components/ArabicCalendar';
+
+const DEFAULT_TIME_SLOTS = [
+    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+    '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+];
 
 export default function LabProfileScreen() {
     const { id } = useLocalSearchParams();
@@ -16,6 +24,9 @@ export default function LabProfileScreen() {
     const [loading, setLoading] = useState(true);
     const [bookingModalVisible, setBookingModalVisible] = useState(false);
     const [bookingForm, setBookingForm] = useState({ date: '', time: '', visit_type: 'visit_center' });
+    const today = new Date();
+    const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
+    const [calendarYear, setCalendarYear] = useState(today.getFullYear());
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -63,8 +74,31 @@ export default function LabProfileScreen() {
             Alert.alert('تنبيه', 'يرجى اختيار تحليل واحد على الأقل');
             return;
         }
-        setBookingForm({ date: '', time: '', visit_type: 'visit_center' });
+        const now = new Date();
+        setCalendarMonth(now.getMonth());
+        setCalendarYear(now.getFullYear());
+        setBookingForm({ date: now.toISOString().split('T')[0], time: '', visit_type: 'visit_center' });
         setBookingModalVisible(true);
+    };
+
+    const goPrevMonth = () => {
+        setCalendarMonth(prev => {
+            if (prev === 0) {
+                setCalendarYear(y => y - 1);
+                return 11;
+            }
+            return prev - 1;
+        });
+    };
+
+    const goNextMonth = () => {
+        setCalendarMonth(prev => {
+            if (prev === 11) {
+                setCalendarYear(y => y + 1);
+                return 0;
+            }
+            return prev + 1;
+        });
     };
 
     const handleBook = async () => {
@@ -90,8 +124,8 @@ export default function LabProfileScreen() {
             });
             setBookingModalVisible(false);
             setSelectedTests([]);
-            Alert.alert('✅ تم الحجز', 'تم إرسال طلب الحجز بنجاح', [
-                { text: 'حسناً', onPress: () => router.back() },
+            Alert.alert('✅ تم الحجز', 'تم حفظ الحجز في حجوزاتك', [
+                { text: 'عرض حجوزاتي', onPress: () => router.replace({ pathname: '/(patient)/labs', params: { tab: 'bookings' } } as any) },
             ]);
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
@@ -249,7 +283,12 @@ export default function LabProfileScreen() {
             {/* Booking Modal */}
             <Modal visible={bookingModalVisible} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <ScrollView
+                        style={styles.modalContent}
+                        contentContainerStyle={styles.modalContentInner}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    >
                         <View style={styles.modalHandle} />
                         <Text style={styles.modalTitle}>حجز التحاليل</Text>
                         <Text style={styles.modalSubtitle}>{selectedTests.length} تحليل | {selectedTotal.toLocaleString()} ل.س</Text>
@@ -262,43 +301,47 @@ export default function LabProfileScreen() {
                             ))}
                         </ScrollView>
 
-                        <Text style={styles.fieldLabel}>التاريخ (YYYY-MM-DD)</Text>
-                        <TextInput
-                            style={styles.fieldInput}
-                            placeholder="2025-01-15"
-                            value={bookingForm.date}
-                            onChangeText={v => setBookingForm(f => ({ ...f, date: v }))}
-                            textAlign="right"
+                        <Text style={styles.fieldLabel}>أين تريد إجراء التحاليل؟</Text>
+                        <View style={styles.visitTypeRow}>
+                            {[
+                                { key: 'visit_center', label: 'في المركز' },
+                                ...(lab?.has_home_service ? [{ key: 'home_service', label: `في البيت (+${(lab.home_service_fee || 0).toLocaleString()} ل.س)` }] : []),
+                            ].map(opt => (
+                                <TouchableOpacity
+                                    key={opt.key}
+                                    style={[styles.visitTypeBtn, bookingForm.visit_type === opt.key && styles.visitTypeBtnActive]}
+                                    onPress={() => setBookingForm(f => ({ ...f, visit_type: opt.key }))}
+                                >
+                                    <Text style={[styles.visitTypeTxt, bookingForm.visit_type === opt.key && { color: '#FFF' }]}>{opt.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={styles.fieldLabel}>اختر التاريخ</Text>
+                        <ArabicCalendar
+                            month={calendarMonth}
+                            year={calendarYear}
+                            selectedDate={bookingForm.date}
+                            onSelect={date => setBookingForm(f => ({ ...f, date }))}
+                            onPrevMonth={goPrevMonth}
+                            onNextMonth={goNextMonth}
                         />
 
-                        <Text style={styles.fieldLabel}>الوقت</Text>
-                        <TextInput
-                            style={styles.fieldInput}
-                            placeholder="09:00 AM"
-                            value={bookingForm.time}
-                            onChangeText={v => setBookingForm(f => ({ ...f, time: v }))}
-                            textAlign="right"
-                        />
-
-                        {lab?.has_home_service && (
-                            <>
-                                <Text style={styles.fieldLabel}>نوع الزيارة</Text>
-                                <View style={styles.visitTypeRow}>
-                                    {[
-                                        { key: 'visit_center', label: 'زيارة المختبر' },
-                                        { key: 'home_service', label: `خدمة منزلية (+${lab.home_service_fee || 0} ل.س)` },
-                                    ].map(opt => (
-                                        <TouchableOpacity
-                                            key={opt.key}
-                                            style={[styles.visitTypeBtn, bookingForm.visit_type === opt.key && styles.visitTypeBtnActive]}
-                                            onPress={() => setBookingForm(f => ({ ...f, visit_type: opt.key }))}
-                                        >
-                                            <Text style={[styles.visitTypeTxt, bookingForm.visit_type === opt.key && { color: '#FFF' }]}>{opt.label}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </>
-                        )}
+                        <Text style={styles.fieldLabel}>اختر الوقت</Text>
+                        <View style={styles.timeGrid}>
+                            {DEFAULT_TIME_SLOTS.map(slot => {
+                                const active = bookingForm.time === slot;
+                                return (
+                                    <TouchableOpacity
+                                        key={slot}
+                                        style={[styles.timeSlot, active && styles.timeSlotActive]}
+                                        onPress={() => setBookingForm(f => ({ ...f, time: slot }))}
+                                    >
+                                        <Text style={[styles.timeSlotText, active && styles.timeSlotTextActive]}>{slot}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
 
                         <View style={styles.bookingTotalBox}>
                             <View style={styles.totalLine}>
@@ -327,7 +370,7 @@ export default function LabProfileScreen() {
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </ScrollView>
                 </View>
             </Modal>
         </View>
@@ -389,7 +432,8 @@ const styles = StyleSheet.create({
     bookBtnTextSelected: { color: '#166534' },
     // Modal styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
+    modalContent: { maxHeight: '92%', backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+    modalContentInner: { padding: 24, paddingBottom: 40 },
     modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 16 },
     modalTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 4 },
     modalSubtitle: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'center', marginBottom: 16 },
@@ -403,6 +447,11 @@ const styles = StyleSheet.create({
     visitTypeBtn: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingVertical: 10, alignItems: 'center' },
     visitTypeBtnActive: { backgroundColor: '#43A047', borderColor: '#43A047' },
     visitTypeTxt: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#64748B' },
+    timeGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+    timeSlot: { width: '30.5%', minHeight: 40, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center' },
+    timeSlotActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
+    timeSlotText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#475569' },
+    timeSlotTextActive: { color: '#FFF' },
     bookingTotalBox: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, marginTop: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 },
     totalLine: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
     totalLabel: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#64748B' },

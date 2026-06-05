@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, Dimensions, Platform, Alert, TextInput, RefreshControl,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -25,6 +25,7 @@ type TabKey = 'browse' | 'bookings' | 'results';
 
 export default function PatientLabsScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ tab?: string }>();
     const { user } = useAuth();
     const [labs, setLabs] = useState<any[]>([]);
     const [results, setResults] = useState<any[]>([]);
@@ -33,6 +34,12 @@ export default function PatientLabsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [tab, setTab] = useState<TabKey>('browse');
     const [search, setSearch] = useState('');
+
+    useEffect(() => {
+        if (params.tab === 'bookings' || params.tab === 'results' || params.tab === 'browse') {
+            setTab(params.tab);
+        }
+    }, [params.tab]);
 
     const loadData = async () => {
         if (!user?.id) return;
@@ -51,7 +58,7 @@ export default function PatientLabsScreen() {
                 .filter((b: any) => b.provider_role === 'lab')
                 .map((b: any) => ({
                     ...b,
-                    test: { name: b.service_name || 'تحليل' },
+                    test: { name: b.service_items?.length ? `${b.service_items.length} تحاليل` : (b.service_name || 'تحليل') },
                     lab: b.provider || { name: b.provider?.name },
                 }));
             const merged = [...serviceLabBookings, ...legacyBookings];
@@ -134,6 +141,9 @@ export default function PatientLabsScreen() {
 
     const renderBooking = ({ item, index }: any) => {
         const s = STATUS_MAP[item.status] || STATUS_MAP.pending;
+        const serviceItems = Array.isArray(item.service_items) ? item.service_items : [];
+        const visitLabel = item.visit_type === 'home_service' ? 'في البيت' : 'في المركز';
+        const total = Number(item.services_total || 0) + Number(item.home_service_fee || 0);
         return (
             <Animated.View entering={FadeInDown.delay(index * 80)} style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -148,10 +158,23 @@ export default function PatientLabsScreen() {
                         <MaterialCommunityIcons name={s.icon as any} size={22} color={s.color} />
                     </View>
                 </View>
+                {serviceItems.length > 0 && (
+                    <View style={styles.serviceItemsWrap}>
+                        {serviceItems.map((service: any, idx: number) => (
+                            <View key={`${item.id}-${service.id || idx}`} style={styles.serviceChip}>
+                                <Text style={styles.serviceChipText}>{service.name}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
                 <View style={styles.cardFooter}>
                     <Text style={styles.dateText}>
                         {item.date}{item.time ? ` — ${item.time}` : ''}
                     </Text>
+                    <View style={styles.bookingMetaGroup}>
+                        <Text style={styles.visitText}>{visitLabel}</Text>
+                        {total > 0 && <Text style={styles.totalText}>{total.toLocaleString()} ل.س</Text>}
+                    </View>
                 </View>
             </Animated.View>
         );
@@ -290,6 +313,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
         marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6',
     },
+    serviceItemsWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+    serviceChip: { backgroundColor: '#F0FDF4', borderRadius: 12, borderWidth: 1, borderColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 5 },
+    serviceChipText: { maxWidth: 180, fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#166534', textAlign: 'right' },
+    bookingMetaGroup: { alignItems: 'flex-start', gap: 2 },
+    visitText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
+    totalText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#43A047' },
     dateText: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
     empty: { alignItems: 'center', marginTop: 60, gap: 12, paddingHorizontal: 24 },
     emptyText: { fontSize: 15, fontFamily: 'Cairo_400Regular', color: '#9CA3AF', textAlign: 'center' },
