@@ -104,7 +104,24 @@ export default function PharmacyDashboard() {
                 ))}
             </View>
 
-            {/* Prescription Fulfillment Quick Action */}
+            {/* Quick Actions */}
+            <View style={styles.quickActions}>
+                <TouchableOpacity style={styles.quickCard} onPress={() => router.push('/(pharmacy)/medicines' as any)}>
+                    <View style={[styles.quickIcon, { backgroundColor: C.success + '15' }]}>
+                        <MaterialCommunityIcons name="pill" size={24} color={C.success} />
+                    </View>
+                    <Text style={styles.quickTitle}>إدارة الأدوية</Text>
+                    <Text style={styles.quickSub}>إضافة وتعديل المخزون</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.quickCard} onPress={() => router.push('/(pharmacy)/warehouse' as any)}>
+                    <View style={[styles.quickIcon, { backgroundColor: '#EA580C15' }]}>
+                        <MaterialCommunityIcons name="warehouse" size={24} color="#EA580C" />
+                    </View>
+                    <Text style={styles.quickTitle}>طلب من المستودع</Text>
+                    <Text style={styles.quickSub}>توريد أدوية بالجملة</Text>
+                </TouchableOpacity>
+            </View>
+
             <TouchableOpacity style={styles.rxBtn} onPress={() => router.push('/(pharmacy)/prescriptions' as any)}>
                 <LinearGradient colors={[C.accent, C.primary]} style={styles.rxBtnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                     <MaterialCommunityIcons name="file-document-outline" size={24} color="#FFF" />
@@ -249,7 +266,12 @@ const styles = StyleSheet.create({
     acceptBtnText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
     deliveredBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.success + '12', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     deliveredBtnText: { color: C.success, fontSize: 13, fontFamily: 'Cairo_700Bold' },
-    rxBtn: { marginHorizontal: 16, marginTop: 16, borderRadius: 16, overflow: 'hidden' },
+    quickActions: { flexDirection: 'row-reverse', paddingHorizontal: 16, marginTop: 16, gap: 10 },
+    quickCard: { flex: 1, backgroundColor: C.white, borderRadius: 16, padding: 14, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+    quickIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    quickTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: C.text, textAlign: 'center' },
+    quickSub: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'center', marginTop: 2 },
+    rxBtn: { marginHorizontal: 16, marginTop: 12, borderRadius: 16, overflow: 'hidden' },
     rxBtnGrad: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
     rxBtnText: { fontFamily: 'Cairo_700Bold', fontSize: 15, color: '#FFF' },
 });

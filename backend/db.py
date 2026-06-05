@@ -34,6 +34,7 @@ def init_db():
     ensure_demo_radiology_centers()
     ensure_provider_catalog()
     ensure_demo_core_users()
+    ensure_demo_pharmacy_warehouse()
     ensure_demo_appointments()
 
 
@@ -329,6 +330,67 @@ def ensure_demo_core_users():
                 continue
             db.add(User(**row))
         db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_demo_pharmacy_warehouse():
+    """Ensure demo pharmacy, warehouse, medicines, and warehouse inventory exist on partial DBs."""
+    from datetime import datetime, timezone
+    from models import User, Medicine, WarehouseInventory
+    from auth_utils import hash_password
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        demos = [
+            {
+                "id": "ph1", "role": "pharmacy", "name": "صيدلية الشفاء",
+                "email": "pharma.nour@medlink.sy", "password": hash_password("123456"),
+                "phone": "+963-912-777888", "city": "دمشق",
+                "is_active": True, "verified": True, "created_at": now,
+            },
+            {
+                "id": "wh1", "role": "warehouse", "name": "مستودع الدواء الرئيسي",
+                "email": "wh.main@medlink.sy", "password": hash_password("123456"),
+                "phone": "+963-966-112233", "city": "دمشق",
+                "is_active": True, "verified": True, "created_at": now,
+            },
+        ]
+        for row in demos:
+            if db.query(User).filter(User.id == row["id"]).first():
+                continue
+            if db.query(User).filter(User.email == row["email"]).first():
+                continue
+            db.add(User(**row))
+        db.commit()
+
+        if db.query(User).filter(User.id == "ph1").first():
+            if db.query(Medicine).filter(Medicine.pharmacy_id == "ph1").count() == 0:
+                for med in [
+                    {"id": "m1", "name": "أموكسيسيلين 500mg", "category": "مضادات حيوية", "price": 4500, "stock_status": "in_stock", "quantity": 250},
+                    {"id": "m2", "name": "باراسيتامول 500mg", "category": "مسكنات", "price": 1200, "stock_status": "in_stock", "quantity": 500},
+                    {"id": "m3", "name": "أوميبرازول 20mg", "category": "الجهاز الهضمي", "price": 6000, "stock_status": "in_stock", "quantity": 180},
+                ]:
+                    if db.query(Medicine).filter(Medicine.id == med["id"]).first():
+                        continue
+                    db.add(Medicine(pharmacy_id="ph1", requires_prescription=False, alternatives=[], **med))
+                db.commit()
+
+        if db.query(User).filter(User.id == "wh1").first():
+            if db.query(WarehouseInventory).filter(WarehouseInventory.warehouse_id == "wh1").count() == 0:
+                for item in [
+                    {"id": "wi1", "name": "أموكسيسيلين 500mg (حزم 100)", "category": "مضادات حيوية", "bulk_price": 380000, "unit": "حزمة/100 علبة", "stock": 45, "min_order": 5},
+                    {"id": "wi2", "name": "باراسيتامول 500mg (حزم 100)", "category": "مسكنات", "bulk_price": 95000, "unit": "حزمة/100 علبة", "stock": 120, "min_order": 10},
+                    {"id": "wi3", "name": "فيتامين D3 1000IU (حزم 50)", "category": "فيتامينات", "bulk_price": 520000, "unit": "حزمة/50 علبة", "stock": 30, "min_order": 5},
+                    {"id": "wi4", "name": "سالبوتامول بخاخ (حزم 24)", "category": "جهاز تنفسي", "bulk_price": 350000, "unit": "حزمة/24 قطعة", "stock": 20, "min_order": 3},
+                ]:
+                    if db.query(WarehouseInventory).filter(WarehouseInventory.id == item["id"]).first():
+                        continue
+                    db.add(WarehouseInventory(warehouse_id="wh1", **item))
+                db.commit()
     except Exception:
         db.rollback()
     finally:

@@ -174,9 +174,14 @@ def delete_medicine(medicine_id: str, current_user: dict = Depends(require_role(
 
 @router.post("/medicines")
 def add_medicine(medicine: dict, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
+    pharmacy_id = medicine.get("pharmacy_id")
+    if current_user.get("role") == "pharmacy":
+        pharmacy_id = current_user.get("sub")
+    if not pharmacy_id:
+        raise HTTPException(400, "معرف الصيدلية مطلوب")
     med_id = f"m_{uuid.uuid4().hex[:8]}"
     new_med = Medicine(
-        id=med_id, pharmacy_id=medicine.get("pharmacy_id"), name=medicine.get("name"),
+        id=med_id, pharmacy_id=pharmacy_id, name=medicine.get("name"),
         name_en=medicine.get("name_en"), category=medicine.get("category") or None,
         price=medicine.get("price"), old_price=medicine.get("old_price"),
         description=medicine.get("description"), manufacturer=medicine.get("manufacturer"),

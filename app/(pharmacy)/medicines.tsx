@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal, Platform, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,6 +20,7 @@ const STOCK_ICONS: Record<string, string> = { in_stock: 'check-circle', out_of_s
 
 export default function PharmacyMedicines() {
     const { user } = useAuth();
+    const router = useRouter();
     const [medicines, setMedicines] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
@@ -67,6 +69,9 @@ export default function PharmacyMedicines() {
                 <View style={styles.headerTop}>
                     <TouchableOpacity style={styles.excelBtn} onPress={uploadExcel}>
                         <MaterialCommunityIcons name="file-excel" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.excelBtn} onPress={() => router.back()}>
+                        <MaterialCommunityIcons name="arrow-right" size={20} color="#FFF" />
                     </TouchableOpacity>
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
                         <Text style={styles.headerTitle}>إدارة الأدوية</Text>

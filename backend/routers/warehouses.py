@@ -10,6 +10,24 @@ from utils.helpers import model_to_dict
 
 router = APIRouter()
 
+
+def _enrich_warehouse_order_items(db: Session, raw_items: list) -> list:
+    enriched = []
+    for item in raw_items or []:
+        row = dict(item)
+        inv = None
+        if row.get("item_id"):
+            inv = db.query(WarehouseInventory).filter(WarehouseInventory.id == row["item_id"]).first()
+        if inv:
+            if not row.get("name"):
+                row["name"] = inv.name
+            row["unit"] = inv.unit
+            if row.get("bulk_price") is None:
+                row["bulk_price"] = inv.bulk_price
+        enriched.append(row)
+    return enriched
+
+
 @router.get("")
 def list_warehouses(db: Session = Depends(get_db)):
     warehouses = db.query(User).filter(User.role == "warehouse").all()
@@ -48,6 +66,8 @@ def get_inventory(warehouse_id: str, db: Session = Depends(get_db)):
 
 @router.post("/{warehouse_id}/inventory")
 def add_inventory_item(warehouse_id: str, item: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    if current_user.get("role") == "warehouse" and current_user.get("sub") != warehouse_id:
+        raise HTTPException(403, "غير مصرح لك بإضافة مخزون لهذا المستودع")
     new_item = WarehouseInventory(
         id=f"wi_{uuid.uuid4().hex[:8]}",
         warehouse_id=warehouse_id,
@@ -86,6 +106,7 @@ def get_orders(warehouse_id: str, current_user: dict = Depends(require_role("war
     results = []
     for o in orders:
         odict = model_to_dict(o)
+        odict["items"] = _enrich_warehouse_order_items(db, odict.get("items") or [])
         ph = db.query(User).filter(User.id == o.pharmacy_id).first()
         if ph:
             odict["pharmacy"] = model_to_dict(ph, ["password"])

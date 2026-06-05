@@ -727,10 +727,12 @@ if __name__ == "__main__":
         ensure_demo_secretary,
         ensure_demo_radiology_centers,
         ensure_demo_core_users,
+        ensure_demo_pharmacy_warehouse,
         ensure_demo_appointments,
     )
 
     ensure_demo_secretary()
     ensure_demo_radiology_centers()
     ensure_demo_core_users()
+    ensure_demo_pharmacy_warehouse()
     ensure_demo_appointments()

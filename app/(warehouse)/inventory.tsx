@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Platform, Alert, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
@@ -14,6 +15,7 @@ const C = {
 
 export default function WarehouseInventory() {
     const { user } = useAuth();
+    const router = useRouter();
     const [inventory, setInventory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -62,6 +64,9 @@ export default function WarehouseInventory() {
             <LinearGradient colors={['#BF360C', C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
                 <View style={styles.headerBlob} />
                 <View style={styles.headerRow}>
+                    <TouchableOpacity style={styles.headerAction} onPress={() => router.back()}>
+                        <MaterialCommunityIcons name="arrow-right" size={22} color="#FFF" />
+                    </TouchableOpacity>
                     <TouchableOpacity style={styles.headerAction} onPress={uploadExcel}>
                         <MaterialCommunityIcons name="file-excel" size={22} color="#FFF" />
                     </TouchableOpacity>

@@ -3,11 +3,14 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { Colors, BorderRadius, Shadow } from '../../src/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 export default function WarehouseDashboard() {
     const { user, logout } = useAuth();
+    const router = useRouter();
     const [inventory, setInventory] = useState<any[]>([]);
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,6 +47,7 @@ export default function WarehouseDashboard() {
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
             <LinearGradient colors={['#EA580C', '#DC2626']} style={styles.header} start={{x:0,y:0}} end={{x:1,y:1}}>
                 <View style={styles.headerRow}>
@@ -75,7 +79,24 @@ export default function WarehouseDashboard() {
                 ))}
             </View>
 
-            {/* Low Stock Alert */}
+            {/* Quick Actions */}
+            <View style={styles.quickActions}>
+                <TouchableOpacity style={styles.quickCard} onPress={() => router.push('/(warehouse)/inventory' as any)}>
+                    <View style={[styles.quickIcon, { backgroundColor: Colors.primary + '15' }]}>
+                        <MaterialCommunityIcons name="package-variant-plus" size={24} color={Colors.primary} />
+                    </View>
+                    <Text style={styles.quickTitle}>إدارة المخزون</Text>
+                    <Text style={styles.quickSub}>إضافة أصناف وتوريد</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.quickCard} onPress={() => router.replace('/(warehouse)/orders' as any)}>
+                    <View style={[styles.quickIcon, { backgroundColor: Colors.warning + '15' }]}>
+                        <MaterialCommunityIcons name="truck-delivery-outline" size={24} color={Colors.warning} />
+                    </View>
+                    <Text style={styles.quickTitle}>طلبات الصيدليات</Text>
+                    <Text style={styles.quickSub}>{pendingOrders} طلب جديد</Text>
+                </TouchableOpacity>
+            </View>
+
             {lowStock > 0 && (
                 <View style={styles.alertBox}>
                     <Text style={styles.alertText}>⚠️ {lowStock} أصناف قاربت على النفاد. يجب إعادة الطلب قريباً</Text>
@@ -114,7 +135,6 @@ export default function WarehouseDashboard() {
                     ))}
             </View>
 
-            <View style={{ height: 20 }} />
         </ScrollView>
     );
 }
@@ -132,7 +152,12 @@ const styles = StyleSheet.create({
     statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 12, alignItems: 'center', borderTopWidth: 3, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
     statVal: { fontSize: 20, fontFamily: 'Cairo_700Bold' },
     statLabel: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#6B7280', marginTop: 2, textAlign: 'center' },
-    alertBox: { marginHorizontal: 16, backgroundColor: '#FEF3C7', borderRadius: 14, padding: 12, marginBottom: 4 },
+    quickActions: { flexDirection: 'row-reverse', paddingHorizontal: 16, marginTop: 4, gap: 10 },
+    quickCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 14, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
+    quickIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    quickTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'center' },
+    quickSub: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'center', marginTop: 2 },
+    alertBox: { marginHorizontal: 16, backgroundColor: '#FEF3C7', borderRadius: 14, padding: 12, marginBottom: 4, marginTop: 12 },
     alertText: { color: '#D97706', fontFamily: 'Cairo_600SemiBold', fontSize: 13, textAlign: 'right' },
     section: { paddingHorizontal: 16, paddingBottom: 10 },
     sectionTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'right', marginBottom: 12, marginTop: 10 },

@@ -4,11 +4,28 @@ from datetime import datetime, timezone
 import uuid
 
 from db import get_db
-from models import Order, WarehouseOrder, User, Medicine, AuditLog, Notification, Prescription
+from models import Order, WarehouseOrder, User, Medicine, WarehouseInventory, AuditLog, Notification, Prescription
 from auth_utils import get_current_user
 from utils.helpers import model_to_dict
 
 router = APIRouter()
+
+
+def _enrich_warehouse_order_items(db: Session, raw_items: list) -> list:
+    enriched = []
+    for item in raw_items or []:
+        row = dict(item)
+        inv = None
+        if row.get("item_id"):
+            inv = db.query(WarehouseInventory).filter(WarehouseInventory.id == row["item_id"]).first()
+        if inv:
+            if not row.get("name"):
+                row["name"] = inv.name
+            row["unit"] = inv.unit
+            if row.get("bulk_price") is None:
+                row["bulk_price"] = inv.bulk_price
+        enriched.append(row)
+    return enriched
 
 
 def _enrich_order_items(db: Session, raw_items: list) -> list:
@@ -167,11 +184,51 @@ def list_warehouse_orders(warehouse_id: str = Query(None), pharmacy_id: str = Qu
         query = query.filter(WarehouseOrder.warehouse_id == warehouse_id)
     if pharmacy_id:
         query = query.filter(WarehouseOrder.pharmacy_id == pharmacy_id)
-    return [model_to_dict(wo) for wo in query.all()]
+    results = []
+    for wo in query.all():
+        odict = model_to_dict(wo)
+        odict["items"] = _enrich_warehouse_order_items(db, odict.get("items") or [])
+        ph = db.query(User).filter(User.id == wo.pharmacy_id).first()
+        if ph:
+            odict["pharmacy"] = model_to_dict(ph, ["password"])
+        results.append(odict)
+    return results
 
 @router.post("/warehouse")
 def create_warehouse_order(order: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    pharmacy_id = order.get("pharmacy_id")
+    warehouse_id = order.get("warehouse_id")
+    raw_items = order.get("items", []) or []
+    if not pharmacy_id or not warehouse_id:
+        raise HTTPException(400, "بيانات الطلب غير مكتملة")
+    if not raw_items:
+        raise HTTPException(400, "السلة فارغة")
+    if current_user.get("role") == "pharmacy" and current_user.get("sub") != pharmacy_id:
+        raise HTTPException(403, "غير مصرح لك بإنشاء هذا الطلب")
+
+    stored_items = _enrich_warehouse_order_items(db, raw_items)
+    now = datetime.now(timezone.utc).isoformat()
     wo_id = f"wo_{uuid.uuid4().hex[:8]}"
-    new_wo = WarehouseOrder(id=wo_id, pharmacy_id=order.get("pharmacy_id"), warehouse_id=order.get("warehouse_id"), items=order.get("items", []), total=order.get("total", 0), status="pending", created_at=datetime.now(timezone.utc).isoformat())
-    db.add(new_wo); db.commit(); db.refresh(new_wo)
-    return model_to_dict(new_wo)
+    new_wo = WarehouseOrder(
+        id=wo_id, pharmacy_id=pharmacy_id, warehouse_id=warehouse_id,
+        items=stored_items, total=order.get("total", 0), status="pending", created_at=now,
+    )
+    db.add(new_wo)
+
+    pharmacy = db.query(User).filter(User.id == pharmacy_id).first()
+    item_names = ", ".join((i.get("name") or i.get("item_id") or "صنف") for i in stored_items[:3])
+    if len(stored_items) > 3:
+        item_names += f" (+{len(stored_items) - 3})"
+    db.add(Notification(
+        id=f"ntf_{uuid.uuid4().hex[:8]}",
+        user_id=warehouse_id,
+        title="طلب جديد من صيدلية 🏭",
+        message=f"طلب من {pharmacy.name if pharmacy else 'صيدلية'}: {item_names}",
+        type="warehouse_order",
+        created_at=now,
+    ))
+    db.commit()
+    db.refresh(new_wo)
+    result = model_to_dict(new_wo)
+    result["items"] = _enrich_warehouse_order_items(db, result.get("items") or [])
+    return result
