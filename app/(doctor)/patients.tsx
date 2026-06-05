@@ -10,6 +10,7 @@ import Animated, { FadeInUp, FadeInRight, FadeInDown } from 'react-native-reanim
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/theme';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 export default function DoctorPatients() {
     const { user } = useAuth();
