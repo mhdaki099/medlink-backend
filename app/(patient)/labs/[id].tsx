@@ -305,7 +305,12 @@ export default function LabProfileScreen() {
                         <View style={styles.visitTypeRow}>
                             {[
                                 { key: 'visit_center', label: 'في المركز' },
-                                ...(lab?.has_home_service ? [{ key: 'home_service', label: `في البيت (+${(lab.home_service_fee || 0).toLocaleString()} ل.س)` }] : []),
+                                {
+                                    key: 'home_service',
+                                    label: Number(lab?.home_service_fee || 0) > 0
+                                        ? `في البيت (+${Number(lab.home_service_fee || 0).toLocaleString()} ل.س)`
+                                        : 'في البيت',
+                                },
                             ].map(opt => (
                                 <TouchableOpacity
                                     key={opt.key}
