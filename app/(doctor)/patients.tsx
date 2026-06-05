@@ -277,7 +277,7 @@ export default function DoctorPatients() {
             <ScrollView 
                 style={styles.list}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 120 }}
+                contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
             >
                 {loading ? (

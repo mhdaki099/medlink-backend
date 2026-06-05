@@ -82,8 +82,16 @@ function CustomTabBar({ state, navigation }: any) {
     ).start();
   }, []);
 
-  const cutoutWidth = 75;
-  
+  const cutoutWidth = 72;
+  const fabX = translateX.interpolate({
+    inputRange: [0, TAB_WIDTH, TAB_WIDTH * 2],
+    outputRange: [
+      (TAB_WIDTH - FAB_SIZE) / 2,
+      TAB_WIDTH + (TAB_WIDTH - FAB_SIZE) / 2,
+      TAB_WIDTH * 2 + (TAB_WIDTH - FAB_SIZE) / 2,
+    ],
+  });
+
   return (
     <View style={[styles.tabBarWrapper, { height: TAB_BAR_HEIGHT }]}>
       <View style={styles.backgroundContainer}>
@@ -110,7 +118,7 @@ function CustomTabBar({ state, navigation }: any) {
         <View style={styles.whiteFill} />
       </View>
 
-      <View style={styles.tabItemsWrapper}>
+      <View style={[styles.tabItemsWrapper, { paddingBottom: insets.bottom }]}>
         {TABS.map((tab, index) => {
           const isFocused = activeIndex === index;
           return (
@@ -132,16 +140,8 @@ function CustomTabBar({ state, navigation }: any) {
       </View>
 
       <Animated.View style={[
-        styles.fabContainer, 
-        { 
-          transform: [
-            { translateX: translateX.interpolate({
-                inputRange: [0, TAB_WIDTH * (TABS.length - 1)], // From rightmost tab (index 5) to leftmost tab (index 0)
-                outputRange: [ (TAB_WIDTH - FAB_SIZE) / 2, TAB_WIDTH * (TABS.length - 1) + (TAB_WIDTH - FAB_SIZE) / 2]
-            })},
-            { scale: fabScale }
-          ]
-        }
+        styles.fabContainer,
+        { transform: [{ translateX: fabX }, { scale: fabScale }] },
       ]}>
         <LinearGradient
           colors={['#1E88E5', '#43A047']}
@@ -169,7 +169,7 @@ export default function PatientLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: false,
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />

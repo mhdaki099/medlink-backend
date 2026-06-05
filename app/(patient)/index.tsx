@@ -9,6 +9,7 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api, BASE_URL } from '../../src/services/api';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 const { width } = Dimensions.get('window');
 
@@ -565,7 +566,7 @@ export default function PatientHome() {
                         ))}
                     </View>
 
-                    <View style={{ height: 120 }} />
+                    <View style={{ height: TAB_BAR_CLEARANCE }} />
                 </View>
             </ScrollView>
 

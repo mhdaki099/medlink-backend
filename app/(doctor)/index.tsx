@@ -12,6 +12,7 @@ import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop } from 're
 import { api, BASE_URL } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/theme';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 const { width } = Dimensions.get('window');
 const LOGO_IMG = require('../../assets/Logo Design.png');
@@ -375,7 +376,7 @@ export default function DoctorDashboard() {
 
             <View style={{ height: 60 }} />
 
-            <View style={{ height: 100 }} />
+            <View style={{ height: TAB_BAR_CLEARANCE }} />
 
             <Modal visible={editModal.visible} transparent animationType="slide">
                 <KeyboardAvoidingView

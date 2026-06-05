@@ -10,6 +10,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/theme';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 export default function DoctorAppointments() {
     const { user } = useAuth();
@@ -248,7 +249,7 @@ export default function DoctorAppointments() {
             <ScrollView 
                 style={styles.list}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 120 }}
+                contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
             >
                 {loading ? (

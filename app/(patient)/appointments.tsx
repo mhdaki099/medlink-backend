@@ -6,6 +6,7 @@ import { useFocusEffect } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 import ArabicCalendar from '../../src/components/ArabicCalendar';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 const { width } = Dimensions.get('window');
 
@@ -531,7 +532,7 @@ const styles = StyleSheet.create({
     emptyTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#111827', marginBottom: 8 },
     emptySub: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'center' },
     
-    listContent: { padding: 20, paddingBottom: 120 },
+    listContent: { padding: 20, paddingBottom: TAB_BAR_CLEARANCE },
     card: {
         backgroundColor: '#FFF',
         borderRadius: 24,

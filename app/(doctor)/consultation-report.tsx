@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, Alert, ActivityIndicator, Platform, Switch, Modal
+    TextInput, Alert, ActivityIndicator, Platform, Switch, Modal, KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -59,7 +59,7 @@ export default function ConsultationReportScreen() {
 
     const [showServiceModal, setShowServiceModal] = useState(false);
     const [serviceType, setServiceType] = useState<'lab' | 'radiology'>('lab');
-    const [selectedExamId, setSelectedExamId] = useState('');
+    const [selectedExamIds, setSelectedExamIds] = useState<string[]>([]);
     const [customExamName, setCustomExamName] = useState('');
     const [serviceNotes, setServiceNotes] = useState('');
 
@@ -113,9 +113,15 @@ export default function ConsultationReportScreen() {
 
     const resetServiceModal = (type: 'lab' | 'radiology') => {
         setServiceType(type);
-        setSelectedExamId('');
+        setSelectedExamIds([]);
         setCustomExamName('');
         setServiceNotes('');
+    };
+
+    const toggleExam = (id: string) => {
+        setSelectedExamIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+        );
     };
 
     const openServiceModal = (type: 'lab' | 'radiology') => {
@@ -187,30 +193,43 @@ export default function ConsultationReportScreen() {
     };
 
     const handleAddServiceRequest = () => {
-        if (!selectedExamId) {
-            Alert.alert('تنبيه', 'يرجى اختيار نوع الفحص من القائمة');
+        if (!selectedExamIds.length) {
+            Alert.alert('تنبيه', 'يرجى اختيار فحص واحد على الأقل من القائمة');
             return;
         }
-        if (selectedExamId === 'other' && !customExamName.trim()) {
+        if (selectedExamIds.includes('other') && !customExamName.trim()) {
             Alert.alert('تنبيه', 'يرجى كتابة اسم الفحص في حقل «أخرى»');
             return;
         }
-        const service_name = getExamLabel(examOptions, selectedExamId, customExamName);
-        setPendingServiceRequests(prev => [
-            ...prev,
-            {
-                localId: `pending_${Date.now()}`,
+        const newItems: PendingServiceRequest[] = [];
+        const ts = Date.now();
+        selectedExamIds.forEach((examId, idx) => {
+            if (examId === 'other') {
+                if (!customExamName.trim()) return;
+                newItems.push({
+                    localId: `pending_${ts}_${idx}`,
+                    request_type: serviceType,
+                    service_name: customExamName.trim(),
+                    notes: serviceNotes.trim(),
+                    exam_id: 'other',
+                });
+                return;
+            }
+            newItems.push({
+                localId: `pending_${ts}_${idx}`,
                 request_type: serviceType,
-                service_name,
+                service_name: getExamLabel(examOptions, examId),
                 notes: serviceNotes.trim(),
-                exam_id: selectedExamId,
-            },
-        ]);
+                exam_id: examId,
+            });
+        });
+        if (!newItems.length) return;
+        setPendingServiceRequests(prev => [...prev, ...newItems]);
         setShowServiceModal(false);
         resetServiceModal(serviceType);
         Alert.alert(
             '✅ تمت الإضافة',
-            `تمت إضافة ${serviceType === 'lab' ? 'التحليل' : 'الأشعة'} — سيُولَّد رمز ${serviceType === 'lab' ? 'LAB' : 'RAD'} عند الحفظ`,
+            `تمت إضافة ${newItems.length} ${serviceType === 'lab' ? 'تحليل' : 'أشعة'} — سيُولَّد رمز ${serviceType === 'lab' ? 'LAB' : 'RAD'} لكل فحص عند الحفظ`,
         );
     };
 
@@ -239,10 +258,17 @@ export default function ConsultationReportScreen() {
                     <ActivityIndicator color="#1E88E5" size="large" />
                 </View>
             ) : (
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+            >
             <ScrollView
                 style={styles.content}
-                contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 48 }}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
             >
                 {showSavedSummary && savedReportId && (
                     <View style={styles.savedSummaryCard}>
@@ -445,6 +471,7 @@ export default function ConsultationReportScreen() {
                     ) : null}
                 </View>
             </ScrollView>
+            </KeyboardAvoidingView>
             )}
 
             <Modal visible={showPrescModal} transparent animationType="slide">
@@ -456,7 +483,11 @@ export default function ConsultationReportScreen() {
                             </TouchableOpacity>
                             <Text style={styles.modalTitle}>وصفة طبية (اختياري)</Text>
                         </View>
-                        <ScrollView showsVerticalScrollIndicator={false}>
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+                        >
                             {medications.map((m, idx) => (
                                 <View key={idx} style={styles.medRow}>
                                     <Text style={styles.medLabel}>دواء {idx + 1}</Text>
@@ -526,9 +557,12 @@ export default function ConsultationReportScreen() {
             </Modal>
 
             <Modal visible={showServiceModal} transparent animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
-                        <View style={styles.modalContent}>
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalSheet}>
                             <View style={styles.modalHeader}>
                                 <TouchableOpacity onPress={() => setShowServiceModal(false)}>
                                     <Ionicons name="close" size={24} color="#374151" />
@@ -537,57 +571,68 @@ export default function ConsultationReportScreen() {
                                     {serviceType === 'lab' ? 'طلب تحليل (اختياري)' : 'طلب أشعة (اختياري)'}
                                 </Text>
                             </View>
-                            <Text style={styles.pickerHint}>اختر من القائمة — لا حاجة للكتابة إلا عند «أخرى»</Text>
-                            <View style={styles.examGrid}>
-                                {examOptions.map(opt => (
-                                    <TouchableOpacity
-                                        key={opt.id}
-                                        style={[
-                                            styles.examChip,
-                                            selectedExamId === opt.id && styles.examChipActive,
-                                        ]}
-                                        onPress={() => setSelectedExamId(opt.id)}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.examChipText,
-                                                selectedExamId === opt.id && styles.examChipTextActive,
-                                            ]}
-                                        >
-                                            {opt.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                            {selectedExamId === 'other' && (
+                            <ScrollView
+                                showsVerticalScrollIndicator
+                                keyboardShouldPersistTaps="handled"
+                                contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+                            >
+                                <Text style={styles.pickerHint}>
+                                    اختر فحصاً أو أكثر — الكتابة فقط عند «أخرى»
+                                    {selectedExamIds.length > 0 ? ` (${selectedExamIds.length} محدد)` : ''}
+                                </Text>
+                                <View style={styles.examGrid}>
+                                    {examOptions.map(opt => {
+                                        const selected = selectedExamIds.includes(opt.id);
+                                        return (
+                                            <TouchableOpacity
+                                                key={opt.id}
+                                                style={[styles.examChip, selected && styles.examChipActive]}
+                                                onPress={() => toggleExam(opt.id)}
+                                            >
+                                                {selected ? (
+                                                    <MaterialCommunityIcons name="check-circle" size={14} color="#1E88E5" />
+                                                ) : null}
+                                                <Text style={[styles.examChipText, selected && styles.examChipTextActive]}>
+                                                    {opt.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                                {selectedExamIds.includes('other') && (
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder={serviceType === 'lab' ? 'اكتب اسم التحليل...' : 'اكتب نوع الأشعة...'}
+                                        value={customExamName}
+                                        onChangeText={setCustomExamName}
+                                        textAlign="right"
+                                    />
+                                )}
                                 <TextInput
-                                    style={styles.input}
-                                    placeholder={serviceType === 'lab' ? 'اكتب اسم التحليل...' : 'اكتب نوع الأشعة...'}
-                                    value={customExamName}
-                                    onChangeText={setCustomExamName}
+                                    style={[styles.textArea, { marginTop: 8 }]}
+                                    placeholder="ملاحظات إضافية (اختياري)..."
+                                    value={serviceNotes}
+                                    onChangeText={setServiceNotes}
+                                    multiline
                                     textAlign="right"
+                                    textAlignVertical="top"
                                 />
-                            )}
-                            <TextInput
-                                style={[styles.textArea, { marginTop: 8 }]}
-                                placeholder="ملاحظات إضافية (اختياري)..."
-                                value={serviceNotes}
-                                onChangeText={setServiceNotes}
-                                multiline
-                                textAlign="right"
-                                textAlignVertical="top"
-                            />
-                            <TouchableOpacity style={[styles.saveBtn, { marginTop: 16 }]} onPress={handleAddServiceRequest}>
+                            </ScrollView>
+                            <TouchableOpacity style={[styles.saveBtn, { marginBottom: insets.bottom || 12 }]} onPress={handleAddServiceRequest}>
                                 <LinearGradient
                                     colors={serviceType === 'lab' ? ['#0EA5E9', '#0284C7'] : ['#8E24AA', '#6A1B9A']}
                                     style={styles.saveBtnGrad}
                                 >
-                                    <Text style={styles.saveBtnText}>إضافة للقائمة</Text>
+                                    <Text style={styles.saveBtnText}>
+                                        {selectedExamIds.length > 1
+                                            ? `إضافة ${selectedExamIds.length} فحوصات`
+                                            : 'إضافة للقائمة'}
+                                    </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
-                    </ScrollView>
-                </View>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );
@@ -632,11 +677,29 @@ const styles = StyleSheet.create({
     skipBtnText: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: '#64748B' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '85%' },
+    modalSheet: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        paddingHorizontal: 24,
+        paddingTop: 24,
+        maxHeight: '88%',
+    },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     modalTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
     pickerHint: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'right', marginBottom: 12 },
     examGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-    examChip: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+    examChip: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
     examChipActive: { backgroundColor: '#DBEAFE', borderColor: '#1E88E5' },
     examChipText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#475569' },
     examChipTextActive: { color: '#1E88E5' },
