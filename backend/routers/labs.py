@@ -147,12 +147,21 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
     return model_to_dict(booking)
 
 
+def _assert_provider_owns_booking(booking: ServiceBooking, current_user: dict):
+    if current_user.get("role") == "admin":
+        return
+    if current_user.get("sub") != booking.provider_id:
+        raise HTTPException(403, "ليس لديك صلاحية على هذا الحجز")
+
+
 @router.put("/service-bookings/{booking_id}/status")
 def update_service_booking_status(booking_id: str, data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     """Approve, reject, or complete a service booking."""
     booking = db.query(ServiceBooking).filter(ServiceBooking.id == booking_id).first()
     if not booking:
         raise HTTPException(404, "الحجز غير موجود")
+    if current_user.get("role") in ("lab", "radiology"):
+        _assert_provider_owns_booking(booking, current_user)
 
     new_status = data.get("status", booking.status)
     if new_status not in ("pending", "confirmed", "rejected", "completed", "cancelled"):
@@ -221,9 +230,11 @@ def get_provider_slots(provider_id: str, date: str = None, db: Session = Depends
         provider.available_hours = provider.open_hours
     generated_slots = _resolve_doctor_time_slots(provider)
 
+    wh = provider.working_hours or provider.open_hours or ""
+    booked_filtered = [b for b in booked if not date or b.date == date]
     return {
         "time_slots": generated_slots,
-        "booked_slots": [{"date": b.date, "time": b.time} for b in booked],
+        "booked_slots": [{"date": b.date, "time": b.time} for b in booked_filtered],
         "working_hours": wh,
     }
 
@@ -288,8 +299,96 @@ def get_lab_tests(lab_id: str, db: Session = Depends(get_db)):
     tests = db.query(LabTest).filter(LabTest.lab_id == lab_id).all()
     return [model_to_dict(t) for t in tests]
 
+
+@router.post("/{provider_id}/tests")
+def add_provider_test(
+    provider_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.get("role") not in ("admin", "lab", "radiology"):
+        raise HTTPException(403, "ليس لديك صلاحية")
+    if current_user.get("role") != "admin" and current_user.get("sub") != provider_id:
+        raise HTTPException(403, "لا يمكنك إضافة فحوصات لمركز آخر")
+    provider = db.query(User).filter(
+        User.id == provider_id,
+        User.role.in_(["lab", "radiology"]),
+    ).first()
+    if not provider:
+        raise HTTPException(404, "المزود غير موجود")
+    if not (data.get("name") or "").strip():
+        raise HTTPException(400, "اسم الفحص مطلوب")
+    test = LabTest(
+        id=f"lt_{uuid.uuid4().hex[:8]}",
+        lab_id=provider_id,
+        name=data.get("name", "").strip(),
+        name_en=data.get("name_en", ""),
+        category=data.get("category", "عام"),
+        price=float(data.get("price", 0) or 0),
+        duration_hours=int(data.get("duration_hours", 24) or 24),
+        description=data.get("description", ""),
+        preparation=data.get("preparation", ""),
+    )
+    db.add(test)
+    db.commit()
+    db.refresh(test)
+    return model_to_dict(test)
+
+
+@router.put("/tests/{test_id}")
+def update_provider_test(
+    test_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    test = db.query(LabTest).filter(LabTest.id == test_id).first()
+    if not test:
+        raise HTTPException(404, "الفحص غير موجود")
+    if current_user.get("role") not in ("admin", "lab", "radiology"):
+        raise HTTPException(403, "ليس لديك صلاحية")
+    if current_user.get("role") != "admin" and current_user.get("sub") != test.lab_id:
+        raise HTTPException(403, "لا يمكنك تعديل فحوصات مركز آخر")
+    if "name" in data and data["name"]:
+        test.name = data["name"].strip()
+    if "name_en" in data:
+        test.name_en = data["name_en"]
+    if "category" in data:
+        test.category = data["category"]
+    if "price" in data:
+        test.price = float(data["price"] or 0)
+    if "duration_hours" in data:
+        test.duration_hours = int(data["duration_hours"] or 24)
+    if "description" in data:
+        test.description = data["description"]
+    if "preparation" in data:
+        test.preparation = data["preparation"]
+    db.commit()
+    db.refresh(test)
+    return model_to_dict(test)
+
+
+@router.delete("/tests/{test_id}")
+def delete_provider_test(
+    test_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    test = db.query(LabTest).filter(LabTest.id == test_id).first()
+    if not test:
+        raise HTTPException(404, "الفحص غير موجود")
+    if current_user.get("role") not in ("admin", "lab", "radiology"):
+        raise HTTPException(403, "ليس لديك صلاحية")
+    if current_user.get("role") != "admin" and current_user.get("sub") != test.lab_id:
+        raise HTTPException(403, "لا يمكنك حذف فحوصات مركز آخر")
+    db.delete(test)
+    db.commit()
+    return {"message": "تم حذف الفحص"}
+
+
 @router.get("/{lab_id}/bookings")
-def get_bookings(lab_id: str, current_user: dict = Depends(require_role("lab", "admin")), db: Session = Depends(get_db)):
+def get_bookings(lab_id: str, current_user: dict = Depends(require_role("lab", "radiology", "admin")), db: Session = Depends(get_db)):
     bookings = db.query(LabBooking).filter(LabBooking.lab_id == lab_id).all()
     results = []
     for b in bookings:
@@ -304,7 +403,7 @@ def get_bookings(lab_id: str, current_user: dict = Depends(require_role("lab", "
     return results
 
 @router.post("/{lab_id}/results")
-def upload_result(lab_id: str, result: dict, current_user: dict = Depends(require_role("lab", "admin")), db: Session = Depends(get_db)):
+def upload_result(lab_id: str, result: dict, current_user: dict = Depends(require_role("lab", "radiology", "admin")), db: Session = Depends(get_db)):
     result_id = f"lr_{uuid.uuid4().hex[:8]}"
     new_result = LabResult(id=result_id, booking_id=result.get("booking_id"), patient_id=result.get("patient_id"), lab_id=lab_id, test_id=result.get("test_id"), uploaded_by=result.get("uploaded_by"), date=result.get("date"), values=result.get("values", []), notes=result.get("notes"), doctor_note=result.get("doctor_note"))
     db.add(new_result); db.commit(); db.refresh(new_result)

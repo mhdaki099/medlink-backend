@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
@@ -7,11 +7,23 @@ import { useAuth } from '../../src/contexts/AuthContext';
 
 const C = {
     primary: '#8E24AA', accent: '#CE93D8', success: '#27AE60', warning: '#F59E0B',
-    bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
+    danger: '#EF4444', bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
 };
-const STATUS_COLORS: Record<string, string> = { booked: C.warning, processing: C.primary, completed: C.success };
-const STATUS_LABELS: Record<string, string> = { booked: 'محجوز', processing: 'جاري الفحص', completed: 'مكتمل' };
-const STATUS_ICONS: Record<string, string> = { booked: 'clock-outline', processing: 'flask', completed: 'check-circle-outline' };
+const STATUS_COLORS: Record<string, string> = {
+    pending: C.warning, confirmed: C.primary, rejected: C.danger, completed: C.success, cancelled: '#9CA3AF',
+};
+const STATUS_LABELS: Record<string, string> = {
+    pending: 'بانتظار الموافقة', confirmed: 'مؤكد', rejected: 'مرفوض', completed: 'مكتمل', cancelled: 'ملغى',
+};
+const STATUS_ICONS: Record<string, string> = {
+    pending: 'clock-outline', confirmed: 'check-circle-outline', rejected: 'close-circle-outline',
+    completed: 'check-all', cancelled: 'cancel',
+};
+
+function bookingServicesLabel(bk: any): string {
+    if (bk.service_items?.length) return bk.service_items.map((i: any) => i.name).join('، ');
+    return bk.service_name || 'خدمة';
+}
 
 export default function LabBookings() {
     const { user } = useAuth();
@@ -22,17 +34,36 @@ export default function LabBookings() {
 
     const load = async () => {
         if (!user?.id) return;
-        try { const bks = await api.getLabBookings(user.id); setBookings(bks); }
-        catch (e) { console.warn(e); } finally { setLoading(false); setRefreshing(false); }
+        try {
+            const bks = await api.getServiceBookings({ provider_id: user.id });
+            setBookings(bks);
+        } catch (e) { console.warn(e); }
+        finally { setLoading(false); setRefreshing(false); }
     };
 
     useEffect(() => { load(); }, [user]);
 
+    const updateStatus = async (id: string, status: string, extra: Record<string, string> = {}) => {
+        try {
+            await api.updateServiceBookingStatus(id, { status, ...extra });
+            load();
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
+
+    const confirmBooking = (id: string) => updateStatus(id, 'confirmed');
+    const completeBooking = (id: string) => updateStatus(id, 'completed');
+    const rejectBooking = (id: string) => {
+        Alert.alert('رفض الحجز', 'هل تريد رفض هذا الحجز؟', [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'رفض', style: 'destructive', onPress: () => updateStatus(id, 'rejected', { rejection_reason_type: 'service_unavailable', rejection_note: 'الخدمة غير متوفرة حالياً' }) },
+        ]);
+    };
+
     const filtered = filter === 'all' ? bookings : bookings.filter(b => b.status === filter);
     const FILTERS = [
         { key: 'all', label: 'الكل', count: bookings.length },
-        { key: 'booked', label: 'محجوز', count: bookings.filter(b => b.status === 'booked').length },
-        { key: 'processing', label: 'جاري', count: bookings.filter(b => b.status === 'processing').length },
+        { key: 'pending', label: 'بانتظار', count: bookings.filter(b => b.status === 'pending').length },
+        { key: 'confirmed', label: 'مؤكد', count: bookings.filter(b => b.status === 'confirmed').length },
         { key: 'completed', label: 'مكتمل', count: bookings.filter(b => b.status === 'completed').length },
     ];
 
@@ -75,9 +106,10 @@ export default function LabBookings() {
                                 </View>
                                 <Text style={styles.patient}>{bk.patient?.name || 'مريض'}</Text>
                             </View>
+                            {bk.patient?.phone ? <Text style={styles.phone}>📞 {bk.patient.phone}</Text> : null}
                             <View style={styles.testRow}>
                                 <MaterialCommunityIcons name="flask-outline" size={16} color={C.primary} />
-                                <Text style={styles.testName}>{bk.test?.name || 'فحص'}</Text>
+                                <Text style={styles.testName}>{bookingServicesLabel(bk)}</Text>
                             </View>
                             <View style={styles.metaRow}>
                                 <View style={styles.metaPill}>
@@ -88,15 +120,33 @@ export default function LabBookings() {
                                     <MaterialCommunityIcons name="calendar-outline" size={13} color={C.textSec} />
                                     <Text style={styles.metaText}>{bk.date}</Text>
                                 </View>
+                                {bk.visit_type === 'home_service' && (
+                                    <View style={[styles.metaPill, { backgroundColor: '#FEF3C7' }]}>
+                                        <MaterialCommunityIcons name="home-outline" size={13} color="#D97706" />
+                                        <Text style={[styles.metaText, { color: '#D97706' }]}>منزلي</Text>
+                                    </View>
+                                )}
                             </View>
                             <View style={styles.cardFooter}>
                                 <View style={styles.pricePill}>
-                                    <Text style={styles.priceText}>{(bk.test?.price || 0).toLocaleString()} ل.س</Text>
+                                    <Text style={styles.priceText}>{(bk.services_total || 0).toLocaleString()} ل.س</Text>
                                 </View>
-                                {bk.test?.preparation && (
-                                    <Text style={styles.prepText} numberOfLines={1}>📋 {bk.test.preparation}</Text>
-                                )}
                             </View>
+                            {bk.status === 'pending' && (
+                                <View style={styles.actions}>
+                                    <TouchableOpacity style={styles.confirmBtn} onPress={() => confirmBooking(bk.id)}>
+                                        <Text style={styles.confirmBtnText}>تأكيد ✓</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.rejectBtn} onPress={() => rejectBooking(bk.id)}>
+                                        <Text style={styles.rejectBtnText}>رفض ✕</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                            {bk.status === 'confirmed' && (
+                                <TouchableOpacity style={styles.completeBtn} onPress={() => completeBooking(bk.id)}>
+                                    <Text style={styles.completeBtnText}>إتمام الخدمة ✓</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ))}
             </ScrollView>
@@ -121,17 +171,24 @@ const styles = StyleSheet.create({
     empty: { alignItems: 'center', marginTop: 60, gap: 12 },
     emptyText: { fontSize: 15, fontFamily: 'Cairo_400Regular', color: C.textSec },
     card: { backgroundColor: C.white, borderRadius: 20, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
-    cardTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    cardTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
     patient: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.text },
+    phone: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 8 },
     statusBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
     statusText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     testRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 10 },
-    testName: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: C.primary },
-    metaRow: { flexDirection: 'row-reverse', gap: 10, marginBottom: 10 },
+    testName: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: C.primary, flex: 1, textAlign: 'right' },
+    metaRow: { flexDirection: 'row-reverse', gap: 10, marginBottom: 10, flexWrap: 'wrap' },
     metaPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
     metaText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec },
     cardFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
     pricePill: { backgroundColor: C.primary + '12', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
     priceText: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: C.primary },
-    prepText: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#D97706', flex: 1, textAlign: 'right' },
+    actions: { flexDirection: 'row-reverse', gap: 8, marginTop: 12 },
+    confirmBtn: { flex: 1, backgroundColor: '#DCFCE7', borderRadius: 12, padding: 12, alignItems: 'center' },
+    confirmBtnText: { color: C.success, fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    rejectBtn: { flex: 1, backgroundColor: '#FEE2E2', borderRadius: 12, padding: 12, alignItems: 'center' },
+    rejectBtnText: { color: C.danger, fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    completeBtn: { backgroundColor: C.primary, borderRadius: 12, padding: 12, alignItems: 'center', marginTop: 12 },
+    completeBtnText: { color: '#FFF', fontFamily: 'Cairo_700Bold', fontSize: 13 },
 });

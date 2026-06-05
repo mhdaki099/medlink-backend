@@ -249,6 +249,9 @@ class ApiClient {
     getLabTests(labId?: string) {
         return labId ? this.get<any[]>(`/labs/${labId}/tests`) : this.get<any[]>('/labs/tests/all');
     }
+    addLabTest(providerId: string, data: any) { return this.post<any>(`/labs/${providerId}/tests`, data); }
+    updateLabTest(testId: string, data: any) { return this.put<any>(`/labs/tests/${testId}`, data); }
+    deleteLabTest(testId: string) { return this.delete<any>(`/labs/tests/${testId}`); }
     getLabBookings(labId: string) { return this.get<any[]>(`/labs/${labId}/bookings`); }
     uploadLabResult(labId: string, result: any) { return this.post<any>(`/labs/${labId}/results`, result); }
     updateBookingStatus(id: string, status: string) {

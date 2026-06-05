@@ -19,14 +19,11 @@ export default function RadiologyProfileScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const [center, setCenter] = useState<any>(null);
+    const [tests, setTests] = useState<any[]>([]);
+    const [selectedTests, setSelectedTests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [bookingModal, setBookingModal] = useState(false);
-    const [bookingForm, setBookingForm] = useState({ 
-        service_name: '', 
-        date: '', 
-        time: '', 
-        reason: '' 
-    });
+    const [bookingForm, setBookingForm] = useState({ date: '', time: '', reason: '' });
     const today = new Date();
     const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
     const [calendarYear, setCalendarYear] = useState(today.getFullYear());
@@ -35,8 +32,12 @@ export default function RadiologyProfileScreen() {
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await api.getLab(id as string);
-                setCenter(data);
+                const [centerData, testsData] = await Promise.all([
+                    api.getLab(id as string),
+                    api.getLabTests(id as string),
+                ]);
+                setCenter(centerData);
+                setTests(testsData);
             } catch (e) {
                 console.warn(e);
             } finally {
@@ -46,22 +47,35 @@ export default function RadiologyProfileScreen() {
         load();
     }, [id]);
 
+    const selectedTotal = selectedTests.reduce((sum, t) => sum + Number(t.price || 0), 0);
+
+    const toggleTest = (test: any) => {
+        setSelectedTests(prev => (
+            prev.some(item => item.id === test.id)
+                ? prev.filter(item => item.id !== test.id)
+                : [...prev, test]
+        ));
+    };
+
+    const removeSelectedTest = (testId: string) => {
+        setSelectedTests(prev => prev.filter(item => item.id !== testId));
+    };
+
     const getPhotoUrl = (path: string) => {
         if (!path) return 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=400';
         if (path.startsWith('http')) return path;
         return `${BASE_URL.replace(/\/api$/, '')}${path}`;
     };
 
-    const openBooking = (serviceName: string) => {
+    const openBooking = () => {
+        if (selectedTests.length === 0) {
+            Alert.alert('تنبيه', 'يرجى اختيار خدمة واحدة على الأقل');
+            return;
+        }
         const now = new Date();
         setCalendarMonth(now.getMonth());
         setCalendarYear(now.getFullYear());
-        setBookingForm({
-            service_name: serviceName,
-            date: now.toISOString().split('T')[0],
-            time: '',
-            reason: '',
-        });
+        setBookingForm({ date: now.toISOString().split('T')[0], time: '', reason: '' });
         setBookingModal(true);
     };
 
@@ -87,9 +101,10 @@ export default function RadiologyProfileScreen() {
 
     const handleBook = async () => {
         if (!user?.id) { Alert.alert('تنبيه', 'يجب تسجيل الدخول'); return; }
-        if (!bookingForm.service_name || !bookingForm.date || !bookingForm.time) { 
-            Alert.alert('تنبيه', 'يرجى ملء جميع الحقول'); 
-            return; 
+        if (selectedTests.length === 0) { Alert.alert('تنبيه', 'يرجى اختيار خدمة واحدة على الأقل'); return; }
+        if (!bookingForm.date || !bookingForm.time) {
+            Alert.alert('تنبيه', 'يرجى تحديد التاريخ والوقت');
+            return;
         }
         setSubmitting(true);
         try {
@@ -97,13 +112,19 @@ export default function RadiologyProfileScreen() {
                 patient_id: user.id,
                 provider_id: id,
                 provider_role: 'radiology',
-                service_name: bookingForm.service_name,
+                service_items: selectedTests.map(test => ({
+                    id: test.id,
+                    name: test.name,
+                    price: Number(test.price || 0),
+                })),
+                services_total: selectedTotal,
                 date: bookingForm.date,
                 time: bookingForm.time,
                 reason: bookingForm.reason,
             });
             setBookingModal(false);
-            setBookingForm({ service_name: '', date: '', time: '', reason: '' });
+            setSelectedTests([]);
+            setBookingForm({ date: '', time: '', reason: '' });
             Alert.alert('✅ تم الحجز', 'تم حفظ الحجز في حجوزاتك بانتظار موافقة المركز', [
                 { text: 'عرض حجوزاتي', onPress: () => router.replace({ pathname: '/(patient)/radiology', params: { tab: 'bookings' } } as any) },
             ]);
@@ -121,15 +142,6 @@ export default function RadiologyProfileScreen() {
     if (!center) {
         return <View style={styles.loaderArea}><Text>المركز غير موجود</Text></View>;
     }
-
-    const services = [
-        { name: 'أشعة سينية (X-Ray)', icon: 'scan-outline' },
-        { name: 'أشعة مقطعية (CT Scan)', icon: 'scan' },
-        { name: 'رنين مغناطيسي (MRI)', icon: 'magnet-outline' },
-        { name: 'موجات فوق صوتية (Ultrasound)', icon: 'pulse-outline' },
-        { name: 'ماموجرام', icon: 'medical-outline' },
-        { name: 'أشعة بانوراما للأسنان', icon: 'medical-outline' },
-    ];
 
     return (
         <View style={styles.container}>
@@ -180,24 +192,58 @@ export default function RadiologyProfileScreen() {
                     <Text style={styles.sectionTitle}>الخدمات المتوفرة</Text>
                     <Text style={styles.sectionSubtitle}>اختر نوع الأشعة المطلوبة</Text>
 
-                    <View style={styles.servicesGrid}>
-                        {services.map((service, idx) => (
-                            <TouchableOpacity 
-                                key={idx} 
-                                style={styles.serviceCard}
-                                onPress={() => openBooking(service.name)}
-                            >
-                                <View style={styles.serviceIcon}>
-                                    <Ionicons name={service.icon as any} size={28} color="#8B5CF6" />
+                    {selectedTests.length > 0 && (
+                        <View style={styles.basketCard}>
+                            <View style={styles.basketHeader}>
+                                <TouchableOpacity onPress={() => setSelectedTests([])}>
+                                    <Text style={styles.clearBasketText}>تفريغ</Text>
+                                </TouchableOpacity>
+                                <View style={{ alignItems: 'flex-end', flex: 1 }}>
+                                    <Text style={styles.basketTitle}>الخدمات المختارة</Text>
+                                    <Text style={styles.basketMeta}>{selectedTests.length} خدمة | {selectedTotal.toLocaleString()} ل.س</Text>
                                 </View>
-                                <Text style={styles.serviceName}>{service.name}</Text>
-                                <View style={styles.bookServiceBtn}>
-                                    <Text style={styles.bookServiceBtnText}>احجز</Text>
-                                    <Ionicons name="chevron-back" size={14} color="#8B5CF6" />
-                                </View>
+                            </View>
+                            <TouchableOpacity onPress={openBooking}>
+                                <LinearGradient colors={['#8B5CF6', '#6366F1']} style={styles.basketBookGrad}>
+                                    <Text style={styles.basketBookText}>حجز الخدمات المختارة</Text>
+                                </LinearGradient>
                             </TouchableOpacity>
-                        ))}
-                    </View>
+                        </View>
+                    )}
+
+                    {tests.length === 0 ? (
+                        <View style={styles.emptyServices}>
+                            <MaterialCommunityIcons name="radiology-box" size={40} color="#D1D5DB" />
+                            <Text style={styles.emptyServicesText}>لا توجد خدمات مدرجة حالياً</Text>
+                        </View>
+                    ) : (
+                        tests.map((test, idx) => {
+                            const isSelected = selectedTests.some(item => item.id === test.id);
+                            return (
+                                <View key={test.id || idx} style={[styles.testCard, isSelected && styles.testCardSelected]}>
+                                    <View style={styles.testHeaderRow}>
+                                        <TouchableOpacity
+                                            style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+                                            onPress={() => toggleTest(test)}
+                                        >
+                                            {isSelected && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                                        </TouchableOpacity>
+                                        <Text style={styles.testName}>{test.name}</Text>
+                                        <Text style={styles.testPrice}>{test.price?.toLocaleString()} ل.س</Text>
+                                    </View>
+                                    {test.description ? <Text style={styles.testDesc}>{test.description}</Text> : null}
+                                    <TouchableOpacity
+                                        style={[styles.selectBtn, isSelected && styles.selectBtnActive]}
+                                        onPress={() => toggleTest(test)}
+                                    >
+                                        <Text style={[styles.selectBtnText, isSelected && styles.selectBtnTextActive]}>
+                                            {isSelected ? 'مختار' : 'اختيار'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })
+                    )}
                 </View>
 
                 {center.description && (
@@ -221,18 +267,13 @@ export default function RadiologyProfileScreen() {
                     >
                         <View style={styles.modalHandle} />
                         <Text style={styles.modalTitle}>حجز موعد أشعة</Text>
-                        {bookingForm.service_name && (
-                            <Text style={styles.modalSubtitle}>{bookingForm.service_name}</Text>
-                        )}
-
-                        <Text style={styles.fieldLabel}>نوع الأشعة *</Text>
-                        <TextInput
-                            style={styles.fieldInput}
-                            placeholder="مثال: أشعة سينية للصدر"
-                            value={bookingForm.service_name}
-                            onChangeText={v => setBookingForm(f => ({ ...f, service_name: v }))}
-                            textAlign="right"
-                        />
+                        <Text style={styles.modalSubtitle}>{selectedTests.length} خدمة | {selectedTotal.toLocaleString()} ل.س</Text>
+                        {selectedTests.map(test => (
+                            <View key={test.id} style={styles.modalSelectedRow}>
+                                <Text style={styles.modalSelectedPrice}>{Number(test.price || 0).toLocaleString()} ل.س</Text>
+                                <Text style={styles.modalSelectedName}>{test.name}</Text>
+                            </View>
+                        ))}
 
                         <Text style={styles.fieldLabel}>اختر التاريخ *</Text>
                         <ArabicCalendar
@@ -398,48 +439,30 @@ const styles = StyleSheet.create({
         textAlign: 'right', 
         marginBottom: 15 
     },
-    servicesGrid: { 
-        flexDirection: 'row-reverse', 
-        flexWrap: 'wrap', 
-        gap: 12 
-    },
-    serviceCard: { 
-        width: '48%', 
-        backgroundColor: '#FFF', 
-        borderRadius: 16, 
-        padding: 16, 
-        alignItems: 'center', 
-        borderWidth: 1, 
-        borderColor: '#F3F4F6', 
-        elevation: 2 
-    },
-    serviceIcon: { 
-        width: 56, 
-        height: 56, 
-        borderRadius: 28, 
-        backgroundColor: '#F3E8FF', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        marginBottom: 12 
-    },
-    serviceName: { 
-        fontSize: 13, 
-        fontWeight: '700', 
-        color: '#111827', 
-        textAlign: 'center', 
-        marginBottom: 12,
-        minHeight: 36
-    },
-    bookServiceBtn: { 
-        flexDirection: 'row-reverse', 
-        alignItems: 'center', 
-        gap: 4 
-    },
-    bookServiceBtnText: { 
-        fontSize: 13, 
-        fontWeight: '700', 
-        color: '#8B5CF6' 
-    },
+    basketCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#E9D5FF' },
+    basketHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 12, gap: 12 },
+    basketTitle: { fontSize: 15, fontWeight: '800', color: '#111827', textAlign: 'right' },
+    basketMeta: { fontSize: 12, color: '#6B7280', textAlign: 'right' },
+    clearBasketText: { fontSize: 13, fontWeight: '700', color: '#EF4444' },
+    basketBookGrad: { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+    basketBookText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+    emptyServices: { alignItems: 'center', paddingVertical: 40, gap: 10 },
+    emptyServicesText: { fontSize: 14, color: '#9CA3AF' },
+    testCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F3F4F6' },
+    testCardSelected: { borderColor: '#8B5CF6', backgroundColor: '#FAF5FF' },
+    testHeaderRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 8 },
+    testName: { flex: 1, fontSize: 14, fontWeight: '700', color: '#111827', textAlign: 'right' },
+    testPrice: { fontSize: 13, fontWeight: '800', color: '#8B5CF6' },
+    testDesc: { fontSize: 12, color: '#6B7280', textAlign: 'right', marginBottom: 10 },
+    checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center' },
+    checkboxSelected: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
+    selectBtn: { borderRadius: 12, borderWidth: 1, borderColor: '#8B5CF6', paddingVertical: 10, alignItems: 'center' },
+    selectBtnActive: { backgroundColor: '#8B5CF6' },
+    selectBtnText: { fontWeight: '700', color: '#8B5CF6' },
+    selectBtnTextActive: { color: '#FFF' },
+    modalSelectedRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    modalSelectedName: { flex: 1, fontSize: 13, color: '#374151', textAlign: 'right' },
+    modalSelectedPrice: { fontSize: 13, fontWeight: '700', color: '#8B5CF6' },
     descSection: { marginBottom: 25 },
     descText: { 
         fontSize: 14, 

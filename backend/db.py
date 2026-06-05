@@ -32,6 +32,7 @@ def init_db():
     ensure_sqlite_columns()
     ensure_demo_secretary()
     ensure_demo_radiology_centers()
+    ensure_provider_catalog()
     ensure_demo_core_users()
     ensure_demo_appointments()
 
@@ -204,6 +205,57 @@ def ensure_demo_radiology_centers():
             if db.query(User).filter(User.id == row["id"]).first():
                 continue
             db.add(User(**row))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_provider_catalog():
+    """Seed lab/radiology service catalogs when a provider has no tests yet."""
+    from models import LabTest, User
+
+    lab_catalog = [
+        {"id": "lt1", "lab_id": "lab1", "name": "صورة دم كاملة CBC", "category": "تحاليل الدم", "price": 3500, "duration_hours": 2,
+         "description": "تحليل شامل لخلايا الدم", "preparation": "لا يشترط الصيام"},
+        {"id": "lt2", "lab_id": "lab1", "name": "سكر الدم الصائم", "category": "تحاليل الدم", "price": 1800, "duration_hours": 1,
+         "description": "قياس مستوى السكر في الدم", "preparation": "الصيام 8 ساعات مطلوب"},
+        {"id": "lt3", "lab_id": "lab1", "name": "وظائف الكبد LFT", "category": "تحاليل الدم", "price": 6500, "duration_hours": 4,
+         "description": "فحص إنزيمات الكبد", "preparation": "الصيام 8 ساعات مطلوب"},
+        {"id": "lt8", "lab_id": "lab2", "name": "تحليل الهيموغلوبين السكري HbA1c", "category": "تحاليل الدم", "price": 7500, "duration_hours": 4,
+         "description": "مؤشر متوسط السكر", "preparation": "لا يشترط الصيام"},
+        {"id": "lt9", "lab_id": "lab2", "name": "فيروس التهاب الكبد B و C", "category": "فحوصات الفيروسات", "price": 12000, "duration_hours": 8,
+         "description": "كشف فيروس التهاب الكبد", "preparation": "لا يشترط الصيام"},
+    ]
+    radiology_catalog = [
+        {"id": "rt1", "lab_id": "rad1", "name": "أشعة سينية (X-Ray)", "category": "أشعة", "price": 25000, "duration_hours": 1,
+         "description": "تصوير بالأشعة السينية", "preparation": "إزالة المعادن من منطقة الفحص"},
+        {"id": "rt2", "lab_id": "rad1", "name": "أشعة مقطعية (CT Scan)", "category": "أشعة", "price": 85000, "duration_hours": 2,
+         "description": "تصوير مقطعي محوسب", "preparation": "الصيام 4 ساعات إن لزم الصبغة"},
+        {"id": "rt3", "lab_id": "rad1", "name": "رنين مغناطيسي (MRI)", "category": "أشعة", "price": 120000, "duration_hours": 3,
+         "description": "تصوير بالرنين المغناطيسي", "preparation": "إزالة أي أجهزة معدنية"},
+        {"id": "rt4", "lab_id": "rad1", "name": "موجات فوق صوتية (Ultrasound)", "category": "أشعة", "price": 35000, "duration_hours": 1,
+         "description": "فحص بالموجات فوق الصوتية", "preparation": "شرب الماء قبل الفحص إن طُلب"},
+        {"id": "rt5", "lab_id": "rad2", "name": "ماموجرام", "category": "أشعة", "price": 45000, "duration_hours": 1,
+         "description": "فحص الثدي الشعاعي", "preparation": "لا يشترط تحضير خاص"},
+        {"id": "rt6", "lab_id": "rad2", "name": "أشعة بانوراما للأسنان", "category": "أشعة", "price": 20000, "duration_hours": 1,
+         "description": "تصوير بانورامي للفك والأسنان", "preparation": "إزالة المجوهرات من الفم"},
+    ]
+
+    catalogs_by_provider = {}
+    for row in lab_catalog + radiology_catalog:
+        catalogs_by_provider.setdefault(row["lab_id"], []).append(row)
+
+    db = SessionLocal()
+    try:
+        for provider_id, rows in catalogs_by_provider.items():
+            if not db.query(User).filter(User.id == provider_id).first():
+                continue
+            for row in rows:
+                if db.query(LabTest).filter(LabTest.id == row["id"]).first():
+                    continue
+                db.add(LabTest(**row))
         db.commit()
     except Exception:
         db.rollback()
