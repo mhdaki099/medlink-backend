@@ -54,10 +54,11 @@ export default function PharmacyDashboard() {
         processing: orders.filter((o: any) => ['processing', 'preparing'].includes(o.status)).length,
         delivered: orders.filter((o: any) => o.status === 'delivered').length,
     };
-    const inStock = medicines.filter((m: any) => m.stock_status === 'in_stock').length;
+    const listedMeds = medicines.filter((m: any) => m.stock_status !== 'out_of_stock').length;
 
     const STATS = [
-        { label: 'أدوية متوفرة', val: inStock, icon: 'pill', color: C.success },
+        { label: 'أدوية معروضة', val: listedMeds, icon: 'pill', color: C.success },
+        { label: 'إجمالي الأدوية', val: medicines.length, icon: 'format-list-bulleted', color: C.accent },
         { label: 'طلبات جديدة', val: counts.pending, icon: 'bell-ring-outline', color: C.primary },
         { label: 'قيد التجهيز', val: counts.processing, icon: 'package-variant', color: C.blue },
         { label: 'تم التسليم', val: counts.delivered, icon: 'check-circle-outline', color: C.success },
@@ -112,7 +113,7 @@ export default function PharmacyDashboard() {
                         <MaterialCommunityIcons name="pill" size={24} color={C.success} />
                     </View>
                     <Text style={styles.quickTitle}>إدارة الأدوية</Text>
-                    <Text style={styles.quickSub}>إضافة وتعديل المخزون</Text>
+                    <Text style={styles.quickSub}>إضافة وتعديل الأدوية</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.quickCard} onPress={() => router.push('/(pharmacy)/warehouse' as any)}>
                     <View style={[styles.quickIcon, { backgroundColor: '#EA580C15' }]}>

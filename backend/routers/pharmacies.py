@@ -159,6 +159,8 @@ def update_medicine(medicine_id: str, updates: dict, current_user: dict = Depend
     med = db.query(Medicine).filter(Medicine.id == medicine_id).first()
     if not med:
         raise HTTPException(404, "الدواء غير موجود")
+    if current_user.get("role") == "pharmacy" and current_user.get("sub") != med.pharmacy_id:
+        raise HTTPException(403, "غير مصرح لك بتعديل هذا الدواء")
     for key, value in updates.items():
         if hasattr(med, key):
             setattr(med, key, value)
@@ -168,6 +170,8 @@ def update_medicine(medicine_id: str, updates: dict, current_user: dict = Depend
 @router.delete("/medicines/{medicine_id}")
 def delete_medicine(medicine_id: str, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
     med = db.query(Medicine).filter(Medicine.id == medicine_id).first()
+    if current_user.get("role") == "pharmacy" and med and current_user.get("sub") != med.pharmacy_id:
+        raise HTTPException(403, "غير مصرح لك بحذف هذا الدواء")
     if med:
         db.delete(med); db.commit()
     return {"message": "تم الحذف"}

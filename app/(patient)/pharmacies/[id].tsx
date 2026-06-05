@@ -103,7 +103,10 @@ export default function PharmacyProfileScreen() {
                             <Text style={styles.emptyText}>لا توجد أدوية مدرجة حالياً</Text>
                         </View>
                     ) : (
-                        medicines.map((med, idx) => (
+                        medicines.map((med, idx) => {
+                            const isListed = med.stock_status === 'in_stock';
+                            const statusLabel = med.stock_status === 'coming_soon' ? 'قريباً' : isListed ? 'متوفر' : 'غير متوفر';
+                            return (
                             <View key={med.id || idx} style={styles.medCard}>
                                 <View style={styles.medImageWrap}>
                                     <Image 
@@ -117,22 +120,23 @@ export default function PharmacyProfileScreen() {
                                 <View style={styles.medInfo}>
                                     <View style={styles.medHeaderRow}>
                                         <Text style={styles.medName}>{med.name}</Text>
-                                        <View style={[styles.stockBadge, med.quantity > 0 ? styles.inStock : styles.outOfStock]}>
-                                            <Text style={[styles.stockText, med.quantity > 0 ? styles.inStockText : styles.outOfStockText]}>
-                                                {med.quantity > 0 ? 'متوفر' : 'نَفِد'}
+                                        <View style={[styles.stockBadge, isListed ? styles.inStock : styles.outOfStock]}>
+                                            <Text style={[styles.stockText, isListed ? styles.inStockText : styles.outOfStockText]}>
+                                                {statusLabel}
                                             </Text>
                                         </View>
                                     </View>
                                     <Text style={styles.medCat}>{med.category}</Text>
                                     <View style={styles.medFooter}>
                                         <Text style={styles.medPrice}>{med.price?.toLocaleString()} ل.س</Text>
-                                        <TouchableOpacity style={styles.addBtn} disabled={med.quantity <= 0}>
-                                            <Ionicons name="add" size={20} color={med.quantity > 0 ? "#FFF" : "#9CA3AF"} />
+                                        <TouchableOpacity style={styles.addBtn} disabled={!isListed}>
+                                            <Ionicons name="add" size={20} color={isListed ? "#FFF" : "#9CA3AF"} />
                                         </TouchableOpacity>
                                     </View>
                                 </View>
                             </View>
-                        ))
+                            );
+                        })
                     )}
                 </View>
                 <View style={{ height: 100 }} />
