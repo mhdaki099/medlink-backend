@@ -6,7 +6,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import OrderItemsList from '../../src/components/OrderItemsList';
 
-import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
+import { useProviderTabBarClearance } from '../../src/constants/layout';
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
     blue: '#2980B9', bg: '#F5F6FA', white: '#FFF', text: '#1A1A2E',
@@ -18,6 +18,7 @@ const STATUS_ICONS: Record<string, string> = { pending_confirmation: 'clock-outl
 
 export default function PharmacyOrders() {
     const { user } = useAuth();
+    const bottomPad = useProviderTabBarClearance();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -67,7 +68,7 @@ export default function PharmacyOrders() {
                 </ScrollView>
             </LinearGradient>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPad }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" /> :
                     filtered.length === 0 ? (

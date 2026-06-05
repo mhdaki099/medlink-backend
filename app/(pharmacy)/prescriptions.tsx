@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
-import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
+import { useSubscreenBottomPadding } from '../../src/constants/layout';
 
 const STATUS_LABELS: Record<string, string> = {
     pending: 'بانتظار الصرف',
@@ -14,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function PharmacyPrescriptions() {
     const { user } = useAuth();
+    const bottomPad = useSubscreenBottomPadding();
     const [code, setCode] = useState('');
     const [patientName, setPatientName] = useState('');
     const [phone, setPhone] = useState('');
@@ -61,7 +62,7 @@ export default function PharmacyPrescriptions() {
                 <Text style={styles.headerSub}>ابحث بالرمز أو اسم المريض أو الهاتف</Text>
             </LinearGradient>
 
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomPad }]} keyboardShouldPersistTaps="handled">
                 <View style={styles.searchBox}>
                     <TextInput style={styles.input} placeholder="رمز الوصفة RX-..." value={code} onChangeText={setCode} textAlign="right" />
                     <TextInput style={styles.input} placeholder="اسم المريض" value={patientName} onChangeText={setPatientName} textAlign="right" />
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     header: { paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 24, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
     headerTitle: { fontFamily: 'Cairo_700Bold', fontSize: 22, color: '#FFF', textAlign: 'right' },
     headerSub: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(255,255,255,0.85)', textAlign: 'right', marginTop: 4 },
-    content: { padding: 20, paddingBottom: TAB_BAR_CLEARANCE },
+    content: { padding: 20 },
     searchBox: { backgroundColor: '#FFF', borderRadius: 20, padding: 16, gap: 10, marginBottom: 16 },
     input: { backgroundColor: '#F8FAFC', borderRadius: 12, height: 48, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular', borderWidth: 1, borderColor: '#E2E8F0' },
     searchBtn: { backgroundColor: '#FF9500', borderRadius: 12, height: 48, justifyContent: 'center', alignItems: 'center' },

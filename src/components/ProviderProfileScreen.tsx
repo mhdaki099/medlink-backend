@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from '
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { TAB_BAR_CLEARANCE } from '../constants/layout';
+import { useProviderTabBarClearance } from '../constants/layout';
 import { FONTS } from '../constants/typography';
 
 type Props = {
@@ -14,11 +14,12 @@ type Props = {
 
 export default function ProviderProfileScreen({ title, icon, accent = '#1E88E5' }: Props) {
     const { user, logout } = useAuth();
+    const bottomPad = useProviderTabBarClearance();
 
     return (
         <ScrollView
             style={styles.container}
-            contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+            contentContainerStyle={{ paddingBottom: bottomPad }}
             showsVerticalScrollIndicator={false}
         >
             <LinearGradient colors={[accent, '#43A047']} style={styles.header}>

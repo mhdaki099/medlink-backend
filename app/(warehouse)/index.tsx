@@ -6,11 +6,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
+import { useProviderTabBarClearance } from '../../src/constants/layout';
 
 export default function WarehouseDashboard() {
     const { user, logout } = useAuth();
     const router = useRouter();
+    const bottomPad = useProviderTabBarClearance();
     const [inventory, setInventory] = useState<any[]>([]);
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -47,7 +48,7 @@ export default function WarehouseDashboard() {
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+            contentContainerStyle={{ paddingBottom: bottomPad }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
             <LinearGradient colors={['#EA580C', '#DC2626']} style={styles.header} start={{x:0,y:0}} end={{x:1,y:1}}>
                 <View style={styles.headerRow}>

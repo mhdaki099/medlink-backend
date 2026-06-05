@@ -7,7 +7,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
 
-import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
+import { useSubscreenBottomPadding, useSubscreenFabBottom } from '../../src/constants/layout';
 const { width } = Dimensions.get('window');
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
@@ -21,6 +21,8 @@ const STOCK_ICONS: Record<string, string> = { in_stock: 'check-circle', out_of_s
 export default function PharmacyMedicines() {
     const { user } = useAuth();
     const router = useRouter();
+    const bottomPad = useSubscreenBottomPadding(80);
+    const fabBottom = useSubscreenFabBottom();
     const [medicines, setMedicines] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
@@ -90,13 +92,13 @@ export default function PharmacyMedicines() {
             </LinearGradient>
 
             {/* FAB */}
-            <TouchableOpacity style={styles.fab} onPress={() => setShowAdd(true)}>
+            <TouchableOpacity style={[styles.fab, { bottom: fabBottom }]} onPress={() => setShowAdd(true)}>
                 <LinearGradient colors={[C.primary, C.accent]} style={styles.fabGrad}>
                     <MaterialCommunityIcons name="plus" size={28} color="#FFF" />
                 </LinearGradient>
             </TouchableOpacity>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}>
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPad }}>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" /> :
                     filtered.length === 0 ? (
                         <View style={styles.empty}>
@@ -184,7 +186,7 @@ const styles = StyleSheet.create({
     excelBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     searchBar: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 14, paddingHorizontal: 14, height: 44 },
     searchInput: { flex: 1, fontSize: 14, fontFamily: 'Cairo_400Regular', color: C.text, marginRight: 8 },
-    fab: { position: 'absolute', bottom: TAB_BAR_FAB_BOTTOM, left: 20, zIndex: 50 },
+    fab: { position: 'absolute', left: 20, zIndex: 50 },
     fabGrad: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
     list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
     empty: { alignItems: 'center', marginTop: 60, gap: 12 },

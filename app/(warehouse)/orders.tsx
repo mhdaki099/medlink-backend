@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
-import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
+import { useProviderTabBarClearance } from '../../src/constants/layout';
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', blue: '#3B82F6',
     bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
@@ -16,6 +16,7 @@ const STATUS_ICONS: Record<string, string> = { pending: 'clock-outline', process
 
 export default function WarehouseOrders() {
     const { user } = useAuth();
+    const bottomPad = useProviderTabBarClearance();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -64,7 +65,7 @@ export default function WarehouseOrders() {
                 </ScrollView>
             </LinearGradient>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPad }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" /> :
                     filtered.length === 0 ? (

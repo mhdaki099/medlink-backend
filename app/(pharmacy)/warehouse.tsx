@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSubscreenBottomPadding, useSubscreenFabBottom } from '../../src/constants/layout';
 
 const C = {
     warehouse: '#EA580C', bg: '#F8FAFC', white: '#FFF', text: '#111827',
@@ -14,6 +15,8 @@ const C = {
 export default function PharmacyWarehouse() {
     const { user } = useAuth();
     const router = useRouter();
+    const bottomPad = useSubscreenBottomPadding();
+    const orderBarBottom = useSubscreenFabBottom(16);
     const [warehouses, setWarehouses] = useState<any[]>([]);
     const [inventory, setInventory] = useState<any[]>([]);
     const [selectedWh, setSelectedWh] = useState<string | null>(null);
@@ -90,7 +93,7 @@ export default function PharmacyWarehouse() {
                 ))}
             </ScrollView>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: cartCount > 0 ? 100 : 24 }}>
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: cartCount > 0 ? orderBarBottom + 88 : bottomPad }}>
                 {loading ? <ActivityIndicator color={C.warehouse} style={{ marginTop: 40 }} size="large" /> :
                     warehouses.length === 0 ? (
                         <View style={styles.empty}>
@@ -130,7 +133,7 @@ export default function PharmacyWarehouse() {
             </ScrollView>
 
             {cartCount > 0 && (
-                <TouchableOpacity style={styles.orderBar} onPress={placeOrder} activeOpacity={0.88}>
+                <TouchableOpacity style={[styles.orderBar, { bottom: orderBarBottom }]} onPress={placeOrder} activeOpacity={0.88}>
                     <Text style={styles.orderBarText}>{cartCount} أصناف</Text>
                     <Text style={styles.orderBarBtn}>إرسال الطلب للمستودع ←</Text>
                 </TouchableOpacity>
@@ -170,7 +173,7 @@ const styles = StyleSheet.create({
     qtyBtnText: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: C.warehouse },
     qtyVal: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.text },
     orderBar: {
-        position: 'absolute', bottom: 24, left: 16, right: 16,
+        position: 'absolute', left: 16, right: 16,
         backgroundColor: C.warehouse, borderRadius: 16, padding: 16,
         flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center',
         shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,

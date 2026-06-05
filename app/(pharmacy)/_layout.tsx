@@ -3,6 +3,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PROVIDER_TAB_BAR_BASE_HEIGHT } from '../../src/constants/layout';
 
 const { width } = Dimensions.get('window');
 
@@ -15,7 +16,7 @@ const TABS = [
 const HIDE_TAB_BAR_ROUTES = new Set(['medicines', 'prescriptions', 'warehouse']);
 
 const TAB_WIDTH = width / 3;
-const TAB_BAR_BASE_HEIGHT = 70;
+const TAB_BAR_BASE_HEIGHT = PROVIDER_TAB_BAR_BASE_HEIGHT;
 const FAB_SIZE = 56;
 
 function CustomTabBar({ state, navigation }: any) {

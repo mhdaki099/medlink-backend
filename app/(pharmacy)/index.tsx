@@ -7,7 +7,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import OrderItemsList from '../../src/components/OrderItemsList';
 
-import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
+import { useProviderTabBarClearance } from '../../src/constants/layout';
 const { width } = Dimensions.get('window');
 const C = {
     primary: '#1E88E5', primaryDark: '#1565C0', accent: '#43A047', success: '#27AE60',
@@ -18,6 +18,7 @@ const C = {
 export default function PharmacyDashboard() {
     const { user, logout } = useAuth();
     const router = useRouter();
+    const bottomPad = useProviderTabBarClearance();
     const [orders, setOrders] = useState<any[]>([]);
     const [medicines, setMedicines] = useState<any[]>([]);
     const [analytics, setAnalytics] = useState<any>(null);
@@ -70,7 +71,7 @@ export default function PharmacyDashboard() {
     const STATUS_COLORS: Record<string, string> = { pending: C.primary, pending_confirmation: C.primary, processing: C.blue, preparing: C.blue, delivered: C.success, cancelled: C.danger };
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPad }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
 
             {/* Gradient Header */}
