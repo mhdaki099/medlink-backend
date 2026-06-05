@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { 
     View, Text, StyleSheet, ScrollView, ActivityIndicator, 
-    RefreshControl, TouchableOpacity, Alert, Platform, Image, Modal, TextInput, KeyboardAvoidingView,
+    RefreshControl, TouchableOpacity, Alert, Platform, Modal, TextInput, KeyboardAvoidingView, Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,8 +15,8 @@ import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 export default function DoctorAppointments() {
     const { user } = useAuth();
     const router = useRouter();
-    const [appointments, setAppointments] = useState<any[]>([]);
-    const [filter, setFilter] = useState<string>('needs_action');
+    const [allAppointments, setAllAppointments] = useState<any[]>([]);
+    const [filter, setFilter] = useState<string>('upcoming');
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [actionModal, setActionModal] = useState<{
@@ -51,21 +51,12 @@ export default function DoctorAppointments() {
         }
         try {
             const apts = await api.getAppointments({ doctor_id: user.id });
-            const UPCOMING = new Set([
-                'pending', 'confirmed', 'cancellation_requested',
-                'reschedule_requested', 'schedule_change_pending',
-                'patient_confirmation_pending',
-            ]);
-            const NEEDS_ACTION = new Set(['cancellation_requested', 'reschedule_requested']);
-            let filtered = apts;
-            if (filter === 'needs_action') {
-                filtered = apts.filter((a: any) => NEEDS_ACTION.has(a.status));
-            } else if (filter === 'pending') {
-                filtered = apts.filter((a: any) => UPCOMING.has(a.status));
-            } else if (filter !== 'all') {
-                filtered = apts.filter((a: any) => a.status === filter);
-            }
-            setAppointments(filtered);
+            const sorted = [...apts].sort((a, b) => {
+                const da = `${a.date || ''} ${a.time || ''}`;
+                const db = `${b.date || ''} ${b.time || ''}`;
+                return db.localeCompare(da);
+            });
+            setAllAppointments(sorted);
         } catch (e: any) {
             console.warn(e);
             Alert.alert('خطأ', e.message || 'تعذر تحميل المواعيد');
@@ -75,13 +66,32 @@ export default function DoctorAppointments() {
         }
     };
 
-    useEffect(() => { loadData(); }, [filter]);
+    useEffect(() => { loadData(); }, []);
 
     useFocusEffect(
         useCallback(() => {
             loadData();
-        }, [filter, user?.id])
+        }, [user?.id])
     );
+
+    const FILTER_FN: Record<string, (a: any) => boolean> = {
+        needs_action: (a) => ['cancellation_requested', 'reschedule_requested'].includes(a.status),
+        upcoming: (a) => ['pending', 'confirmed', 'patient_confirmation_pending', 'schedule_change_pending'].includes(a.status),
+        done: (a) => a.status === 'completed',
+        cancelled: (a) => ['cancelled', 'rejected'].includes(a.status),
+        all: () => true,
+    };
+
+    const FILTERS = [
+        { key: 'needs_action', label: 'طلبات' },
+        { key: 'upcoming', label: 'القادمة' },
+        { key: 'done', label: 'منتهية' },
+        { key: 'cancelled', label: 'ملغاة' },
+        { key: 'all', label: 'الكل' },
+    ];
+
+    const appointments = allAppointments.filter(FILTER_FN[filter] || FILTER_FN.all);
+    const getFilterCount = (key: string) => allAppointments.filter(FILTER_FN[key] || FILTER_FN.all).length;
 
     const handleStatusUpdate = async (
         id: string,
@@ -195,14 +205,6 @@ export default function DoctorAppointments() {
         }
     };
 
-    const FILTERS = [
-        { key: 'needs_action', label: 'طلبات' },
-        { key: 'pending', label: 'القادمة' },
-        { key: 'completed', label: 'المكتملة' },
-        { key: 'cancelled', label: 'الملغاة' },
-        { key: 'all', label: 'الكل' },
-    ];
-
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'confirmed': return '#10B981';
@@ -212,6 +214,8 @@ export default function DoctorAppointments() {
             case 'cancellation_requested': return '#DC2626';
             case 'reschedule_requested': return '#D97706';
             case 'schedule_change_pending': return '#7C3AED';
+            case 'patient_confirmation_pending': return '#8B5CF6';
+            case 'rejected': return '#EF4444';
             default: return '#64748B';
         }
     };
@@ -220,30 +224,45 @@ export default function DoctorAppointments() {
         switch (status) {
             case 'confirmed': return 'مؤكد';
             case 'pending': return 'قيد الانتظار';
-            case 'completed': return 'مكتمل';
+            case 'completed': return 'منتهي';
             case 'cancelled': return 'ملغى';
+            case 'rejected': return 'مرفوض';
             case 'cancellation_requested': return 'طلب إلغاء';
             case 'reschedule_requested': return 'طلب إعادة جدولة';
             case 'schedule_change_pending': return 'بانتظار المريض';
+            case 'patient_confirmation_pending': return 'بانتظار المريض';
             default: return status;
         }
+    };
+
+    const callPatient = (phone?: string) => {
+        if (!phone?.trim()) {
+            Alert.alert('تنبيه', 'لا يوجد رقم هاتف مسجل للمريض');
+            return;
+        }
+        Linking.openURL(`tel:${phone.trim()}`);
     };
 
     return (
         <View style={styles.container}>
             <LinearGradient colors={['#F8FAFC', '#F8FAFC']} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                 <Text style={styles.headerTitle}>المواعيد</Text>
-                <View style={styles.filterContainer}>
-                    {FILTERS.map(f => (
-                        <TouchableOpacity 
-                            key={f.key} 
-                            style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
-                            onPress={() => setFilter(f.key)}
-                        >
-                            <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                    {FILTERS.map(f => {
+                        const count = getFilterCount(f.key);
+                        return (
+                            <TouchableOpacity
+                                key={f.key}
+                                style={[styles.filterChip, filter === f.key && styles.filterChipActive]}
+                                onPress={() => setFilter(f.key)}
+                            >
+                                <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
+                                    {f.label}{count > 0 ? ` (${count})` : ''}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
             </LinearGradient>
 
             <ScrollView 
@@ -271,8 +290,10 @@ export default function DoctorAppointments() {
                                     <Ionicons name="person" size={22} color="#94A3B8" />
                                 </View>
                                 <View style={styles.patientInfo}>
-                                    <Text style={styles.patientName}>{apt.patient?.name || apt.patient?.id || 'مريض غير معروف'}</Text>
-                                    <Text style={styles.patientMeta}>كشف عام</Text>
+                                    <Text style={styles.patientName}>{apt.patient?.name || 'مريض غير معروف'}</Text>
+                                    {apt.patient?.patient_unique_id ? (
+                                        <Text style={styles.patientMeta}>ID: {apt.patient.patient_unique_id}</Text>
+                                    ) : null}
                                 </View>
                                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(apt.status) + '15' }]}>
                                     <Text style={[styles.statusLabelTxt, { color: getStatusColor(apt.status) }]}>{getStatusLabel(apt.status)}</Text>
@@ -288,8 +309,41 @@ export default function DoctorAppointments() {
                                     <Ionicons name="time-outline" size={14} color="#64748B" />
                                     <Text style={styles.dateText}>{apt.time}</Text>
                                 </View>
+                                {apt.price ? (
+                                    <View style={styles.dateTimePill}>
+                                        <Ionicons name="cash-outline" size={14} color="#64748B" />
+                                        <Text style={styles.dateText}>{apt.price.toLocaleString()} ل.س</Text>
+                                    </View>
+                                ) : null}
                             </View>
-                            {/* Debug: <Text style={{fontSize: 8}}>{apt.id}</Text> */}
+
+                            {(apt.reason || apt.notes) ? (
+                                <View style={styles.reasonBox}>
+                                    <Text style={styles.reasonLabel}>سبب الزيارة / الشكوى</Text>
+                                    <Text style={styles.reasonText}>{apt.reason || apt.notes}</Text>
+                                </View>
+                            ) : null}
+
+                            <View style={styles.contactRow}>
+                                {apt.patient?.phone ? (
+                                    <TouchableOpacity style={styles.contactPill} onPress={() => callPatient(apt.patient.phone)}>
+                                        <Ionicons name="call-outline" size={14} color="#0EA5E9" />
+                                        <Text style={styles.contactText}>{apt.patient.phone}</Text>
+                                    </TouchableOpacity>
+                                ) : null}
+                                {apt.patient?.email && !apt.patient.email.includes('provisional_') ? (
+                                    <View style={styles.contactPill}>
+                                        <Ionicons name="mail-outline" size={14} color="#64748B" />
+                                        <Text style={styles.contactText} numberOfLines={1}>{apt.patient.email}</Text>
+                                    </View>
+                                ) : null}
+                                {apt.patient?.city ? (
+                                    <View style={styles.contactPill}>
+                                        <Ionicons name="location-outline" size={14} color="#64748B" />
+                                        <Text style={styles.contactText}>{apt.patient.city}</Text>
+                                    </View>
+                                ) : null}
+                            </View>
 
 
                             {/* Reschedule/Cancel request indicators */}
@@ -404,6 +458,32 @@ export default function DoctorAppointments() {
                                     >
                                         <Text style={styles.confirmBtnText}>إنهاء الجلسة</Text>
                                     </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {apt.status === 'completed' && (
+                                <View style={styles.actions}>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, { backgroundColor: '#6366F1', flex: 1 }]}
+                                        onPress={() => router.push({
+                                            pathname: '/(doctor)/consultation-report',
+                                            params: {
+                                                appointmentId: apt.id,
+                                                patientId: apt.patient_id,
+                                                patientName: apt.patient?.name || '',
+                                            },
+                                        } as any)}
+                                    >
+                                        <Text style={styles.confirmBtnText}>عرض التقرير</Text>
+                                    </TouchableOpacity>
+                                    {apt.patient?.phone ? (
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.confirmBtn, { flex: 1 }]}
+                                            onPress={() => callPatient(apt.patient.phone)}
+                                        >
+                                            <Text style={styles.confirmBtnText}>اتصال</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
                                 </View>
                             )}
                         </Animated.View>
@@ -545,8 +625,8 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FFFFFF' },
     header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20 },
     headerTitle: { fontSize: 24, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 20 },
-    filterContainer: { flexDirection: 'row-reverse', backgroundColor: '#F1F5F9', borderRadius: 15, padding: 4 },
-    filterChip: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    filterScroll: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 4 },
+    filterChip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9' },
     filterChipActive: { backgroundColor: '#5D5FEF', elevation: 2, shadowColor: '#5D5FEF', shadowOpacity: 0.1, shadowRadius: 5 },
     filterText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8' },
     filterTextActive: { color: '#FFF' },
@@ -561,7 +641,13 @@ const styles = StyleSheet.create({
     statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
     statusLabelTxt: { fontSize: 10, fontFamily: 'Cairo_700Bold' },
 
-    dateTimeContainer: { backgroundColor: '#F8FAFC', borderRadius: 15, padding: 12, flexDirection: 'row-reverse', justifyContent: 'space-around', marginBottom: 15 },
+    dateTimeContainer: { backgroundColor: '#F8FAFC', borderRadius: 15, padding: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-around', gap: 8, marginBottom: 12 },
+    reasonBox: { backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, marginBottom: 12, borderRightWidth: 3, borderRightColor: '#F59E0B' },
+    reasonLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#B45309', textAlign: 'right', marginBottom: 4 },
+    reasonText: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#78350F', textAlign: 'right', lineHeight: 20 },
+    contactRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+    contactPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, maxWidth: '100%' },
+    contactText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#475569', maxWidth: 160 },
     dateTimePill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
     dateText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#475569' },
 

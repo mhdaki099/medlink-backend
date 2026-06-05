@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, Alert, ActivityIndicator, Platform, Switch, Modal, KeyboardAvoidingView,
@@ -17,7 +17,7 @@ import {
 
 const param = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) || '';
 
-type MedRow = { name: string; dosage: string; duration: string };
+type MedRow = { name: string; dosage: string; duration: string; medicineId?: string };
 
 type PendingServiceRequest = {
     localId: string;
@@ -54,6 +54,8 @@ export default function ConsultationReportScreen() {
     const [showPrescModal, setShowPrescModal] = useState(false);
     const [medications, setMedications] = useState<MedRow[]>([{ name: '', dosage: '', duration: '' }]);
     const [prescNotes, setPrescNotes] = useState('');
+    const [medicineCatalog, setMedicineCatalog] = useState<any[]>([]);
+    const [medSearch, setMedSearch] = useState('');
     const [pendingPrescription, setPendingPrescription] = useState<PendingPrescription | null>(null);
     const [savedPrescription, setSavedPrescription] = useState<any | null>(null);
 
@@ -68,8 +70,19 @@ export default function ConsultationReportScreen() {
     const [pendingServiceRequests, setPendingServiceRequests] = useState<PendingServiceRequest[]>([]);
     const [loadingReport, setLoadingReport] = useState(true);
     const [showSavedSummary, setShowSavedSummary] = useState(false);
+    const [editingServiceType, setEditingServiceType] = useState<'lab' | 'radiology' | null>(null);
 
     const examOptions = serviceType === 'lab' ? LAB_EXAM_OPTIONS : RADIOLOGY_EXAM_OPTIONS;
+
+    useEffect(() => {
+        api.getAllMedicines().then(setMedicineCatalog).catch(() => setMedicineCatalog([]));
+    }, []);
+
+    const filteredMedicines = medicineCatalog.filter(m => {
+        if (!medSearch.trim()) return true;
+        const q = medSearch.trim();
+        return m.name?.includes(q) || m.category?.includes(q);
+    }).slice(0, 24);
 
     const applyReportToForm = (report: any) => {
         if (!report?.id) return;
@@ -125,21 +138,88 @@ export default function ConsultationReportScreen() {
     };
 
     const openServiceModal = (type: 'lab' | 'radiology') => {
+        setEditingServiceType(null);
         resetServiceModal(type);
         setShowServiceModal(true);
     };
 
+    const openPrescriptionModal = () => {
+        setMedSearch('');
+        setMedications([{ name: '', dosage: '', duration: '' }]);
+        setPrescNotes('');
+        setShowPrescModal(true);
+    };
+
+    const editPrescription = () => {
+        const src = pendingPrescription || savedPrescription;
+        if (!src) {
+            openPrescriptionModal();
+            return;
+        }
+        const meds = (src.medications || []).map((m: any) => ({
+            name: m.name || '',
+            dosage: m.dosage || m.strength || '',
+            duration: m.duration || m.freq || '',
+            medicineId: m.medicine_id,
+        }));
+        setMedications(meds.length ? meds : [{ name: '', dosage: '', duration: '' }]);
+        setPrescNotes(src.notes || '');
+        setMedSearch('');
+        setShowPrescModal(true);
+    };
+
+    const editPendingServices = (type: 'lab' | 'radiology') => {
+        const items = pendingServiceRequests.filter(p => p.request_type === type);
+        if (!items.length) return;
+        setEditingServiceType(type);
+        setServiceType(type);
+        setSelectedExamIds([...new Set(items.map(i => i.exam_id || 'other'))]);
+        const otherItem = items.find(i => i.exam_id === 'other');
+        setCustomExamName(otherItem?.service_name || '');
+        setServiceNotes(items[0]?.notes || '');
+        setShowServiceModal(true);
+    };
+
+    const selectCatalogMedicine = (rowIdx: number, med: any) => {
+        const u = [...medications];
+        u[rowIdx] = {
+            name: med.name,
+            dosage: med.dosage || med.strength || '',
+            duration: u[rowIdx].duration,
+            medicineId: med.id,
+        };
+        setMedications(u);
+    };
+
+    const removeMedication = (idx: number) => {
+        const next = medications.filter((_, i) => i !== idx);
+        setMedications(next.length ? next : [{ name: '', dosage: '', duration: '' }]);
+    };
+
     const addPendingPrescription = () => {
         const validMeds = medications.filter(m => m.name.trim());
+        const wasEdit = !!(pendingPrescription || savedPrescription);
         if (!validMeds.length) {
-            Alert.alert('تنبيه', 'أضف دواءً واحداً على الأقل، أو اضغط «تخطي» إذا لا توجد وصفة');
+            if (wasEdit) {
+                setPendingPrescription(null);
+                setSavedPrescription(null);
+                setShowPrescModal(false);
+                setMedications([{ name: '', dosage: '', duration: '' }]);
+                setPrescNotes('');
+                setMedSearch('');
+                Alert.alert('✅ تم', 'تم حذف الوصفة من الملخص');
+                return;
+            }
+            Alert.alert('تنبيه', 'اختر دواءً واحداً على الأقل من قائمة الأدوية، أو اضغط «تخطي»');
             return;
         }
         setPendingPrescription({ medications: validMeds, notes: prescNotes.trim() });
+        if (savedPrescription) setSavedPrescription(null);
         setShowPrescModal(false);
         setMedications([{ name: '', dosage: '', duration: '' }]);
         setPrescNotes('');
-        Alert.alert('✅ تمت الإضافة', 'تمت إضافة الوصفة — سيُولَّد رمز RX عند حفظ التقرير');
+        setMedSearch('');
+        Alert.alert('✅ تم', wasEdit ? 'تم تحديث الوصفة في الملخص' : 'تمت إضافة الوصفة — سيُولَّد رمز RX عند الحفظ');
     };
 
     const handleSaveReport = async () => {
@@ -159,7 +239,12 @@ export default function ConsultationReportScreen() {
                 follow_up: followUp,
             };
             if (pendingPrescription?.medications?.length) {
-                payload.medications = pendingPrescription.medications;
+                payload.medications = pendingPrescription.medications.map(m => ({
+                    name: m.name,
+                    dosage: m.dosage,
+                    duration: m.duration,
+                    medicine_id: m.medicineId,
+                }));
                 payload.prescription_notes = pendingPrescription.notes;
             }
             if (pendingServiceRequests.length) {
@@ -224,17 +309,22 @@ export default function ConsultationReportScreen() {
             });
         });
         if (!newItems.length) return;
-        setPendingServiceRequests(prev => [...prev, ...newItems]);
+        const wasEdit = !!editingServiceType;
+        setPendingServiceRequests(prev => {
+            const base = editingServiceType
+                ? prev.filter(p => p.request_type !== editingServiceType)
+                : prev;
+            return [...base, ...newItems];
+        });
+        setEditingServiceType(null);
         setShowServiceModal(false);
         resetServiceModal(serviceType);
         Alert.alert(
-            '✅ تمت الإضافة',
-            `تمت إضافة ${newItems.length} ${serviceType === 'lab' ? 'تحليل' : 'أشعة'} — سيُولَّد رمز ${serviceType === 'lab' ? 'LAB' : 'RAD'} لكل فحص عند الحفظ`,
+            '✅ تم',
+            wasEdit
+                ? `تم تحديث ${serviceType === 'lab' ? 'التحاليل' : 'الأشعة'} في الملخص`
+                : `تمت إضافة ${newItems.length} ${serviceType === 'lab' ? 'تحليل' : 'أشعة'} — رمز ${serviceType === 'lab' ? 'LAB' : 'RAD'} عند الحفظ`,
         );
-    };
-
-    const removePendingRequest = (localId: string) => {
-        setPendingServiceRequests(prev => prev.filter(p => p.localId !== localId));
     };
 
     const activePrescription = savedPrescription || pendingPrescription;
@@ -362,27 +452,21 @@ export default function ConsultationReportScreen() {
                     {hasOptionalItems && (
                         <View style={styles.summaryBox}>
                             <Text style={styles.summaryTitle}>ملخص الإضافات</Text>
-                            {savedPrescription ? (
+                            {(savedPrescription || pendingPrescription) ? (
                                 <View style={styles.summaryRow}>
-                                    <MaterialCommunityIcons name="prescription" size={18} color="#8B5CF6" />
-                                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                        <Text style={styles.summaryItem}>
-                                            وصفة — {savedPrescription.medications?.length || 0} دواء
-                                        </Text>
-                                        <Text style={styles.codeSmall}>RX: {savedPrescription.prescription_code}</Text>
-                                    </View>
-                                </View>
-                            ) : pendingPrescription ? (
-                                <View style={styles.summaryRow}>
-                                    <TouchableOpacity onPress={() => setPendingPrescription(null)}>
-                                        <MaterialCommunityIcons name="close-circle" size={18} color="#94A3B8" />
+                                    <TouchableOpacity onPress={editPrescription} style={styles.editBtn}>
+                                        <Text style={styles.editBtnText}>تعديل</Text>
                                     </TouchableOpacity>
                                     <MaterialCommunityIcons name="prescription" size={18} color="#8B5CF6" />
                                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
                                         <Text style={styles.summaryItem}>
-                                            وصفة — {pendingPrescription.medications.length} دواء (بانتظار الحفظ)
+                                            وصفة — {(pendingPrescription || savedPrescription).medications?.length || 0} دواء
                                         </Text>
-                                        <Text style={styles.codePending}>رمز RX عند الحفظ</Text>
+                                        {savedPrescription?.prescription_code ? (
+                                            <Text style={styles.codeSmall}>RX: {savedPrescription.prescription_code}</Text>
+                                        ) : (
+                                            <Text style={styles.codePending}>رمز RX عند الحفظ</Text>
+                                        )}
                                     </View>
                                 </View>
                             ) : null}
@@ -399,40 +483,46 @@ export default function ConsultationReportScreen() {
                                     </View>
                                 </View>
                             ))}
-                            {pendingServiceRequests.map(sr => (
-                                <View key={sr.localId} style={styles.summaryRow}>
-                                    <TouchableOpacity onPress={() => removePendingRequest(sr.localId)}>
-                                        <MaterialCommunityIcons name="close-circle" size={18} color="#94A3B8" />
+                            {pendingServiceRequests.some(p => p.request_type === 'lab') && (
+                                <View style={styles.summaryRow}>
+                                    <TouchableOpacity onPress={() => editPendingServices('lab')} style={styles.editBtn}>
+                                        <Text style={styles.editBtnText}>تعديل</Text>
                                     </TouchableOpacity>
-                                    <MaterialCommunityIcons
-                                        name={sr.request_type === 'lab' ? 'flask' : 'radiology-box-outline'}
-                                        size={18}
-                                        color="#0EA5E9"
-                                    />
+                                    <MaterialCommunityIcons name="flask" size={18} color="#0EA5E9" />
                                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                        <Text style={styles.summaryItem}>{sr.service_name}</Text>
-                                        <Text style={styles.codePending}>
-                                            رمز {sr.request_type === 'lab' ? 'LAB' : 'RAD'} عند الحفظ
+                                        <Text style={styles.summaryItem}>
+                                            تحاليل — {pendingServiceRequests.filter(p => p.request_type === 'lab').length} فحص
                                         </Text>
+                                        <Text style={styles.codePending}>رمز LAB عند الحفظ</Text>
                                     </View>
                                 </View>
-                            ))}
+                            )}
+                            {pendingServiceRequests.some(p => p.request_type === 'radiology') && (
+                                <View style={styles.summaryRow}>
+                                    <TouchableOpacity onPress={() => editPendingServices('radiology')} style={styles.editBtn}>
+                                        <Text style={styles.editBtnText}>تعديل</Text>
+                                    </TouchableOpacity>
+                                    <MaterialCommunityIcons name="radiology-box-outline" size={18} color="#8E24AA" />
+                                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                        <Text style={styles.summaryItem}>
+                                            أشعة — {pendingServiceRequests.filter(p => p.request_type === 'radiology').length} فحص
+                                        </Text>
+                                        <Text style={styles.codePending}>رمز RAD عند الحفظ</Text>
+                                    </View>
+                                </View>
+                            )}
                         </View>
                     )}
 
                     <View style={styles.actionsGrid}>
                         <TouchableOpacity
                             style={styles.actionCard}
-                            onPress={() => {
-                                if (pendingPrescription || savedPrescription) {
-                                    Alert.alert('تنبيه', 'يوجد وصفة مضافة بالفعل');
-                                    return;
-                                }
-                                setShowPrescModal(true);
-                            }}
+                            onPress={() => (pendingPrescription || savedPrescription) ? editPrescription() : openPrescriptionModal()}
                         >
                             <MaterialCommunityIcons name="prescription" size={28} color="#8B5CF6" />
-                            <Text style={styles.actionCardText}>وصفة (اختياري)</Text>
+                            <Text style={styles.actionCardText}>
+                                {(pendingPrescription || savedPrescription) ? 'تعديل الوصفة' : 'وصفة (اختياري)'}
+                            </Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.actionCard} onPress={() => openServiceModal('lab')}>
                             <MaterialCommunityIcons name="flask" size={28} color="#0EA5E9" />
@@ -488,18 +578,51 @@ export default function ConsultationReportScreen() {
                             keyboardShouldPersistTaps="handled"
                             contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
                         >
+                            <Text style={styles.pickerHint}>ابحث واختر من أدوية البرنامج — لا إدخال يدوي لاسم الدواء</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="بحث عن دواء..."
+                                value={medSearch}
+                                onChangeText={setMedSearch}
+                                textAlign="right"
+                            />
                             {medications.map((m, idx) => (
                                 <View key={idx} style={styles.medRow}>
-                                    <Text style={styles.medLabel}>دواء {idx + 1}</Text>
+                                    <View style={styles.medRowHeader}>
+                                        <Text style={styles.medLabel}>دواء {idx + 1}</Text>
+                                        {(medications.length > 1 || m.name.trim()) ? (
+                                            <TouchableOpacity
+                                                onPress={() => removeMedication(idx)}
+                                                style={styles.removeMedBtn}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                                                <Text style={styles.removeMedText}>حذف</Text>
+                                            </TouchableOpacity>
+                                        ) : null}
+                                    </View>
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={styles.medChipScroll}
+                                    >
+                                        {filteredMedicines.map(med => (
+                                            <TouchableOpacity
+                                                key={`${idx}-${med.id}`}
+                                                style={[styles.medChip, m.medicineId === med.id && styles.medChipActive]}
+                                                onPress={() => selectCatalogMedicine(idx, med)}
+                                            >
+                                                <Text style={[styles.medChipText, m.medicineId === med.id && styles.medChipTextActive]}>
+                                                    {med.name}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
                                     <TextInput
                                         style={styles.input}
-                                        placeholder="اسم الدواء"
+                                        placeholder="الدواء المختار"
                                         value={m.name}
-                                        onChangeText={v => {
-                                            const u = [...medications];
-                                            u[idx].name = v;
-                                            setMedications(u);
-                                        }}
+                                        editable={false}
                                         textAlign="right"
                                     />
                                     <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
@@ -516,7 +639,7 @@ export default function ConsultationReportScreen() {
                                         />
                                         <TextInput
                                             style={[styles.input, { flex: 1 }]}
-                                            placeholder="المدة"
+                                            placeholder="المدة / التكرار"
                                             value={m.duration}
                                             onChangeText={v => {
                                                 const u = [...medications];
@@ -548,7 +671,9 @@ export default function ConsultationReportScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.saveBtn} onPress={addPendingPrescription}>
                                 <LinearGradient colors={['#8B5CF6', '#6D28D9']} style={styles.saveBtnGrad}>
-                                    <Text style={styles.saveBtnText}>إضافة للقائمة</Text>
+                                    <Text style={styles.saveBtnText}>
+                                        {(pendingPrescription || savedPrescription) ? 'حفظ التعديل' : 'إضافة للقائمة'}
+                                    </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
                         </ScrollView>
@@ -624,9 +749,11 @@ export default function ConsultationReportScreen() {
                                     style={styles.saveBtnGrad}
                                 >
                                     <Text style={styles.saveBtnText}>
-                                        {selectedExamIds.length > 1
-                                            ? `إضافة ${selectedExamIds.length} فحوصات`
-                                            : 'إضافة للقائمة'}
+                                        {editingServiceType
+                                            ? 'حفظ التعديل'
+                                            : selectedExamIds.length > 1
+                                                ? `إضافة ${selectedExamIds.length} فحوصات`
+                                                : 'إضافة للقائمة'}
                                     </Text>
                                 </LinearGradient>
                             </TouchableOpacity>
@@ -659,6 +786,27 @@ const styles = StyleSheet.create({
     summaryBox: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
     summaryTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#475569', textAlign: 'right', marginBottom: 10 },
     summaryRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 8 },
+    editBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: '#EEF2FF',
+        borderWidth: 1,
+        borderColor: '#C7D2FE',
+    },
+    editBtnText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#4F46E5' },
+    medChipScroll: { flexDirection: 'row-reverse', gap: 8, paddingBottom: 8 },
+    medChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    medChipActive: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
+    medChipText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#475569' },
+    medChipTextActive: { color: '#FFF' },
     summaryItem: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#1E293B', textAlign: 'right' },
     codeSmall: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#16A34A', textAlign: 'right' },
     codePending: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#0284C7', textAlign: 'right' },
@@ -704,7 +852,23 @@ const styles = StyleSheet.create({
     examChipText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#475569' },
     examChipTextActive: { color: '#1E88E5' },
     medRow: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginBottom: 12 },
-    medLabel: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#6366F1', textAlign: 'right', marginBottom: 6 },
+    medRowHeader: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    medLabel: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#6366F1', textAlign: 'right' },
+    removeMedBtn: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        backgroundColor: '#FEF2F2',
+    },
+    removeMedText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#EF4444' },
     addMedBtn: { alignItems: 'center', paddingVertical: 10 },
     addMedText: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
     savedSummaryCard: { backgroundColor: '#ECFDF5', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#86EFAC' },

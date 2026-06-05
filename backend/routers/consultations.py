@@ -329,5 +329,12 @@ def get_patient_service_requests(patient_id: str, current_user: dict = Depends(g
         doctor = db.query(User).filter(User.id == r.doctor_id).first()
         if doctor:
             rdict["doctor"] = model_to_dict(doctor, ["password"])
+        if r.consultation_report_id:
+            report = db.query(ConsultationReport).filter(
+                ConsultationReport.id == r.consultation_report_id
+            ).first()
+            if report:
+                rdict["appointment_id"] = report.appointment_id
+                rdict["consultation_report_id"] = report.id
         results.append(rdict)
     return results

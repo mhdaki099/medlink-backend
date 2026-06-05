@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { 
-    View, Text, StyleSheet, ScrollView, Image, 
+    View, Text, StyleSheet, ScrollView,
     TouchableOpacity, ActivityIndicator, RefreshControl, 
-    TextInput, Alert, Modal, Platform
+    TextInput, Alert, Modal, Platform, Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,10 +13,88 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { Colors } from '../../src/theme';
 import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
+const APT_STATUS_LABELS: Record<string, string> = {
+    pending: 'قيد الانتظار',
+    confirmed: 'مؤكد',
+    completed: 'منتهي',
+    cancelled: 'ملغى',
+    rejected: 'مرفوض',
+    cancellation_requested: 'طلب إلغاء',
+    reschedule_requested: 'طلب إعادة جدولة',
+    schedule_change_pending: 'بانتظار المريض',
+    patient_confirmation_pending: 'بانتظار المريض',
+};
+
+const buildPatientFromAppointments = (apts: any[]) => {
+    const map = new Map<string, any>();
+    for (const a of apts) {
+        const pid = a.patient_id;
+        if (!pid) continue;
+        const p = a.patient || {};
+        const aptSummary = {
+            id: a.id,
+            date: a.date,
+            time: a.time,
+            status: a.status,
+            reason: a.reason || a.notes || '',
+            price: a.price,
+        };
+        const existing = map.get(pid);
+        if (!existing) {
+            map.set(pid, {
+                id: pid,
+                name: p.name || 'مريض مجهول',
+                phone: p.phone,
+                email: p.email,
+                address: p.address,
+                city: p.city,
+                dob: p.dob,
+                gender: p.gender,
+                blood_type: p.blood_type,
+                allergies: p.allergies,
+                drug_allergies: p.drug_allergies,
+                chronic_conditions: p.chronic_conditions,
+                patient_unique_id: p.patient_unique_id,
+                is_provisional: p.is_provisional,
+                lastVisit: a.date,
+                lastVisitTime: a.time,
+                lastStatus: a.status,
+                hasRecordAccess: !!a.record_access_granted,
+                appointments: [aptSummary],
+            });
+            continue;
+        }
+        existing.hasRecordAccess = existing.hasRecordAccess || !!a.record_access_granted;
+        existing.appointments.push(aptSummary);
+        const isNewer = `${a.date} ${a.time}` > `${existing.lastVisit} ${existing.lastVisitTime || ''}`;
+        if (isNewer) {
+            existing.lastVisit = a.date;
+            existing.lastVisitTime = a.time;
+            existing.lastStatus = a.status;
+        }
+        existing.phone = existing.phone || p.phone;
+        existing.email = existing.email || p.email;
+        existing.address = existing.address || p.address;
+        existing.city = existing.city || p.city;
+        existing.blood_type = existing.blood_type || p.blood_type;
+        existing.allergies = existing.allergies || p.allergies;
+        existing.patient_unique_id = existing.patient_unique_id || p.patient_unique_id;
+    }
+    return Array.from(map.values()).map(entry => ({
+        ...entry,
+        appointmentCount: entry.appointments.length,
+        appointments: entry.appointments.sort((x: any, y: any) =>
+            `${y.date} ${y.time}`.localeCompare(`${x.date} ${x.time}`)
+        ),
+    }));
+};
+
+const hasRecordAccess = (p: any) =>
+    !!p.hasRecordAccess || p.accessRequestStatus === 'approved';
+
 export default function DoctorPatients() {
     const { user } = useAuth();
     const [patients, setPatients] = useState<any[]>([]);
-    const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [search, setSearch] = useState('');
@@ -37,29 +116,22 @@ export default function DoctorPatients() {
         try {
             const [apts, reqs] = await Promise.all([
                 api.getAppointments({ doctor_id: user.id }),
-                api.getDoctorHistoryRequests(user.id)
+                api.getDoctorHistoryRequests(user.id),
             ]);
-            
-            // Deduplicate patients from appointments
-            const seen = new Set<string>();
-            const uniquePatients = apts.filter((a: any) => {
-                if (!a.patient_id || seen.has(a.patient_id)) return false;
-                seen.add(a.patient_id);
-                return true;
-            }).map((a: any) => {
-                const p = a.patient || {};
-                return {
-                    ...p,
-                    id: p.id || a.patient_id,
-                    name: p.name || 'مريض مجهول',
-                    lastVisit: a.date,
-                    appointmentId: a.id,
-                    hasDirectAccess: a.record_access_granted
-                };
-            });
-
-            setPatients(uniquePatients);
-            setRequests(reqs);
+            const built = buildPatientFromAppointments(apts);
+            const reqByPatient = new Map<string, string>();
+            for (const r of reqs) {
+                if (!r.patient_id) continue;
+                const prev = reqByPatient.get(r.patient_id);
+                if (r.status === 'approved' || !prev) {
+                    reqByPatient.set(r.patient_id, r.status);
+                }
+            }
+            setPatients(built.map(p => ({
+                ...p,
+                accessRequestStatus: reqByPatient.get(p.id) || null,
+                hasRecordAccess: p.hasRecordAccess || reqByPatient.get(p.id) === 'approved',
+            })));
         } catch (e: any) {
             console.warn(e);
             Alert.alert('خطأ', e.message || 'تعذر تحميل المرضى');
@@ -71,34 +143,122 @@ export default function DoctorPatients() {
 
     useEffect(() => { loadData(); }, [user]);
 
-    const getRequestStatus = (patientId: string) => {
-        const req = requests.find(r => r.patient_id === patientId && r.status !== 'rejected');
-        return req ? req.status : null;
+    useFocusEffect(
+        useCallback(() => {
+            loadData();
+        }, [user?.id])
+    );
+
+    const [patientVisits, setPatientVisits] = useState<any>(null);
+    const [patientProfile, setPatientProfile] = useState<any>(null);
+    const [loadingProfile, setLoadingProfile] = useState(false);
+
+    const mergeServiceRequests = (visitsData: any, extraReqs: any[]) => {
+        if (!visitsData?.visits || !extraReqs?.length) return visitsData;
+        const byApt: Record<string, any[]> = {};
+        extraReqs.forEach(sr => {
+            if (!sr.appointment_id) return;
+            if (!byApt[sr.appointment_id]) byApt[sr.appointment_id] = [];
+            byApt[sr.appointment_id].push(sr);
+        });
+        const visits = visitsData.visits.map((v: any) => {
+            if (v.type !== 'appointment' || !byApt[v.id]) return v;
+            const existingIds = new Set((v.service_requests || []).map((s: any) => s.id));
+            const merged = [...(v.service_requests || [])];
+            byApt[v.id].forEach(sr => { if (!existingIds.has(sr.id)) merged.push(sr); });
+            return { ...v, service_requests: merged };
+        });
+        return { ...visitsData, visits };
     };
 
     const handleRequestAccess = async (patientId: string) => {
         try {
             await api.requestMedicalHistory(patientId, user!.id);
-            Alert.alert('✅ تم', 'تم إرسال طلب الوصول إلى المريض بنجاح');
+            Alert.alert('✅ تم', 'تم إرسال طلب الوصول للمريض — بانتظار موافقته مرة واحدة');
             loadData();
         } catch (e: any) {
-            Alert.alert('خطأ', e.message);
+            Alert.alert('خطأ', e.message || 'فشل إرسال الطلب');
         }
     };
 
-    const [patientVisits, setPatientVisits] = useState<any>(null);
+    const handlePatientPress = (p: any) => {
+        if (hasRecordAccess(p)) {
+            openPatientHistory(p);
+            return;
+        }
+        if (p.accessRequestStatus === 'pending') {
+            Alert.alert('بانتظار الموافقة', 'طلبك قيد المراجعة من المريض. بعد الموافقة ستظهر كل التفاصيل تلقائياً.');
+            return;
+        }
+        Alert.alert(
+            'طلب وصول للسجل',
+            'يجب طلب إذن المريض مرة واحدة لعرض بيانات التواصل والسجل الطبي الكامل.',
+            [
+                { text: 'إلغاء', style: 'cancel' },
+                { text: 'إرسال الطلب', onPress: () => handleRequestAccess(p.id) },
+            ],
+        );
+    };
 
-    const loadNotes = async (patientId: string) => {
+    const openPatientHistory = async (p: any) => {
+        if (!hasRecordAccess(p)) {
+            handlePatientPress(p);
+            return;
+        }
+        setSelectedPatient(p);
+        setShowHistory(true);
+        setLoadingProfile(true);
+        setPatientProfile(null);
+        setPatientVisits(null);
         try {
-            const [nData, pData, vData] = await Promise.all([
-                api.getPatientNotes(user!.id, patientId),
-                api.getPatientPrescriptions(patientId),
-                api.getPatientVisits(patientId)
+            const [profile, nData, pData, vData, serviceReqs] = await Promise.all([
+                api.getPatientProfile(p.id),
+                api.getPatientNotes(user!.id, p.id),
+                api.getPatientPrescriptions(p.id),
+                api.getPatientVisits(p.id),
+                api.getPatientServiceRequests(p.id).catch(() => []),
             ]);
+            setPatientProfile(profile);
             setNotes(nData);
             setPatientPrescriptions(pData);
-            setPatientVisits(vData);
-        } catch (e) { console.warn(e); }
+            setPatientVisits(mergeServiceRequests(vData, serviceReqs));
+        } catch (e) {
+            console.warn(e);
+            Alert.alert('خطأ', 'تعذر تحميل بيانات المريض');
+        } finally {
+            setLoadingProfile(false);
+        }
+    };
+
+    const callPatient = (phone?: string) => {
+        if (!phone?.trim()) {
+            Alert.alert('تنبيه', 'لا يوجد رقم هاتف');
+            return;
+        }
+        Linking.openURL(`tel:${phone.trim()}`);
+    };
+
+    const emailPatient = (email?: string) => {
+        if (!email?.trim() || email.includes('provisional_')) {
+            Alert.alert('تنبيه', 'لا يوجد بريد إلكتروني');
+            return;
+        }
+        Linking.openURL(`mailto:${email.trim()}`);
+    };
+
+    const whatsappPatient = (phone?: string) => {
+        if (!phone?.trim()) {
+            Alert.alert('تنبيه', 'لا يوجد رقم هاتف');
+            return;
+        }
+        const digits = phone.replace(/\D/g, '');
+        Linking.openURL(`https://wa.me/${digits}`);
+    };
+
+    const formatGender = (g?: string) => {
+        if (g === 'male') return 'ذكر';
+        if (g === 'female') return 'أنثى';
+        return g || '—';
     };
 
     const handleSendPrescription = async () => {
@@ -141,13 +301,25 @@ export default function DoctorPatients() {
         }
     };
 
+    const reloadPatientNotes = async (patientId: string) => {
+        try {
+            const [nData, vData, serviceReqs] = await Promise.all([
+                api.getPatientNotes(user!.id, patientId),
+                api.getPatientVisits(patientId),
+                api.getPatientServiceRequests(patientId).catch(() => []),
+            ]);
+            setNotes(nData);
+            setPatientVisits(mergeServiceRequests(vData, serviceReqs));
+        } catch (e) { console.warn(e); }
+    };
+
     const handleAddNote = async () => {
         if (!newNote.trim()) return;
         setSubmittingNote(true);
         try {
             await api.addPatientNote(user!.id, selectedPatient.id, newNote);
             setNewNote('');
-            loadNotes(selectedPatient.id);
+            await reloadPatientNotes(selectedPatient.id);
             Alert.alert('✅ تم', 'تمت إضافة الملاحظة بنجاح');
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
@@ -156,104 +328,119 @@ export default function DoctorPatients() {
         }
     };
 
-    const filteredPatients = patients.filter(p => 
-        (p.name || '').toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredPatients = patients.filter(p => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.phone || '').includes(q) ||
+            (p.patient_unique_id || '').toLowerCase().includes(q) ||
+            (p.email || '').toLowerCase().includes(q)
+        );
+    });
 
     const renderPatientCard = (p: any, idx: number) => {
-        const status = getRequestStatus(p.id);
-        const hasAccess = p.hasDirectAccess || status === 'approved';
+        const unlocked = hasRecordAccess(p);
+        const pending = p.accessRequestStatus === 'pending';
 
         return (
-            <Animated.View 
-                key={p.id} 
-                entering={FadeInUp.delay(idx * 100)}
-                style={styles.card}
-            >
-                <View style={[styles.profileStrip, { backgroundColor: hasAccess ? '#F0FDF4' : '#F8FAFC' }]} />
-                
-                <View style={styles.cardHeader}>
-                    <View style={styles.patientMain}>
-                        <Text style={styles.patientName}>{p.name}</Text>
-                        <Text style={styles.patientMeta}>🩸 {p.blood_type || '—'} | {p.city || 'دمشق'}</Text>
-                    </View>
+            <Animated.View key={p.id} entering={FadeInUp.delay(idx * 100)}>
+                <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => handlePatientPress(p)}>
+                    <View style={[styles.profileStrip, { backgroundColor: unlocked ? '#DCFCE7' : pending ? '#FEF3C7' : '#FEE2E2' }]} />
 
-                    <TouchableOpacity 
-                        style={styles.favBtn}
-                        onPress={() => {
-                            if (hasAccess) {
-                                setSelectedPatient(p);
-                                setShowHistory(true);
-                            } else if (status === 'pending') {
-                                Alert.alert('انتظار', 'طلب الوصول قيد المراجعة من قبل المريض');
-                            } else {
-                                handleRequestAccess(p.id);
-                            }
-                        }}
-                    >
-                        <Ionicons 
-                            name={hasAccess ? "eye-outline" : status === 'pending' ? "hourglass-outline" : "lock-closed-outline"} 
-                            size={20} 
-                            color={hasAccess ? "#166534" : "#64748B"} 
-                        />
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.cardBody}>
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoVal}>{p.lastVisit}</Text>
-                        <Text style={styles.infoLabel}>آخر زيارة</Text>
-                    </View>
-                    
-                    {p.allergies?.length > 0 && (
-                        <View style={styles.tagRow}>
-                            {p.allergies.slice(0, 2).map((a: string) => (
-                                <View key={a} style={styles.tag}>
-                                    <Text style={styles.tagText}>{a}</Text>
-                                </View>
-                            ))}
-                            <MaterialCommunityIcons name="alert-circle" size={14} color="#EF4444" style={{marginLeft: 5}}/>
+                    <View style={styles.cardHeader}>
+                        <View style={styles.patientMain}>
+                            <Text style={styles.patientName}>{p.name}</Text>
+                            <Text style={styles.patientMeta}>
+                                {p.appointmentCount} موعد
+                                {unlocked ? ` | 🩸 ${p.blood_type || '—'}` : ''}
+                            </Text>
+                            {!unlocked ? (
+                                <Text style={styles.lockedHint}>
+                                    {pending ? '⏳ بانتظار موافقة المريض' : '🔒 التفاصيل مقفلة — اطلب الوصول'}
+                                </Text>
+                            ) : p.patient_unique_id ? (
+                                <Text style={styles.patientIdText}>#{p.patient_unique_id}</Text>
+                            ) : null}
                         </View>
-                    )}
-                </View>
+                        <View style={styles.favBtn}>
+                            <Ionicons
+                                name={unlocked ? 'eye-outline' : pending ? 'hourglass-outline' : 'lock-closed-outline'}
+                                size={20}
+                                color={unlocked ? '#166534' : '#64748B'}
+                            />
+                        </View>
+                    </View>
 
-                <View style={styles.cardActionsRow}>
-                    <TouchableOpacity 
-                        style={[styles.actionBtnCompact, { backgroundColor: '#8B5CF6' }]}
-                        onPress={() => {
-                            setSelectedPatient(p);
-                            setShowPrescriptionModal(true);
-                        }}
-                    >
-                        <Text style={styles.actionBtnText}>وصفة طبية جديدة</Text>
-                        <Ionicons name="document-text-outline" size={16} color="#FFF" style={{marginLeft: 8}}/>
-                    </TouchableOpacity>
+                    {unlocked ? (
+                        <View style={styles.cardContactGrid}>
+                            {p.phone ? (
+                                <TouchableOpacity
+                                    style={styles.contactChip}
+                                    onPress={() => callPatient(p.phone)}
+                                >
+                                    <Ionicons name="call-outline" size={14} color="#0EA5E9" />
+                                    <Text style={styles.contactChipText}>{p.phone}</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                            {p.email && !p.email.includes('provisional_') ? (
+                                <View style={styles.contactChip}>
+                                    <Ionicons name="mail-outline" size={14} color="#64748B" />
+                                    <Text style={styles.contactChipText} numberOfLines={1}>{p.email}</Text>
+                                </View>
+                            ) : null}
+                        </View>
+                    ) : null}
 
-                    <TouchableOpacity 
-                        style={[
-                            styles.actionBtnCompact, 
-                            { backgroundColor: hasAccess ? '#10B981' : status === 'pending' ? '#94A3B8' : '#0EA5E9' }
-                        ]}
-                        onPress={() => {
-                            if (hasAccess) {
+                    <View style={styles.cardBody}>
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoVal}>{p.lastVisit} {p.lastVisitTime || ''}</Text>
+                            <Text style={styles.infoLabel}>آخر زيارة</Text>
+                        </View>
+                        <View style={[styles.statusMini, { backgroundColor: '#E0F2FE' }]}>
+                            <Text style={styles.statusMiniText}>
+                                {APT_STATUS_LABELS[p.lastStatus] || p.lastStatus}
+                            </Text>
+                        </View>
+                        {unlocked && p.allergies?.length > 0 ? (
+                            <View style={styles.tagRow}>
+                                {p.allergies.slice(0, 2).map((a: string) => (
+                                    <View key={a} style={styles.tag}>
+                                        <Text style={styles.tagText}>{a}</Text>
+                                    </View>
+                                ))}
+                                <MaterialCommunityIcons name="alert-circle" size={14} color="#EF4444" />
+                            </View>
+                        ) : null}
+                    </View>
+
+                    <View style={styles.cardActionsRow}>
+                        <TouchableOpacity
+                            style={[styles.actionBtnCompact, { backgroundColor: unlocked ? '#10B981' : pending ? '#94A3B8' : '#0EA5E9' }]}
+                            onPress={() => handlePatientPress(p)}
+                        >
+                            <Text style={styles.actionBtnText}>
+                                {unlocked ? 'التفاصيل الكاملة' : pending ? 'بانتظار الموافقة' : 'طلب الوصول'}
+                            </Text>
+                            <Ionicons
+                                name={unlocked ? 'person-outline' : 'shield-checkmark'}
+                                size={16}
+                                color="#FFF"
+                                style={{ marginLeft: 8 }}
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.actionBtnCompact, { backgroundColor: '#8B5CF6' }]}
+                            onPress={() => {
                                 setSelectedPatient(p);
-                                setShowHistory(true);
-                            } else if (status !== 'pending') {
-                                handleRequestAccess(p.id);
-                            }
-                        }}
-                    >
-                        <Text style={styles.actionBtnText}>
-                            {hasAccess ? 'عرض السجل الطبي' : status === 'pending' ? 'بانتظار الموافقة' : 'طلب الوصول'}
-                        </Text>
-                        <Ionicons 
-                            name={hasAccess ? "medical" : "shield-checkmark"} 
-                            size={16} 
-                            color="#FFF" 
-                            style={{marginLeft: 8}}
-                        />
-                    </TouchableOpacity>
-                </View>
+                                setShowPrescriptionModal(true);
+                            }}
+                        >
+                            <Text style={styles.actionBtnText}>وصفة</Text>
+                            <Ionicons name="document-text-outline" size={16} color="#FFF" style={{ marginLeft: 8 }} />
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
             </Animated.View>
         );
     };
@@ -261,11 +448,12 @@ export default function DoctorPatients() {
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>إدارة المرضى</Text>
+                <Text style={styles.headerTitle}>مرضاي</Text>
+                <Text style={styles.headerSub}>اطلب وصول المريض مرة واحدة — بعد الموافقة تبقى التفاصيل مفتوحة</Text>
                 <View style={styles.searchBox}>
                     <TextInput 
                         style={styles.searchInput}
-                        placeholder="ابحث عن مريض..."
+                        placeholder="ابحث بالاسم أو الهاتف أو الرقم..."
                         placeholderTextColor="#94A3B8"
                         value={search}
                         onChangeText={setSearch}
@@ -298,23 +486,127 @@ export default function DoctorPatients() {
                 visible={showHistory} 
                 animationType="slide" 
                 transparent={false}
-                onShow={() => { if (selectedPatient) loadNotes(selectedPatient.id); }}
+                onRequestClose={() => setShowHistory(false)}
             >
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
                         <TouchableOpacity onPress={() => setShowHistory(false)}>
                             <Ionicons name="close" size={28} color="#1E293B" />
                         </TouchableOpacity>
-                        <Text style={styles.modalTitle}>السجل والملاحظات</Text>
+                        <Text style={styles.modalTitle}>ملف المريض</Text>
                     </View>
-                    <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                        style={styles.modalBody}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
+                    >
                         <View style={styles.patientHero}>
                             <View style={[styles.heroAvatar, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }]}>
                                 <Ionicons name="person" size={50} color="#CBD5E1" />
                             </View>
-                            <Text style={styles.patientNameLarge}>{selectedPatient?.name}</Text>
-                            <Text style={styles.heroMeta}>{selectedPatient?.blood_type} | {selectedPatient?.city}</Text>
+                            <Text style={styles.patientNameLarge}>{patientProfile?.name || selectedPatient?.name}</Text>
+                            <Text style={styles.heroMeta}>
+                                🩸 {patientProfile?.blood_type || selectedPatient?.blood_type || '—'}
+                                {' | '}
+                                {patientProfile?.city || selectedPatient?.city || '—'}
+                            </Text>
                         </View>
+
+                        {loadingProfile ? (
+                            <ActivityIndicator color={Colors.primary} style={{ marginVertical: 24 }} />
+                        ) : patientProfile ? (
+                            <View style={styles.contactSection}>
+                                <View style={styles.quickActionsRow}>
+                                    {patientProfile.phone ? (
+                                        <>
+                                            <TouchableOpacity style={styles.quickActionBtn} onPress={() => callPatient(patientProfile.phone)}>
+                                                <Ionicons name="call" size={20} color="#FFF" />
+                                                <Text style={styles.quickActionText}>اتصال</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={[styles.quickActionBtn, { backgroundColor: '#25D366' }]} onPress={() => whatsappPatient(patientProfile.phone)}>
+                                                <Ionicons name="logo-whatsapp" size={20} color="#FFF" />
+                                                <Text style={styles.quickActionText}>واتساب</Text>
+                                            </TouchableOpacity>
+                                        </>
+                                    ) : null}
+                                    {patientProfile.email && !patientProfile.email.includes('provisional_') ? (
+                                        <TouchableOpacity style={[styles.quickActionBtn, { backgroundColor: '#6366F1' }]} onPress={() => emailPatient(patientProfile.email)}>
+                                            <Ionicons name="mail" size={20} color="#FFF" />
+                                            <Text style={styles.quickActionText}>بريد</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                </View>
+
+                                <Text style={styles.sectionTitle}>البيانات الشخصية والتواصل</Text>
+                                <View style={styles.contactCard}>
+                                    {[
+                                        { label: 'رقم المريض', value: patientProfile.patient_unique_id },
+                                        { label: 'الهاتف', value: patientProfile.phone, action: () => callPatient(patientProfile.phone), highlight: true },
+                                        { label: 'البريد الإلكتروني', value: patientProfile.email?.includes('provisional_') ? null : patientProfile.email },
+                                        { label: 'المدينة', value: patientProfile.city },
+                                        { label: 'العنوان', value: patientProfile.address },
+                                        { label: 'تاريخ الميلاد', value: patientProfile.dob },
+                                        { label: 'الجنس', value: formatGender(patientProfile.gender) },
+                                        { label: 'فصيلة الدم', value: patientProfile.blood_type },
+                                    ].filter(row => row.value).map((row, i) => (
+                                        <TouchableOpacity
+                                            key={i}
+                                            style={styles.contactRowItem}
+                                            onPress={row.action}
+                                            disabled={!row.action}
+                                        >
+                                            <Text style={[styles.contactValue, row.highlight && { color: '#0EA5E9' }]}>{row.value}</Text>
+                                            <Text style={styles.contactLabel}>{row.label}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+
+                                {(patientProfile.allergies?.length || patientProfile.drug_allergies?.length || patientProfile.chronic_conditions?.length) ? (
+                                    <View style={styles.medicalInfoCard}>
+                                        {patientProfile.allergies?.length > 0 ? (
+                                            <View style={styles.medicalInfoBlock}>
+                                                <Text style={styles.medicalInfoLabel}>حساسية عامة</Text>
+                                                <Text style={styles.medicalInfoText}>{patientProfile.allergies.join('، ')}</Text>
+                                            </View>
+                                        ) : null}
+                                        {patientProfile.drug_allergies?.length > 0 ? (
+                                            <View style={styles.medicalInfoBlock}>
+                                                <Text style={styles.medicalInfoLabel}>حساسية أدوية</Text>
+                                                <Text style={styles.medicalInfoText}>{patientProfile.drug_allergies.join('، ')}</Text>
+                                            </View>
+                                        ) : null}
+                                        {patientProfile.chronic_conditions?.length > 0 ? (
+                                            <View style={styles.medicalInfoBlock}>
+                                                <Text style={styles.medicalInfoLabel}>أمراض مزمنة</Text>
+                                                <Text style={styles.medicalInfoText}>{patientProfile.chronic_conditions.join('، ')}</Text>
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                ) : null}
+
+                                {selectedPatient?.appointments?.length > 0 ? (
+                                    <View style={styles.patientAptsSection}>
+                                        <Text style={styles.sectionTitle}>مواعيدي مع هذا المريض ({selectedPatient.appointmentCount})</Text>
+                                        {selectedPatient.appointments.map((apt: any) => (
+                                            <View key={apt.id} style={styles.patientAptCard}>
+                                                <View style={styles.patientAptHeader}>
+                                                    <Text style={styles.patientAptDate}>{apt.date} — {apt.time}</Text>
+                                                    <Text style={styles.patientAptStatus}>
+                                                        {APT_STATUS_LABELS[apt.status] || apt.status}
+                                                    </Text>
+                                                </View>
+                                                {apt.reason ? (
+                                                    <Text style={styles.patientAptReason}>الشكوى: {apt.reason}</Text>
+                                                ) : null}
+                                                {apt.price ? (
+                                                    <Text style={styles.patientAptPrice}>{apt.price.toLocaleString()} ل.س</Text>
+                                                ) : null}
+                                            </View>
+                                        ))}
+                                    </View>
+                                ) : null}
+                            </View>
+                        ) : null}
 
                         <View style={styles.noteInputSection}>
                             <Text style={styles.sectionTitle}>إضافة ملاحظة طبية</Text>
@@ -360,8 +652,26 @@ export default function DoctorPatients() {
                             )}
                         </View>
                         
+                        {patientPrescriptions.length > 0 ? (
+                            <View style={styles.historySection}>
+                                <Text style={styles.sectionTitle}>الوصفات الصادرة</Text>
+                                {patientPrescriptions.slice(0, 5).map((rx: any, idx: number) => (
+                                    <View key={rx.id || idx} style={styles.rxCard}>
+                                        {rx.prescription_code ? (
+                                            <Text style={styles.rxCode}>{rx.prescription_code}</Text>
+                                        ) : null}
+                                        <Text style={styles.rxMeds}>
+                                            {(rx.medications || []).slice(0, 3).map((m: any) =>
+                                                typeof m === 'string' ? m : m.name
+                                            ).join('، ')}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+                        ) : null}
+
                         <View style={styles.historySection}>
-                            <Text style={styles.sectionTitle}>سجل الزيارات الكامل</Text>
+                            <Text style={styles.sectionTitle}>سجل الزيارات والتقارير</Text>
                             {!patientVisits ? (
                                 <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
                             ) : patientVisits.visits?.length === 0 ? (
@@ -371,63 +681,81 @@ export default function DoctorPatients() {
                                     <View key={vIdx} style={styles.visitTimelineCard}>
                                         <View style={styles.visitTimelineHeader}>
                                             <Text style={styles.visitTimelineDate}>
-                                                {visit.visit_date} - {visit.visit_time}
+                                                {visit.visit_date}{visit.visit_time ? ` - ${visit.visit_time}` : ''}
                                             </Text>
                                             <Ionicons name="calendar-outline" size={14} color="#94A3B8" />
                                         </View>
-                                        
-                                        {visit.complaint && (
-                                            <View style={styles.visitComplaintBox}>
-                                                <Text style={styles.visitComplaintLabel}>الشكوى:</Text>
-                                                <Text style={styles.visitComplaintText}>{visit.complaint}</Text>
-                                            </View>
-                                        )}
 
-                                        {visit.consultation_report && (
-                                            <View style={styles.visitReportBox}>
-                                                <Text style={styles.visitReportLabel}>📋 التقرير:</Text>
-                                                {visit.consultation_report.is_healthy ? (
-                                                    <Text style={styles.visitReportText}>✅ المريض بصحة جيدة</Text>
-                                                ) : (
-                                                    <Text style={styles.visitReportText}>
-                                                        {visit.consultation_report.condition_summary}
-                                                    </Text>
-                                                )}
-                                            </View>
-                                        )}
+                                        {visit.type === 'medical_record' ? (
+                                            <>
+                                                <Text style={styles.visitReportLabel}>{visit.title}</Text>
+                                                <Text style={styles.visitReportText}>{visit.content}</Text>
+                                            </>
+                                        ) : (
+                                            <>
+                                                {visit.complaint ? (
+                                                    <View style={styles.visitComplaintBox}>
+                                                        <Text style={styles.visitComplaintLabel}>الشكوى:</Text>
+                                                        <Text style={styles.visitComplaintText}>{visit.complaint}</Text>
+                                                    </View>
+                                                ) : null}
 
-                                        {visit.prescription && visit.prescription.medications?.length > 0 && (
-                                            <View style={styles.visitPrescBox}>
-                                                <Text style={styles.visitPrescLabel}>💊 الأدوية:</Text>
-                                                {visit.prescription.medications.slice(0, 2).map((med: any, mIdx: number) => (
-                                                    <Text key={mIdx} style={styles.visitMedText}>
-                                                        • {med.name} ({med.dosage})
-                                                    </Text>
-                                                ))}
-                                                {visit.prescription.medications.length > 2 && (
-                                                    <Text style={styles.visitMedMore}>
-                                                        +{visit.prescription.medications.length - 2} أدوية أخرى
-                                                    </Text>
-                                                )}
-                                            </View>
-                                        )}
+                                                {visit.consultation_report ? (
+                                                    <View style={styles.visitReportBox}>
+                                                        <Text style={styles.visitReportLabel}>📋 تقرير الاستشارة</Text>
+                                                        {visit.consultation_report.is_healthy ? (
+                                                            <Text style={styles.visitReportText}>✅ المريض بصحة جيدة</Text>
+                                                        ) : (
+                                                            <Text style={styles.visitReportText}>
+                                                                {visit.consultation_report.condition_summary}
+                                                            </Text>
+                                                        )}
+                                                        {visit.consultation_report.notes ? (
+                                                            <Text style={[styles.visitReportText, { marginTop: 6 }]}>
+                                                                ملاحظات: {visit.consultation_report.notes}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                ) : null}
 
-                                        {visit.service_requests?.length > 0 && (
-                                            <View style={styles.visitServicesBox}>
-                                                <Text style={styles.visitServicesLabel}>🧪 الطلبات:</Text>
-                                                {visit.service_requests.map((req: any, rIdx: number) => (
-                                                    <Text key={rIdx} style={styles.visitServiceText}>
-                                                        • {req.service_name} ({req.reference_code})
-                                                    </Text>
-                                                ))}
-                                            </View>
-                                        )}
+                                                {visit.prescription?.prescription_code || visit.prescription?.medications?.length > 0 ? (
+                                                    <View style={styles.visitPrescBox}>
+                                                        <Text style={styles.visitPrescLabel}>💊 الوصفة</Text>
+                                                        {visit.prescription.prescription_code ? (
+                                                            <Text style={styles.visitCodeText}>RX: {visit.prescription.prescription_code}</Text>
+                                                        ) : null}
+                                                        {(visit.prescription.medications || []).map((med: any, mIdx: number) => (
+                                                            <Text key={mIdx} style={styles.visitMedText}>
+                                                                • {typeof med === 'string' ? med : `${med.name}${med.dosage ? ` (${med.dosage})` : ''}`}
+                                                            </Text>
+                                                        ))}
+                                                        {visit.prescription.notes ? (
+                                                            <Text style={styles.visitMedText}>ملاحظات: {visit.prescription.notes}</Text>
+                                                        ) : null}
+                                                    </View>
+                                                ) : null}
 
-                                        {visit.follow_up && (
-                                            <View style={styles.visitFollowUpBox}>
-                                                <Text style={styles.visitFollowUpLabel}>📅 المتابعة:</Text>
-                                                <Text style={styles.visitFollowUpText}>{visit.follow_up}</Text>
-                                            </View>
+                                                {visit.service_requests?.length > 0 ? (
+                                                    <View style={styles.visitServicesBox}>
+                                                        <Text style={styles.visitServicesLabel}>🧪 التحاليل والأشعة</Text>
+                                                        {visit.service_requests.map((req: any, rIdx: number) => (
+                                                            <View key={rIdx} style={styles.visitServiceRow}>
+                                                                <Text style={styles.visitCodeText}>
+                                                                    {req.request_type === 'lab' ? 'LAB' : 'RAD'}: {req.reference_code}
+                                                                </Text>
+                                                                <Text style={styles.visitServiceText}>{req.service_name}</Text>
+                                                            </View>
+                                                        ))}
+                                                    </View>
+                                                ) : null}
+
+                                                {visit.follow_up ? (
+                                                    <View style={styles.visitFollowUpBox}>
+                                                        <Text style={styles.visitFollowUpLabel}>📅 المتابعة:</Text>
+                                                        <Text style={styles.visitFollowUpText}>{visit.follow_up}</Text>
+                                                    </View>
+                                                ) : null}
+                                            </>
                                         )}
                                     </View>
                                 ))
@@ -535,7 +863,25 @@ export default function DoctorPatients() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FAFBFF' },
     header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20, backgroundColor: '#FFF' },
-    headerTitle: { fontSize: 24, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 15 },
+    headerTitle: { fontSize: 24, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 4 },
+    headerSub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'center', marginBottom: 15 },
+    patientIdText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginTop: 2 },
+    lockedHint: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#B45309', marginTop: 4, textAlign: 'right' },
+    cardContactGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, paddingHorizontal: 15, paddingBottom: 10 },
+    contactChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, maxWidth: '48%' },
+    contactChipText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#475569' },
+    statusMini: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    statusMiniText: { fontSize: 10, fontFamily: 'Cairo_700Bold', color: '#0369A1' },
+    quickActionsRow: { flexDirection: 'row-reverse', gap: 10, marginBottom: 16, paddingHorizontal: 20 },
+    quickActionBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#0EA5E9', paddingVertical: 12, borderRadius: 14 },
+    quickActionText: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#FFF' },
+    patientAptsSection: { marginTop: 16 },
+    patientAptCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+    patientAptHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+    patientAptDate: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
+    patientAptStatus: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#0EA5E9' },
+    patientAptReason: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#475569', textAlign: 'right' },
+    patientAptPrice: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#64748B', textAlign: 'right', marginTop: 4 },
     searchBox: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 18, height: 48, alignItems: 'center', paddingHorizontal: 15 },
     searchInput: { flex: 1, height: '100%', fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#1E293B' },
     
@@ -548,7 +894,9 @@ const styles = StyleSheet.create({
     patientMeta: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#64748B', marginTop: 4 },
     favBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F8FAFC', justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
     
-    cardBody: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingHorizontal: 15, paddingBottom: 15, alignItems: 'center' },
+    cardBody: { flexDirection: 'row-reverse', justifyContent: 'space-between', flexWrap: 'wrap', paddingHorizontal: 15, paddingBottom: 15, alignItems: 'center', gap: 8 },
+    phonePill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#E0F2FE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    phonePillText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#0369A1' },
     infoRow: { alignItems: 'flex-end' },
     infoLabel: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#94A3B8' },
     infoVal: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#1E293B' },
@@ -589,6 +937,20 @@ const styles = StyleSheet.create({
     noteDate: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginRight: 5 },
     noteText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#334155', textAlign: 'right', lineHeight: 22 },
     historySection: { padding: 20, paddingTop: 0 },
+    contactSection: { paddingHorizontal: 20, paddingBottom: 8 },
+    contactCard: { backgroundColor: '#F8FAFC', borderRadius: 16, padding: 14, gap: 10 },
+    contactRowItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    contactLabel: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#94A3B8' },
+    contactValue: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B', flex: 1, textAlign: 'right', marginLeft: 12 },
+    medicalInfoCard: { backgroundColor: '#FEF2F2', borderRadius: 16, padding: 14, marginTop: 12 },
+    medicalInfoBlock: { marginBottom: 8 },
+    medicalInfoLabel: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#B91C1C', textAlign: 'right', marginBottom: 4 },
+    medicalInfoText: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#7F1D1D', textAlign: 'right' },
+    rxCard: { backgroundColor: '#F5F3FF', borderRadius: 12, padding: 12, marginBottom: 8 },
+    rxCode: { fontSize: 14, fontFamily: 'Cairo_800ExtraBold', color: '#7C3AED', textAlign: 'right', marginBottom: 4 },
+    rxMeds: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#4C1D95', textAlign: 'right' },
+    visitCodeText: { fontSize: 12, fontFamily: 'Cairo_800ExtraBold', color: '#0EA5E9', textAlign: 'right' },
+    visitServiceRow: { marginBottom: 6 },
 
     /* Prescription Specific Styles */
     cardActionsRow: { 

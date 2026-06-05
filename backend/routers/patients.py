@@ -143,12 +143,40 @@ def update_family_consent(link_id: str, data: dict, current_user: dict = Depends
 
 @router.post("/history-request")
 def create_history_request(data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    patient_id = data.get("patient_id")
+    doctor_id = data.get("doctor_id")
     now = datetime.now(timezone.utc).isoformat()
+
+    approved = db.query(MedicalHistoryRequest).filter(
+        MedicalHistoryRequest.patient_id == patient_id,
+        MedicalHistoryRequest.doctor_id == doctor_id,
+        MedicalHistoryRequest.status == "approved",
+    ).first()
+    if approved:
+        return model_to_dict(approved)
+
+    pending = db.query(MedicalHistoryRequest).filter(
+        MedicalHistoryRequest.patient_id == patient_id,
+        MedicalHistoryRequest.doctor_id == doctor_id,
+        MedicalHistoryRequest.status == "pending",
+    ).first()
+    if pending:
+        return model_to_dict(pending)
+
     req_id = f"hrq_{uuid.uuid4().hex[:8]}"
-    new_req = MedicalHistoryRequest(id=req_id, patient_id=data.get("patient_id"), doctor_id=data.get("doctor_id"), status="pending", created_at=now)
+    new_req = MedicalHistoryRequest(
+        id=req_id, patient_id=patient_id, doctor_id=doctor_id, status="pending", created_at=now,
+    )
     db.add(new_req)
-    doctor = db.query(User).filter(User.id == data.get("doctor_id")).first()
-    db.add(Notification(id=f"ntf_{uuid.uuid4().hex[:8]}", user_id=data.get("patient_id"), title="طلب وصول للسجل الطبي", message=f"يرغب الدكتور {doctor.name if doctor else ''} بالوصول إلى سجلك الطبي.", type="history_request", created_at=now))
+    doctor = db.query(User).filter(User.id == doctor_id).first()
+    db.add(Notification(
+        id=f"ntf_{uuid.uuid4().hex[:8]}",
+        user_id=patient_id,
+        title="طلب وصول للسجل الطبي",
+        message=f"يرغب الدكتور {doctor.name if doctor else ''} بالوصول إلى سجلك الطبي.",
+        type="history_request",
+        created_at=now,
+    ))
     db.commit()
     return model_to_dict(new_req)
 
@@ -218,57 +246,74 @@ def get_patient_visits(patient_id: str, current_user: dict = Depends(get_current
     elif current_user["role"] not in ("admin", "secretary"):
         raise HTTPException(403, "ليس لديك صلاحية")
     
-    # Get all appointments for this patient
+    patient_user = db.query(User).filter(User.id == patient_id).first()
+
+    reports = db.query(ConsultationReport).filter(
+        ConsultationReport.patient_id == patient_id
+    ).all()
+    reports_by_id = {r.id: r for r in reports}
+    reports_by_apt = {r.appointment_id: r for r in reports}
+    apt_ids_with_report = set(reports_by_apt.keys())
+
+    prescriptions_by_apt = {}
+    for p in db.query(Prescription).filter(Prescription.patient_id == patient_id).all():
+        if p.appointment_id:
+            prescriptions_by_apt[p.appointment_id] = p
+
+    service_requests_by_apt: dict = {}
+    for sr in db.query(ServiceRequest).filter(ServiceRequest.patient_id == patient_id).all():
+        report = reports_by_id.get(sr.consultation_report_id) if sr.consultation_report_id else None
+        apt_id = report.appointment_id if report else None
+        if apt_id:
+            service_requests_by_apt.setdefault(apt_id, []).append(sr)
+
+    apt_ids_with_services = set(service_requests_by_apt.keys())
+
     appointments = db.query(Appointment).filter(
         Appointment.patient_id == patient_id,
-        Appointment.status.in_(["completed", "confirmed"])
     ).order_by(Appointment.date.desc(), Appointment.time.desc()).all()
+    appointments = [
+        apt for apt in appointments
+        if apt.status in ("completed", "confirmed")
+        or apt.id in apt_ids_with_report
+        or apt.id in apt_ids_with_services
+    ]
     
     visits = []
     for apt in appointments:
         doctor = db.query(User).filter(User.id == apt.doctor_id).first()
-        
-        # Get consultation report for this appointment
-        report = db.query(ConsultationReport).filter(
-            ConsultationReport.appointment_id == apt.id
-        ).first()
-        
-        # Get prescription for this appointment (if any)
-        prescription = db.query(Prescription).filter(
-            Prescription.patient_id == patient_id,
-            Prescription.doctor_id == apt.doctor_id
-        ).order_by(Prescription.created_at.desc()).first()
-        
-        # Get service requests from this consultation
-        service_requests = []
-        if report:
-            service_requests = db.query(ServiceRequest).filter(
-                ServiceRequest.consultation_report_id == report.id
-            ).all()
+        report = reports_by_apt.get(apt.id)
+        prescription = prescriptions_by_apt.get(apt.id)
+        service_requests = service_requests_by_apt.get(apt.id, [])
         
         # Get notes for this patient from this doctor
         notes = db.query(PatientNote).filter(
             PatientNote.patient_id == patient_id,
             PatientNote.doctor_id == apt.doctor_id
         ).order_by(PatientNote.created_at.desc()).limit(3).all()
+
+        prescription_payload = None
+        if prescription and (prescription.medications or prescription.prescription_code):
+            prescription_payload = {
+                "id": prescription.id,
+                "medications": prescription.medications or [],
+                "notes": prescription.notes or "",
+                "prescription_code": prescription.prescription_code or "",
+                "created_at": prescription.created_at,
+            }
         
         visit = {
+            "type": "appointment",
             "id": apt.id,
             "visit_date": apt.date,
             "visit_time": apt.time,
-            "patient_name": db.query(User).filter(User.id == patient_id).first().name if db.query(User).filter(User.id == patient_id).first() else "مريض",
-            "patient_phone": db.query(User).filter(User.id == patient_id).first().phone if db.query(User).filter(User.id == patient_id).first() else "",
+            "patient_name": patient_user.name if patient_user else "مريض",
+            "patient_phone": patient_user.phone if patient_user else "",
             "doctor_name": doctor.name if doctor else "طبيب",
             "doctor_specialization": doctor.specialization if doctor else "",
-            "complaint": apt.reason or "لا يوجد",
+            "complaint": apt.reason or apt.notes or "",
             "consultation_report": model_to_dict(report) if report else None,
-            "prescription": {
-                "id": prescription.id if prescription else None,
-                "medications": prescription.medications if prescription else [],
-                "notes": prescription.notes if prescription else "",
-                "prescription_code": prescription.prescription_code if prescription else "",
-                "created_at": prescription.created_at if prescription else None
-            } if prescription else None,
+            "prescription": prescription_payload,
             "service_requests": [
                 {
                     "id": sr.id,
@@ -277,7 +322,8 @@ def get_patient_visits(patient_id: str, current_user: dict = Depends(get_current
                     "reference_code": sr.reference_code,
                     "status": sr.status,
                     "notes": sr.notes,
-                    "created_at": sr.created_at
+                    "created_at": sr.created_at,
+                    "appointment_id": apt.id,
                 } for sr in service_requests
             ],
             "notes": [
@@ -291,6 +337,29 @@ def get_patient_visits(patient_id: str, current_user: dict = Depends(get_current
             "price": apt.price
         }
         visits.append(visit)
+
+    # Uploaded medical records (documents, history, imaging, etc.)
+    records = db.query(MedicalRecord).filter(
+        MedicalRecord.patient_id == patient_id
+    ).order_by(MedicalRecord.created_at.desc()).all()
+    for rec in records:
+        uploader = db.query(User).filter(User.id == rec.uploaded_by).first()
+        visits.append({
+            "type": "medical_record",
+            "id": rec.id,
+            "visit_date": rec.date,
+            "visit_time": "",
+            "record_type": rec.type,
+            "title": rec.title,
+            "content": rec.content,
+            "uploaded_by": uploader.name if uploader else rec.uploaded_by,
+            "created_at": rec.created_at,
+        })
+
+    visits.sort(
+        key=lambda v: v.get("created_at") or f"{v.get('visit_date', '')} {v.get('visit_time', '')}",
+        reverse=True,
+    )
     
     return {
         "patient_id": patient_id,
@@ -315,6 +384,14 @@ def update_history_request(request_id: str, data: dict, current_user: dict = Dep
     req = db.query(MedicalHistoryRequest).filter(MedicalHistoryRequest.id == request_id).first()
     if not req:
         raise HTTPException(404, "الطلب غير موجود")
-    req.status = data.get("status", req.status)
+    new_status = data.get("status", req.status)
+    req.status = new_status
+    if new_status == "approved":
+        appointments = db.query(Appointment).filter(
+            Appointment.patient_id == req.patient_id,
+            Appointment.doctor_id == req.doctor_id,
+        ).all()
+        for apt in appointments:
+            apt.record_access_granted = True
     db.commit()
     return model_to_dict(req)
