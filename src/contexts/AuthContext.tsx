@@ -3,7 +3,7 @@ import { api } from '../services/api';
 
 interface User {
     id: string;
-    role: 'patient' | 'doctor' | 'pharmacy' | 'lab' | 'warehouse' | 'admin' | 'secretary';
+    role: 'patient' | 'doctor' | 'pharmacy' | 'lab' | 'radiology' | 'warehouse' | 'admin' | 'secretary';
     name: string;
     email: string;
     photo?: string;

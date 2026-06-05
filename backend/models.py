@@ -166,6 +166,8 @@ class ServiceBooking(Base):
     provider_role = Column(String) # lab, radiology
     service_id = Column(String, nullable=True)
     service_name = Column(String, nullable=True)
+    service_items = Column(JSON, nullable=True)
+    services_total = Column(Float, default=0)
     date = Column(String)
     time = Column(String)
     visit_type = Column(String, default="visit_center") # visit_center, home_service

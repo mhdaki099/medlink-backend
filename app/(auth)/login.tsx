@@ -26,6 +26,7 @@ const QUICK_LOGINS = [
     { email: 'dr.karim@medlink.sy', role: 'doctor', label: 'طبيب' },
     { email: 'pharma.nour@medlink.sy', role: 'pharmacy', label: 'صيدلية' },
     { email: 'lab.fadi@medlink.sy', role: 'lab', label: 'مختبر' },
+    { email: 'rad.sham@medlink.sy', role: 'radiology', label: 'مركز أشعة' },
     { email: 'wh.main@medlink.sy', role: 'warehouse', label: 'مستودع' },
     { email: 'admin@medlink.sy', role: 'admin', label: 'المدير' },
     { email: 'sec.amal@medlink.sy', role: 'secretary', label: 'سكرتاريا' },
@@ -66,8 +67,17 @@ export default function LoginScreen() {
 
     const navigateAfterLogin = (loggedInUser: any) => {
         const role = loggedInUser?.role || 'patient';
-        const allowed = ['patient', 'doctor', 'pharmacy', 'lab', 'warehouse', 'admin', 'secretary'];
-        const group = allowed.includes(role) ? `(${role})` : '(patient)';
+        const roleGroups: Record<string, string> = {
+            patient: '(patient)',
+            doctor: '(doctor)',
+            pharmacy: '(pharmacy)',
+            lab: '(lab)',
+            radiology: '(lab)',
+            warehouse: '(warehouse)',
+            admin: '(admin)',
+            secretary: '(secretary)',
+        };
+        const group = roleGroups[role] || '(patient)';
         router.replace(`/${group}` as any);
     };
 

@@ -12,8 +12,9 @@ export default function LabProfileScreen() {
     const { user } = useAuth();
     const [lab, setLab] = useState<any>(null);
     const [tests, setTests] = useState<any[]>([]);
+    const [selectedTests, setSelectedTests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [bookingModal, setBookingModal] = useState<{ visible: boolean; test: any | null }>({ visible: false, test: null });
+    const [bookingModalVisible, setBookingModalVisible] = useState(false);
     const [bookingForm, setBookingForm] = useState({ date: '', time: '', visit_type: 'visit_center' });
     const [submitting, setSubmitting] = useState(false);
 
@@ -41,13 +42,34 @@ export default function LabProfileScreen() {
         return `${BASE_URL.replace(/\/api$/, '')}${path}`;
     };
 
-    const openBooking = (test: any) => {
+    const selectedTotal = selectedTests.reduce((sum, test) => sum + Number(test.price || 0), 0);
+    const homeServiceFee = bookingForm.visit_type === 'home_service' ? Number(lab?.home_service_fee || 0) : 0;
+    const bookingGrandTotal = selectedTotal + homeServiceFee;
+
+    const toggleTest = (test: any) => {
+        setSelectedTests(prev => (
+            prev.some(item => item.id === test.id)
+                ? prev.filter(item => item.id !== test.id)
+                : [...prev, test]
+        ));
+    };
+
+    const removeSelectedTest = (testId: string) => {
+        setSelectedTests(prev => prev.filter(item => item.id !== testId));
+    };
+
+    const openBooking = () => {
+        if (selectedTests.length === 0) {
+            Alert.alert('تنبيه', 'يرجى اختيار تحليل واحد على الأقل');
+            return;
+        }
         setBookingForm({ date: '', time: '', visit_type: 'visit_center' });
-        setBookingModal({ visible: true, test });
+        setBookingModalVisible(true);
     };
 
     const handleBook = async () => {
         if (!user?.id) { Alert.alert('تنبيه', 'يجب تسجيل الدخول'); return; }
+        if (selectedTests.length === 0) { Alert.alert('تنبيه', 'يرجى اختيار تحليل واحد على الأقل'); return; }
         if (!bookingForm.date || !bookingForm.time) { Alert.alert('تنبيه', 'يرجى تحديد التاريخ والوقت'); return; }
         setSubmitting(true);
         try {
@@ -55,14 +77,19 @@ export default function LabProfileScreen() {
                 patient_id: user.id,
                 provider_id: id,
                 provider_role: 'lab',
-                service_id: bookingModal.test?.id,
-                service_name: bookingModal.test?.name,
+                service_items: selectedTests.map(test => ({
+                    id: test.id,
+                    name: test.name,
+                    price: Number(test.price || 0),
+                })),
+                services_total: selectedTotal,
                 date: bookingForm.date,
                 time: bookingForm.time,
                 visit_type: bookingForm.visit_type,
                 home_service_fee: bookingForm.visit_type === 'home_service' ? (lab?.home_service_fee || 0) : 0,
             });
-            setBookingModal({ visible: false, test: null });
+            setBookingModalVisible(false);
+            setSelectedTests([]);
             Alert.alert('✅ تم الحجز', 'تم إرسال طلب الحجز بنجاح', [
                 { text: 'حسناً', onPress: () => router.back() },
             ]);
@@ -141,6 +168,34 @@ export default function LabProfileScreen() {
 
                 <View style={styles.testsSection}>
                     <Text style={styles.sectionTitle}>التحاليل المتوفرة</Text>
+                    {selectedTests.length > 0 && (
+                        <View style={styles.basketCard}>
+                            <View style={styles.basketHeader}>
+                                <TouchableOpacity onPress={() => setSelectedTests([])} style={styles.clearBasketBtn}>
+                                    <Text style={styles.clearBasketText}>تفريغ</Text>
+                                </TouchableOpacity>
+                                <View style={styles.basketTitleBlock}>
+                                    <Text style={styles.basketTitle}>سلة التحاليل</Text>
+                                    <Text style={styles.basketMeta}>{selectedTests.length} تحليل | {selectedTotal.toLocaleString()} ل.س</Text>
+                                </View>
+                            </View>
+                            <View style={styles.selectedList}>
+                                {selectedTests.map(test => (
+                                    <View key={test.id} style={styles.selectedPill}>
+                                        <TouchableOpacity onPress={() => removeSelectedTest(test.id)} style={styles.selectedRemoveBtn}>
+                                            <Ionicons name="close" size={14} color="#64748B" />
+                                        </TouchableOpacity>
+                                        <Text style={styles.selectedPillText}>{test.name}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                            <TouchableOpacity style={styles.basketBookBtn} onPress={openBooking}>
+                                <LinearGradient colors={['#43A047', '#1E88E5']} style={styles.basketBookGrad}>
+                                    <Text style={styles.basketBookText}>حجز التحاليل المختارة</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {tests.length === 0 ? (
                         <View style={styles.empty}>
@@ -148,9 +203,17 @@ export default function LabProfileScreen() {
                             <Text style={styles.emptyText}>لا توجد تحاليل مدرجة حالياً</Text>
                         </View>
                     ) : (
-                        tests.map((test, idx) => (
-                            <View key={test.id || idx} style={styles.testCard}>
+                        tests.map((test, idx) => {
+                            const isSelected = selectedTests.some(item => item.id === test.id);
+                            return (
+                            <View key={test.id || idx} style={[styles.testCard, isSelected && styles.testCardSelected]}>
                                 <View style={styles.testHeaderRow}>
+                                    <TouchableOpacity
+                                        style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+                                        onPress={() => toggleTest(test)}
+                                    >
+                                        {isSelected && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                                    </TouchableOpacity>
                                     <Text style={styles.testName}>{test.name}</Text>
                                     <Text style={styles.testPrice}>{test.price?.toLocaleString()} ل.س</Text>
                                 </View>
@@ -167,25 +230,37 @@ export default function LabProfileScreen() {
                                         </View>
                                     )}
                                 </View>
-                                <TouchableOpacity style={styles.bookBtn} onPress={() => openBooking(test)}>
-                                    <Text style={styles.bookBtnText}>احجز هذا التحليل</Text>
+                                <TouchableOpacity
+                                    style={[styles.bookBtn, isSelected && styles.bookBtnSelected]}
+                                    onPress={() => toggleTest(test)}
+                                >
+                                    <Text style={[styles.bookBtnText, isSelected && styles.bookBtnTextSelected]}>
+                                        {isSelected ? 'موجود في السلة' : 'إضافة للسلة'}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
-                        ))
+                            );
+                        })
                     )}
                 </View>
                 <View style={{ height: 100 }} />
             </ScrollView>
 
             {/* Booking Modal */}
-            <Modal visible={bookingModal.visible} transparent animationType="slide">
+            <Modal visible={bookingModalVisible} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHandle} />
-                        <Text style={styles.modalTitle}>حجز تحليل</Text>
-                        {bookingModal.test && (
-                            <Text style={styles.modalSubtitle}>{bookingModal.test.name} — {bookingModal.test.price?.toLocaleString()} ل.س</Text>
-                        )}
+                        <Text style={styles.modalTitle}>حجز التحاليل</Text>
+                        <Text style={styles.modalSubtitle}>{selectedTests.length} تحليل | {selectedTotal.toLocaleString()} ل.س</Text>
+                        <ScrollView style={styles.modalSelectedList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                            {selectedTests.map(test => (
+                                <View key={test.id} style={styles.modalSelectedRow}>
+                                    <Text style={styles.modalSelectedPrice}>{Number(test.price || 0).toLocaleString()} ل.س</Text>
+                                    <Text style={styles.modalSelectedName}>{test.name}</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
 
                         <Text style={styles.fieldLabel}>التاريخ (YYYY-MM-DD)</Text>
                         <TextInput
@@ -225,8 +300,25 @@ export default function LabProfileScreen() {
                             </>
                         )}
 
+                        <View style={styles.bookingTotalBox}>
+                            <View style={styles.totalLine}>
+                                <Text style={styles.totalValue}>{selectedTotal.toLocaleString()} ل.س</Text>
+                                <Text style={styles.totalLabel}>التحاليل</Text>
+                            </View>
+                            {homeServiceFee > 0 && (
+                                <View style={styles.totalLine}>
+                                    <Text style={styles.totalValue}>{homeServiceFee.toLocaleString()} ل.س</Text>
+                                    <Text style={styles.totalLabel}>الخدمة المنزلية</Text>
+                                </View>
+                            )}
+                            <View style={[styles.totalLine, styles.totalFinalLine]}>
+                                <Text style={styles.totalFinalValue}>{bookingGrandTotal.toLocaleString()} ل.س</Text>
+                                <Text style={styles.totalFinalLabel}>الإجمالي</Text>
+                            </View>
+                        </View>
+
                         <View style={styles.modalActions}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setBookingModal({ visible: false, test: null })}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setBookingModalVisible(false)}>
                                 <Text style={styles.cancelBtnText}>إلغاء</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.confirmBtn} onPress={handleBook} disabled={submitting}>
@@ -264,10 +356,27 @@ const styles = StyleSheet.create({
     infoLabel: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#6B7280' },
     testsSection: { flex: 1 },
     sectionTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'right', marginBottom: 15 },
+    basketCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: '#BBF7D0', elevation: 2 },
+    basketHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+    basketTitleBlock: { alignItems: 'flex-end', flex: 1 },
+    basketTitle: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#166534', textAlign: 'right' },
+    basketMeta: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#43A047', textAlign: 'right' },
+    clearBasketBtn: { borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, paddingVertical: 6 },
+    clearBasketText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#64748B' },
+    selectedList: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+    selectedPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: '#F0FDF4', borderRadius: 14, borderWidth: 1, borderColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 6 },
+    selectedRemoveBtn: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+    selectedPillText: { maxWidth: 180, fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#166534', textAlign: 'right' },
+    basketBookBtn: { borderRadius: 12, overflow: 'hidden' },
+    basketBookGrad: { paddingVertical: 12, alignItems: 'center' },
+    basketBookText: { color: '#FFFFFF', fontSize: 14, fontFamily: 'Cairo_700Bold' },
     empty: { alignItems: 'center', marginTop: 40, gap: 10 },
     emptyText: { fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
     testCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 15, borderWidth: 1, borderColor: '#F3F4F6', elevation: 2 },
+    testCardSelected: { borderColor: '#43A047', backgroundColor: '#F8FFF9' },
     testHeaderRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
+    checkboxSelected: { backgroundColor: '#43A047', borderColor: '#43A047' },
     testName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#111827', flex: 1, textAlign: 'right', marginLeft: 10 },
     testPrice: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#43A047' },
     testDesc: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'right', marginBottom: 12 },
@@ -275,19 +384,32 @@ const styles = StyleSheet.create({
     metaBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     metaBadgeText: { fontSize: 10, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
     bookBtn: { width: '100%', height: 42, borderRadius: 10, backgroundColor: '#1E88E5', justifyContent: 'center', alignItems: 'center' },
+    bookBtnSelected: { backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: '#86EFAC' },
     bookBtnText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
+    bookBtnTextSelected: { color: '#166534' },
     // Modal styles
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
     modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 16 },
     modalTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'center', marginBottom: 4 },
     modalSubtitle: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'center', marginBottom: 16 },
+    modalSelectedList: { maxHeight: 120, backgroundColor: '#F8FAFC', borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', padding: 10 },
+    modalSelectedRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 },
+    modalSelectedName: { flex: 1, fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right' },
+    modalSelectedPrice: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#43A047' },
     fieldLabel: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#374151', textAlign: 'right', marginBottom: 6, marginTop: 12 },
     fieldInput: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', height: 48, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular', fontSize: 14 },
     visitTypeRow: { flexDirection: 'row-reverse', gap: 10, marginTop: 4 },
     visitTypeBtn: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', paddingVertical: 10, alignItems: 'center' },
     visitTypeBtnActive: { backgroundColor: '#43A047', borderColor: '#43A047' },
     visitTypeTxt: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#64748B' },
+    bookingTotalBox: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, marginTop: 14, borderWidth: 1, borderColor: '#E2E8F0', gap: 6 },
+    totalLine: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+    totalLabel: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#64748B' },
+    totalValue: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
+    totalFinalLine: { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 8, marginTop: 2 },
+    totalFinalLabel: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#111827' },
+    totalFinalValue: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#43A047' },
     modalActions: { flexDirection: 'row-reverse', gap: 12, marginTop: 20 },
     cancelBtn: { flex: 1, borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', paddingVertical: 14, alignItems: 'center' },
     cancelBtnText: { fontFamily: 'Cairo_700Bold', color: '#64748B' },

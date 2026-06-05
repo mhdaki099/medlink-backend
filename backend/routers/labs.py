@@ -71,8 +71,45 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
     if visit_type not in {"visit_center", "home_service"}:
         raise HTTPException(400, "نوع الزيارة غير صحيح")
 
-    # Check slot availability
     provider_id = data.get("provider_id")
+    raw_items = data.get("service_items") or []
+    service_items = None
+    services_total = float(data.get("services_total", 0) or 0)
+    service_id = data.get("service_id")
+    service_name = data.get("service_name")
+
+    if raw_items:
+        if not isinstance(raw_items, list):
+            raise HTTPException(400, "قائمة التحاليل غير صحيحة")
+        requested_ids = [str(item.get("id")) for item in raw_items if item.get("id")]
+        requested_ids = list(dict.fromkeys(requested_ids))
+        if not requested_ids:
+            raise HTTPException(400, "يرجى اختيار تحليل واحد على الأقل")
+
+        tests = db.query(LabTest).filter(
+            LabTest.lab_id == provider_id,
+            LabTest.id.in_(requested_ids),
+        ).all()
+        tests_by_id = {test.id: test for test in tests}
+        if len(tests_by_id) != len(requested_ids):
+            raise HTTPException(400, "بعض التحاليل المختارة غير متوفرة في هذا المركز")
+
+        ordered_tests = [tests_by_id[test_id] for test_id in requested_ids]
+        service_items = [
+            {
+                "id": test.id,
+                "name": test.name,
+                "price": float(test.price or 0),
+                "duration_hours": test.duration_hours,
+                "preparation": test.preparation,
+            }
+            for test in ordered_tests
+        ]
+        services_total = sum(item["price"] for item in service_items)
+        service_id = ",".join(item["id"] for item in service_items)
+        service_name = "، ".join(item["name"] for item in service_items)
+
+    # Check slot availability
     date = data.get("date")
     time = data.get("time")
     if provider_id and date and time:
@@ -91,8 +128,10 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
         patient_id=data.get("patient_id"),
         provider_id=provider_id,
         provider_role=provider_role,
-        service_id=data.get("service_id"),
-        service_name=data.get("service_name"),
+        service_id=service_id,
+        service_name=service_name,
+        service_items=service_items,
+        services_total=services_total,
         date=date,
         time=time,
         visit_type=visit_type,

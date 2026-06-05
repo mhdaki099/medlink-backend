@@ -13,7 +13,17 @@ export default function LandingScreen() {
 
     useEffect(() => {
         if (user) {
-            router.replace(`/(${user.role})` as any);
+            const roleGroups: Record<string, string> = {
+                patient: '(patient)',
+                doctor: '(doctor)',
+                pharmacy: '(pharmacy)',
+                lab: '(lab)',
+                radiology: '(lab)',
+                warehouse: '(warehouse)',
+                admin: '(admin)',
+                secretary: '(secretary)',
+            };
+            router.replace(`/${roleGroups[user.role] || '(patient)'}` as any);
         }
     }, [user]);
 

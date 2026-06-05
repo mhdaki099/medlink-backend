@@ -39,9 +39,17 @@ function RootLayoutNavigator() {
             router.replace('/(auth)/login');
         } else if (user && inAuthGroup) {
             const role = user.role;
-            const roleGroup = ['patient', 'doctor', 'pharmacy', 'lab', 'warehouse', 'admin', 'secretary'].includes(role)
-                ? `(${role})`
-                : '(patient)';
+            const roleGroups: Record<string, string> = {
+                patient: '(patient)',
+                doctor: '(doctor)',
+                pharmacy: '(pharmacy)',
+                lab: '(lab)',
+                radiology: '(lab)',
+                warehouse: '(warehouse)',
+                admin: '(admin)',
+                secretary: '(secretary)',
+            };
+            const roleGroup = roleGroups[role] || '(patient)';
             router.replace(`/${roleGroup}` as any);
         }
     }, [user, isLoading, segments]);

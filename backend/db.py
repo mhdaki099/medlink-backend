@@ -102,6 +102,8 @@ def ensure_sqlite_columns():
             "rejection_reason_type": "TEXT",
             "recommended_provider_id": "TEXT",
             "reason": "TEXT",
+            "service_items": "JSON",
+            "services_total": "FLOAT DEFAULT 0",
         },
         "lab_bookings": {
             "rejection_note": "TEXT",
