@@ -3,6 +3,7 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, RefreshControl, Dimensions, Platform, Modal, TextInput, Alert
 } from 'react-native';
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 16,
-        paddingBottom: 100,
+        paddingBottom: TAB_BAR_CLEARANCE,
     },
     summaryCard: {
         flexDirection: 'row-reverse',

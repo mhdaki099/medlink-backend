@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 const { width } = Dimensions.get('window');
 
@@ -425,6 +426,7 @@ const styles = StyleSheet.create({
     scrollContent: {
         paddingTop: 70, // Room for avatar
         paddingHorizontal: 20,
+        paddingBottom: TAB_BAR_CLEARANCE,
     },
     uidCard: {
         backgroundColor: '#EBF5FF',

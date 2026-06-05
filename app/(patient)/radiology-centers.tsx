@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+import {
+    View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, TextInput, Platform, Alert
 } from 'react-native';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -255,7 +256,7 @@ const styles = StyleSheet.create({
     filterChipTextActive: { color: '#FFF' },
     listContent: { 
         padding: 16, 
-        paddingBottom: 100 
+        paddingBottom: TAB_BAR_CLEARANCE 
     },
     card: { 
         backgroundColor: Colors.white, 

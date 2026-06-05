@@ -9,6 +9,7 @@ import Animated, {
     FadeInRight,
     FadeIn
 } from 'react-native-reanimated';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 
 const { width, height } = Dimensions.get('window');
 
@@ -120,7 +121,7 @@ export default function ServicesScreen() {
 
             <ScrollView
                 style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
                 showsVerticalScrollIndicator={false}
             >
                 {/* Hero Section */}

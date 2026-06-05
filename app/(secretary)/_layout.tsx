@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, View, Text, TouchableOpacity, Dimensions, Animated, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,8 +12,8 @@ const FAB_SIZE = 58;
 const TAB_WIDTH = width / 2; // Only 2 tabs for secretary
 
 const TABS = [
-  { name: 'appointments', icon: 'calendar-clock', label: 'المواعيد' },
-  { name: 'index', icon: 'view-dashboard', label: 'الرئيسية' },
+  { name: 'appointments', icon: 'calendar-clock', label: 'المواعيد', path: '/(secretary)/appointments' },
+  { name: 'index', icon: 'view-dashboard', label: 'الرئيسية', path: '/(secretary)/' },
 ];
 
 function CustomTabBar({ state, navigation }: any) {
@@ -21,7 +21,17 @@ function CustomTabBar({ state, navigation }: any) {
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
   const activeIndexRaw = TABS.findIndex(t => state.routes[state.index].name === t.name);
-  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 1; 
+  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 1;
+  const routeName = state.routes[state.index]?.name;
+
+  const goToTab = (tab: (typeof TABS)[number]) => {
+    if (routeName === tab.name) return;
+    try {
+      router.replace(tab.path as any);
+    } catch {
+      navigation.navigate(tab.name);
+    }
+  };
 
   // RTL Logic: (1 - activeIndex)
   const targetX = (1 - activeIndex) * TAB_WIDTH;
@@ -73,7 +83,7 @@ function CustomTabBar({ state, navigation }: any) {
           return (
             <TouchableOpacity
               key={tab.name}
-              onPress={() => !isFocused && navigation.navigate(tab.name)}
+              onPress={() => goToTab(tab)}
               style={styles.tabButton}
             >
               {!isFocused && (

@@ -10,7 +10,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Colors } from '../../src/theme';
-import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 
 export default function DoctorAppointments() {
     const { user } = useAuth();
@@ -669,6 +669,6 @@ const styles = StyleSheet.create({
     },
     empty: { alignItems: 'center', marginTop: 100 },
     emptyText: { fontSize: 15, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8', marginTop: 15 },
-    fab: { position: 'absolute', bottom: 100, left: 20, zIndex: 100 },
+    fab: { position: 'absolute', bottom: TAB_BAR_FAB_BOTTOM, left: 20, zIndex: 100 },
     fabGrad: { width: 58, height: 58, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#1E88E5', shadowOpacity: 0.4, shadowRadius: 10 },
 });

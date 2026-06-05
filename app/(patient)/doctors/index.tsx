@@ -3,6 +3,7 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Image, TextInput, ActivityIndicator, RefreshControl, Dimensions, Platform
 } from 'react-native';
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../../src/constants/layout';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -106,7 +107,7 @@ export default function DoctorsScreen() {
                 style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(selectedSpec); }} />}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
             >
                 {/* 1. Header Area */}
                 <View style={styles.header}>

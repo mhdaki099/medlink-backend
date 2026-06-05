@@ -10,10 +10,9 @@ import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import ProviderStatsBar from '../../../src/components/ProviderStatsBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTabBarClearance } from '../../../src/constants/layout';
 
 const { width, height } = Dimensions.get('window');
-/** Must match app/(patient)/_layout.tsx TAB_BAR_BASE_HEIGHT */
-const TAB_BAR_BASE_HEIGHT = 85;
 const BOOKING_BTN_HEIGHT = 64;
 
 // Slider Width Constants
@@ -53,9 +52,7 @@ export default function DoctorProfile() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const { user } = useAuth();
-    const insets = useSafeAreaInsets();
-    /** Space below last scroll item so content clears the tab bar */
-    const scrollBottomPad = TAB_BAR_BASE_HEIGHT + insets.bottom + 24;
+    const scrollBottomPad = useTabBarClearance(24);
 
     const [doctor, setDoctor] = useState<any>(null);
     const [loading, setLoading] = useState(true);

@@ -6,6 +6,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import OrderItemsList from '../../src/components/OrderItemsList';
 
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
     blue: '#2980B9', bg: '#F5F6FA', white: '#FFF', text: '#1A1A2E',
@@ -66,7 +67,7 @@ export default function PharmacyOrders() {
                 </ScrollView>
             </LinearGradient>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" /> :
                     filtered.length === 0 ? (

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { 
-    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+import {
+    View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, RefreshControl, Dimensions, Platform, Alert
 } from 'react-native';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '../../src/services/api';
@@ -112,7 +113,7 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FAFBFF' },
     header: { paddingTop: Platform.OS === 'ios' ? 60 : 40, paddingBottom: 20, alignItems: 'center', borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
     headerTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#FFF' },
-    list: { padding: 20, paddingBottom: 100 },
+    list: { padding: 20, paddingBottom: TAB_BAR_CLEARANCE },
     aptCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8 },
     aptHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingBottom: 10, marginBottom: 10 },
     statusTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },

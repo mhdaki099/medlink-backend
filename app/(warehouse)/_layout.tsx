@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,10 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 const TABS = [
-  { name: 'orders', icon: 'truck-delivery', label: 'الطلبات' },
-  { name: 'index', icon: 'home', label: 'الرئيسية' },
-  { name: 'profile', icon: 'account', label: 'البروفايل' },
+  { name: 'orders', icon: 'truck-delivery', label: 'الطلبات', path: '/(warehouse)/orders' },
+  { name: 'index', icon: 'home', label: 'الرئيسية', path: '/(warehouse)/' },
+  { name: 'profile', icon: 'account', label: 'البروفايل', path: '/(warehouse)/profile' },
 ];
+
+const HIDE_TAB_BAR_ROUTES = new Set(['inventory']);
 
 const TAB_WIDTH = width / 3;
 const TAB_BAR_BASE_HEIGHT = 70;
@@ -19,16 +21,24 @@ const FAB_SIZE = 56;
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
+  const routeName = state.routes[state.index]?.name;
 
-  const activeIndexRaw = TABS.findIndex(t => {
-    const routeName = state.routes[state.index].name;
-    if (routeName === t.name) return true;
-    if (t.name === 'index' && routeName === 'inventory') return true;
-    return false;
-  });
-  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
+  if (HIDE_TAB_BAR_ROUTES.has(routeName)) {
+    return null;
+  }
 
+  const activeIndexRaw = TABS.findIndex(t => routeName === t.name);
+  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 1;
   const targetX = (2 - activeIndex) * TAB_WIDTH;
+
+  const goToTab = (tab: (typeof TABS)[number]) => {
+    if (routeName === tab.name) return;
+    try {
+      router.replace(tab.path as any);
+    } catch {
+      navigation.navigate(tab.name);
+    }
+  };
 
   return (
     <View style={[styles.container, { height: TAB_BAR_HEIGHT }]}>
@@ -45,7 +55,7 @@ function CustomTabBar({ state, navigation }: any) {
             <TouchableOpacity
               key={tab.name}
               style={styles.tabButton}
-              onPress={() => !isFocused && navigation.navigate(tab.name)}
+              onPress={() => goToTab(tab)}
               activeOpacity={0.7}
             >
               <MaterialCommunityIcons

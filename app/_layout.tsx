@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Platform, Text, TextInput } from 'react-native';
 import { useFonts, Cairo_400Regular, Cairo_600SemiBold, Cairo_700Bold } from '@expo-google-fonts/cairo';
 import * as SplashScreen from 'expo-splash-screen';
+import { setupCairoFont } from '../src/utils/setupCairoFont';
+import { FONTS } from '../src/constants/typography';
 
 // Prevent splash screen auto-hide until fonts are loaded
 SplashScreen.preventAutoHideAsync();
@@ -14,15 +16,16 @@ const applyGlobalFont = () => {
     // @ts-ignore
     if (Text.defaultProps == null) Text.defaultProps = {};
     // @ts-ignore
-    Text.defaultProps.style = [{ fontFamily: 'Cairo_400Regular' }];
+    Text.defaultProps.style = [{ fontFamily: FONTS.regular }];
 
     // @ts-ignore
     if (TextInput.defaultProps == null) TextInput.defaultProps = {};
     // @ts-ignore
-    TextInput.defaultProps.style = [{ fontFamily: 'Cairo_400Regular' }];
+    TextInput.defaultProps.style = [{ fontFamily: FONTS.regular }];
 };
 
 applyGlobalFont();
+setupCairoFont();
 
 function RootLayoutNavigator() {
     const { user, isLoading } = useAuth();
@@ -79,6 +82,7 @@ export default function RootLayout() {
 
     useEffect(() => {
         if (fontsLoaded) {
+            setupCairoFont();
             SplashScreen.hideAsync();
 
             // For Web platform, enforce global CSS

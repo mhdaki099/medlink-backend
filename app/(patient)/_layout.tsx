@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, View, Text, TouchableOpacity, Dimensions, Animated, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,9 +13,9 @@ const TAB_WIDTH = width / 3;
 
 // Define the 3 core tabs in order
 const TABS = [
-  { name: 'services', icon: 'view-grid', label: 'خدماتي' },
-  { name: 'index', icon: 'home', label: 'الرئيسية' },
-  { name: 'profile', icon: 'account', label: 'البروفايل' },
+  { name: 'services', icon: 'view-grid', label: 'خدماتي', path: '/(patient)/services' },
+  { name: 'index', icon: 'home', label: 'الرئيسية', path: '/(patient)/' },
+  { name: 'profile', icon: 'account', label: 'البروفايل', path: '/(patient)/profile' },
 ];
 
 /** Secondary screens that belong under the "services" tab highlight */
@@ -42,13 +42,23 @@ function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
+  const routeName = state.routes[state.index]?.name;
+
   const activeIndexRaw = TABS.findIndex(t => {
-    const route = state.routes[state.index];
-    if (route.name === t.name) return true;
-    if (t.name === 'services' && SERVICE_TAB_ROUTES.has(route.name)) return true;
+    if (routeName === t.name) return true;
+    if (t.name === 'services' && SERVICE_TAB_ROUTES.has(routeName)) return true;
     return false;
   });
   const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
+
+  const goToTab = (tab: (typeof TABS)[number]) => {
+    if (routeName === tab.name) return;
+    try {
+      router.replace(tab.path as any);
+    } catch {
+      navigation.navigate(tab.name);
+    }
+  };
 
   // RTL Logic: (2 - activeIndex) because of row-reverse with 3 tabs
   const targetX = (2 - activeIndex) * TAB_WIDTH;
@@ -124,7 +134,7 @@ function CustomTabBar({ state, navigation }: any) {
           return (
             <TouchableOpacity
               key={tab.name}
-              onPress={() => !isFocused && navigation.navigate(tab.name)}
+              onPress={() => goToTab(tab)}
               style={styles.tabButton}
               activeOpacity={0.7}
             >

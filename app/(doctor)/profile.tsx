@@ -4,6 +4,7 @@ import {
     Image, TextInput, Alert, Platform, Modal,
     Switch, KeyboardAvoidingView
 } from 'react-native';
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
@@ -102,7 +103,7 @@ export default function DoctorProfile() {
 
     return (
         <View style={styles.container}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}>
                 {/* Premium Profile Header */}
                 <LinearGradient colors={['#1E88E5', '#43A047']} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                     <View style={styles.headerTop}>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    View, Text, StyleSheet, FlatList, TouchableOpacity, 
+import {
+    View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, Platform, Alert
 } from 'react-native';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api } from '../../src/services/api';
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: '#FFF' },
     headerSub: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.85)', marginTop: 2 },
     backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-    list: { padding: 20, paddingBottom: 100 },
+    list: { padding: 20, paddingBottom: TAB_BAR_CLEARANCE },
     card: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, marginBottom: 12, flexDirection: 'row-reverse', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
     unreadCard: { borderWidth: 1.5, borderColor: '#BFDBFE', backgroundColor: '#F8FBFF' },
     iconBox: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },

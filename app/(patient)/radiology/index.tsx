@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useAuth } from '../../../src/contexts/AuthContext';
 import { api } from '../../../src/services/api';
+import { TAB_BAR_CLEARANCE } from '../../../src/constants/layout';
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: string }> = {
     pending: { label: 'قيد الانتظار', color: '#F59E0B', icon: 'clock-outline' },
@@ -201,7 +202,7 @@ export default function RadiologyScreen() {
                 data={listData}
                 renderItem={renderItem}
                 keyExtractor={(item) => item.id}
-                contentContainerStyle={{ padding: 16, paddingBottom: 110 }}
+                contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_CLEARANCE }}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}

@@ -7,6 +7,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import OrderItemsList from '../../src/components/OrderItemsList';
 
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 const { width } = Dimensions.get('window');
 const C = {
     primary: '#1E88E5', primaryDark: '#1565C0', accent: '#43A047', success: '#27AE60',
@@ -69,7 +70,7 @@ export default function PharmacyDashboard() {
     const STATUS_COLORS: Record<string, string> = { pending: C.primary, pending_confirmation: C.primary, processing: C.blue, preparing: C.blue, delivered: C.success, cancelled: C.danger };
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
 
             {/* Gradient Header */}

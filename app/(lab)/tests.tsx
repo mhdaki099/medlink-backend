@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 import {
     SERVICE_AVAILABILITY,
     SERVICE_AVAILABILITY_OPTIONS,
@@ -203,7 +203,7 @@ export default function LabTests() {
                     ))}
             </ScrollView>
 
-            <TouchableOpacity style={[styles.fab, { bottom: TAB_BAR_CLEARANCE }]} onPress={openAdd} activeOpacity={0.9}>
+            <TouchableOpacity style={[styles.fab, { bottom: TAB_BAR_FAB_BOTTOM }]} onPress={openAdd} activeOpacity={0.9}>
                 <LinearGradient colors={['#6A1B9A', C.primary]} style={styles.fabGrad}>
                     <MaterialCommunityIcons name="plus" size={28} color="#FFF" />
                 </LinearGradient>

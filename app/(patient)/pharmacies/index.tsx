@@ -4,6 +4,7 @@ import {
     Image, TextInput, ActivityIndicator, RefreshControl, Dimensions, Platform,
     Pressable
 } from 'react-native';
+import { TAB_BAR_CLEARANCE } from '../../../src/constants/layout';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -249,7 +250,7 @@ export default function PharmaciesScreen() {
                 <ScrollView
                     style={styles.list}
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
+                    contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE, paddingHorizontal: 16 }}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}
                 >
                     {loading ? (
@@ -639,7 +640,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         padding: 20,
-        paddingBottom: 110, // HUGE padding to completely clear the bottom navigation bar
+        paddingBottom: TAB_BAR_CLEARANCE + 20, // HUGE padding to completely clear the bottom navigation bar
     },
     sheetHeader: {
         alignItems: 'center',

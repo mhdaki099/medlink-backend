@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 
+import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../../src/constants/layout';
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#10B981', danger: '#EF4444', warning: '#F59E0B', blue: '#3B82F6',
     bg: '#F8FAFC', white: '#FFF', text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
@@ -63,7 +64,7 @@ export default function WarehouseOrders() {
                 </ScrollView>
             </LinearGradient>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={C.primary} />}>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" /> :
                     filtered.length === 0 ? (

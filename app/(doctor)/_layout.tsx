@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StyleSheet, View, Text, TouchableOpacity, Dimensions, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,9 +12,9 @@ const FAB_SIZE = 58;
 const TAB_WIDTH = width / 3;
 
 const TABS = [
-  { name: 'patients', icon: 'account-group', label: 'المرضى' },
-  { name: 'index', icon: 'home', label: 'الرئيسية' },
-  { name: 'profile', icon: 'account', label: 'البروفايل' },
+  { name: 'patients', icon: 'account-group', label: 'المرضى', path: '/(doctor)/patients' },
+  { name: 'index', icon: 'home', label: 'الرئيسية', path: '/(doctor)/' },
+  { name: 'profile', icon: 'account', label: 'البروفايل', path: '/(doctor)/profile' },
 ];
 
 const PATIENTS_TAB_ROUTES = new Set([
@@ -49,6 +49,15 @@ function CustomTabBar({ state, navigation }: any) {
     return false;
   });
   const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 1;
+
+  const goToTab = (tab: (typeof TABS)[number]) => {
+    if (routeName === tab.name) return;
+    try {
+      router.replace(tab.path as any);
+    } catch {
+      navigation.navigate(tab.name);
+    }
+  };
 
   const targetX = (2 - activeIndex) * TAB_WIDTH;
   const translateX = useRef(new Animated.Value(targetX)).current;
@@ -107,7 +116,7 @@ function CustomTabBar({ state, navigation }: any) {
           return (
             <TouchableOpacity
               key={tab.name}
-              onPress={() => !isFocused && navigation.navigate(tab.name)}
+              onPress={() => goToTab(tab)}
               style={styles.tabButton}
               activeOpacity={0.7}
             >
