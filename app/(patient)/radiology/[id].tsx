@@ -5,6 +5,14 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import ArabicCalendar from '../../../src/components/ArabicCalendar';
+
+const DEFAULT_TIME_SLOTS = [
+    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+    '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+    '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+];
 
 export default function RadiologyProfileScreen() {
     const { id } = useLocalSearchParams();
@@ -19,6 +27,9 @@ export default function RadiologyProfileScreen() {
         time: '', 
         reason: '' 
     });
+    const today = new Date();
+    const [calendarMonth, setCalendarMonth] = useState(today.getMonth());
+    const [calendarYear, setCalendarYear] = useState(today.getFullYear());
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -41,6 +52,39 @@ export default function RadiologyProfileScreen() {
         return `${BASE_URL.replace(/\/api$/, '')}${path}`;
     };
 
+    const openBooking = (serviceName: string) => {
+        const now = new Date();
+        setCalendarMonth(now.getMonth());
+        setCalendarYear(now.getFullYear());
+        setBookingForm({
+            service_name: serviceName,
+            date: now.toISOString().split('T')[0],
+            time: '',
+            reason: '',
+        });
+        setBookingModal(true);
+    };
+
+    const goPrevMonth = () => {
+        setCalendarMonth(prev => {
+            if (prev === 0) {
+                setCalendarYear(y => y - 1);
+                return 11;
+            }
+            return prev - 1;
+        });
+    };
+
+    const goNextMonth = () => {
+        setCalendarMonth(prev => {
+            if (prev === 11) {
+                setCalendarYear(y => y + 1);
+                return 0;
+            }
+            return prev + 1;
+        });
+    };
+
     const handleBook = async () => {
         if (!user?.id) { Alert.alert('تنبيه', 'يجب تسجيل الدخول'); return; }
         if (!bookingForm.service_name || !bookingForm.date || !bookingForm.time) { 
@@ -60,7 +104,9 @@ export default function RadiologyProfileScreen() {
             });
             setBookingModal(false);
             setBookingForm({ service_name: '', date: '', time: '', reason: '' });
-            Alert.alert('✅ تم الحجز', 'تم إرسال طلب الحجز بنجاح بانتظار موافقة المركز');
+            Alert.alert('✅ تم الحجز', 'تم حفظ الحجز في حجوزاتك بانتظار موافقة المركز', [
+                { text: 'عرض حجوزاتي', onPress: () => router.replace({ pathname: '/(patient)/radiology', params: { tab: 'bookings' } } as any) },
+            ]);
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
         } finally {
@@ -139,10 +185,7 @@ export default function RadiologyProfileScreen() {
                             <TouchableOpacity 
                                 key={idx} 
                                 style={styles.serviceCard}
-                                onPress={() => {
-                                    setBookingForm(f => ({ ...f, service_name: service.name }));
-                                    setBookingModal(true);
-                                }}
+                                onPress={() => openBooking(service.name)}
                             >
                                 <View style={styles.serviceIcon}>
                                     <Ionicons name={service.icon as any} size={28} color="#8B5CF6" />
@@ -170,7 +213,12 @@ export default function RadiologyProfileScreen() {
             {/* Booking Modal */}
             <Modal visible={bookingModal} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                    <ScrollView
+                        style={styles.modalContent}
+                        contentContainerStyle={styles.modalContentInner}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    >
                         <View style={styles.modalHandle} />
                         <Text style={styles.modalTitle}>حجز موعد أشعة</Text>
                         {bookingForm.service_name && (
@@ -186,23 +234,31 @@ export default function RadiologyProfileScreen() {
                             textAlign="right"
                         />
 
-                        <Text style={styles.fieldLabel}>التاريخ (YYYY-MM-DD) *</Text>
-                        <TextInput
-                            style={styles.fieldInput}
-                            placeholder="2025-01-15"
-                            value={bookingForm.date}
-                            onChangeText={v => setBookingForm(f => ({ ...f, date: v }))}
-                            textAlign="right"
+                        <Text style={styles.fieldLabel}>اختر التاريخ *</Text>
+                        <ArabicCalendar
+                            month={calendarMonth}
+                            year={calendarYear}
+                            selectedDate={bookingForm.date}
+                            onSelect={date => setBookingForm(f => ({ ...f, date }))}
+                            onPrevMonth={goPrevMonth}
+                            onNextMonth={goNextMonth}
                         />
 
-                        <Text style={styles.fieldLabel}>الوقت *</Text>
-                        <TextInput
-                            style={styles.fieldInput}
-                            placeholder="09:00 AM"
-                            value={bookingForm.time}
-                            onChangeText={v => setBookingForm(f => ({ ...f, time: v }))}
-                            textAlign="right"
-                        />
+                        <Text style={styles.fieldLabel}>اختر الوقت *</Text>
+                        <View style={styles.timeGrid}>
+                            {DEFAULT_TIME_SLOTS.map(slot => {
+                                const active = bookingForm.time === slot;
+                                return (
+                                    <TouchableOpacity
+                                        key={slot}
+                                        style={[styles.timeSlot, active && styles.timeSlotActive]}
+                                        onPress={() => setBookingForm(f => ({ ...f, time: slot }))}
+                                    >
+                                        <Text style={[styles.timeSlotText, active && styles.timeSlotTextActive]}>{slot}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
 
                         <Text style={styles.fieldLabel}>ملاحظات (اختياري)</Text>
                         <TextInput
@@ -237,7 +293,7 @@ export default function RadiologyProfileScreen() {
                                 </LinearGradient>
                             </TouchableOpacity>
                         </View>
-                    </View>
+                    </ScrollView>
                 </View>
             </Modal>
         </View>
@@ -398,9 +454,12 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end' 
     },
     modalContent: { 
+        maxHeight: '92%',
         backgroundColor: '#FFF', 
         borderTopLeftRadius: 30, 
-        borderTopRightRadius: 30, 
+        borderTopRightRadius: 30,
+    },
+    modalContentInner: {
         padding: 24, 
         paddingBottom: 40 
     },
@@ -441,6 +500,33 @@ const styles = StyleSheet.create({
         height: 48, 
         paddingHorizontal: 14, 
         fontSize: 14 
+    },
+    timeGrid: {
+        flexDirection: 'row-reverse',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    timeSlot: {
+        width: '30.5%',
+        minHeight: 40,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        backgroundColor: '#F8FAFC',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    timeSlotActive: {
+        backgroundColor: '#8B5CF6',
+        borderColor: '#8B5CF6',
+    },
+    timeSlotText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    timeSlotTextActive: {
+        color: '#FFF',
     },
     modalActions: { 
         flexDirection: 'row-reverse', 

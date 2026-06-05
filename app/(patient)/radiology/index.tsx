@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     ActivityIndicator, Platform, Alert, TextInput, RefreshControl,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -23,6 +23,7 @@ type TabKey = 'browse' | 'bookings';
 
 export default function RadiologyScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ tab?: string }>();
     const { user } = useAuth();
     const [centers, setCenters] = useState<any[]>([]);
     const [bookings, setBookings] = useState<any[]>([]);
@@ -30,6 +31,12 @@ export default function RadiologyScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [tab, setTab] = useState<TabKey>('browse');
     const [search, setSearch] = useState('');
+
+    useEffect(() => {
+        if (params.tab === 'bookings' || params.tab === 'browse') {
+            setTab(params.tab);
+        }
+    }, [params.tab]);
 
     const loadData = async () => {
         if (!user?.id) return;
