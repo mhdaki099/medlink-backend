@@ -1,4 +1,4 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,10 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 const TABS = [
-  { name: 'bookings', icon: 'calendar-check', label: 'الحجوزات' },
-  { name: 'index', icon: 'home', label: 'الرئيسية' },
-  { name: 'profile', icon: 'account', label: 'البروفايل' },
+  { name: 'bookings', icon: 'calendar-check', label: 'الحجوزات', path: '/(lab)/bookings' },
+  { name: 'index', icon: 'home', label: 'الرئيسية', path: '/(lab)/' },
+  { name: 'tests', icon: 'clipboard-list-outline', label: 'الخدمات', path: '/(lab)/tests' },
 ];
+
+const HIDE_TAB_BAR_ROUTES = new Set(['results']);
 
 const TAB_WIDTH = width / 3;
 const TAB_BAR_BASE_HEIGHT = 70;
@@ -19,16 +21,24 @@ const FAB_SIZE = 56;
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
   const TAB_BAR_HEIGHT = TAB_BAR_BASE_HEIGHT + insets.bottom;
+  const routeName = state.routes[state.index]?.name;
 
-  const activeIndexRaw = TABS.findIndex(t => {
-    const routeName = state.routes[state.index].name;
-    if (routeName === t.name) return true;
-    if (t.name === 'bookings' && (routeName === 'tests' || routeName === 'results')) return true;
-    return false;
-  });
-  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 0;
+  if (HIDE_TAB_BAR_ROUTES.has(routeName)) {
+    return null;
+  }
 
+  const activeIndexRaw = TABS.findIndex(t => routeName === t.name);
+  const activeIndex = activeIndexRaw >= 0 ? activeIndexRaw : 1;
   const targetX = (2 - activeIndex) * TAB_WIDTH;
+
+  const goToTab = (tab: (typeof TABS)[number]) => {
+    if (routeName === tab.name) return;
+    try {
+      router.replace(tab.path as any);
+    } catch {
+      navigation.navigate(tab.name);
+    }
+  };
 
   return (
     <View style={[styles.container, { height: TAB_BAR_HEIGHT }]}>
@@ -45,7 +55,7 @@ function CustomTabBar({ state, navigation }: any) {
             <TouchableOpacity
               key={tab.name}
               style={styles.tabButton}
-              onPress={() => !isFocused && navigation.navigate(tab.name)}
+              onPress={() => goToTab(tab)}
               activeOpacity={0.7}
             >
               <MaterialCommunityIcons
@@ -86,8 +96,7 @@ export default function LabLayout() {
     >
       <Tabs.Screen name="index" options={{ title: 'الرئيسية' }} />
       <Tabs.Screen name="bookings" options={{ title: 'الحجوزات' }} />
-      <Tabs.Screen name="profile" options={{ title: 'البروفايل' }} />
-      <Tabs.Screen name="tests" options={{ href: null }} />
+      <Tabs.Screen name="tests" options={{ title: 'الخدمات' }} />
       <Tabs.Screen name="results" options={{ href: null }} />
     </Tabs>
   );

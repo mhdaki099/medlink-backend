@@ -4,7 +4,7 @@ import {
     Image, TextInput, ActivityIndicator, RefreshControl, Dimensions, Platform,
     Pressable
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
@@ -25,6 +25,7 @@ const KNOB_SIZE = 50;
 
 export default function PharmaciesScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ prescription_code?: string; prescription_id?: string }>();
     const { user } = useAuth();
     const [medicines, setMedicines] = useState<any[]>([]);
     const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -36,8 +37,16 @@ export default function PharmaciesScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showCart, setShowCart] = useState(false);
+    const [prescriptionCode, setPrescriptionCode] = useState('');
+    const [prescriptionId, setPrescriptionId] = useState('');
+    const [deliveryAddress, setDeliveryAddress] = useState('');
     
     const patientId = user?.id || "guest"; // Use real user ID
+
+    useEffect(() => {
+        if (params.prescription_code) setPrescriptionCode(String(params.prescription_code));
+        if (params.prescription_id) setPrescriptionId(String(params.prescription_id));
+    }, [params.prescription_code, params.prescription_id]);
 
     // Slider Shared Values
     const sliderPos = useSharedValue(0);
@@ -127,6 +136,15 @@ export default function PharmaciesScreen() {
     const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
     const handleCheckout = async () => {
+        if (!user?.id) {
+            alert('يجب تسجيل الدخول لإرسال الطلب');
+            return;
+        }
+        const needsRx = cart.some((i: any) => i.requires_prescription);
+        if (needsRx && !prescriptionCode.trim()) {
+            alert('يرجى إدخال رمز الوصفة الطبية (RX) لهذا الطلب');
+            return;
+        }
         try {
             // Group cart items by pharmacy
             const grouped: Record<string, any[]> = {};
@@ -141,9 +159,16 @@ export default function PharmaciesScreen() {
                 await api.createOrder({
                     patient_id: patientId,
                     pharmacy_id: pharmacyId,
-                    items: items.map((i: any) => ({ medicine_id: i.id, qty: i.quantity, price: i.price })),
+                    prescription_id: prescriptionId || undefined,
+                    prescription_code: prescriptionCode.trim() || undefined,
+                    items: items.map((i: any) => ({
+                        medicine_id: i.id,
+                        name: i.name,
+                        qty: i.quantity,
+                        price: i.price,
+                    })),
                     total,
-                    delivery_address: '',
+                    delivery_address: deliveryAddress.trim(),
                 });
             }
             // Clear cart
@@ -352,6 +377,30 @@ export default function PharmaciesScreen() {
 
                             {cart.length > 0 && (
                                 <View style={styles.cartFooter}>
+                                    <Text style={styles.fieldLabel}>رمز الوصفة الطبية (RX)</Text>
+                                    <TextInput
+                                        style={styles.fieldInput}
+                                        placeholder="مثال: RX-12345678"
+                                        value={prescriptionCode}
+                                        onChangeText={setPrescriptionCode}
+                                        textAlign="right"
+                                        autoCapitalize="characters"
+                                    />
+                                    <Text style={styles.fieldHint}>
+                                        {cart.some((i: any) => i.requires_prescription)
+                                            ? 'مطلوب لبعض الأدوية في السلة'
+                                            : 'اختياري — أدخله إذا كان الطلب مرتبطاً بوصفة'}
+                                    </Text>
+
+                                    <Text style={styles.fieldLabel}>عنوان التوصيل</Text>
+                                    <TextInput
+                                        style={styles.fieldInput}
+                                        placeholder="المدينة، الحي، الشارع..."
+                                        value={deliveryAddress}
+                                        onChangeText={setDeliveryAddress}
+                                        textAlign="right"
+                                    />
+
                                     <View style={styles.totalRow}>
                                         <Text style={styles.totalPrice}>{cartTotal.toLocaleString()} ل.س</Text>
                                         <Text style={styles.totalLabel}>الإجمالي</Text>
@@ -675,6 +724,29 @@ const styles = StyleSheet.create({
         paddingTop: 15,
         gap: 10,
         marginBottom: 20, 
+    },
+    fieldLabel: {
+        fontSize: 13,
+        fontFamily: 'Cairo_700Bold',
+        color: '#374151',
+        textAlign: 'right',
+    },
+    fieldInput: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        height: 46,
+        paddingHorizontal: 14,
+        fontSize: 14,
+        fontFamily: 'Cairo_400Regular',
+        color: '#111827',
+    },
+    fieldHint: {
+        fontSize: 11,
+        fontFamily: 'Cairo_400Regular',
+        color: '#94A3B8',
+        textAlign: 'right',
     },
     totalRow: {
         flexDirection: 'row-reverse',

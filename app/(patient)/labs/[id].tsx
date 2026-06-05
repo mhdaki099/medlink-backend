@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { getServiceAvailability, isServiceBookable } from '../../../src/constants/serviceAvailability';
 import ArabicCalendar from '../../../src/components/ArabicCalendar';
 
 const DEFAULT_TIME_SLOTS = [
@@ -58,6 +59,10 @@ export default function LabProfileScreen() {
     const bookingGrandTotal = selectedTotal + homeServiceFee;
 
     const toggleTest = (test: any) => {
+        if (!isServiceBookable(test.availability_status)) {
+            Alert.alert('غير متاح', `هذا التحليل حالياً: ${getServiceAvailability(test.availability_status).label}`);
+            return;
+        }
         setSelectedTests(prev => (
             prev.some(item => item.id === test.id)
                 ? prev.filter(item => item.id !== test.id)
@@ -239,16 +244,24 @@ export default function LabProfileScreen() {
                     ) : (
                         tests.map((test, idx) => {
                             const isSelected = selectedTests.some(item => item.id === test.id);
+                            const bookable = isServiceBookable(test.availability_status);
+                            const avail = getServiceAvailability(test.availability_status);
                             return (
-                            <View key={test.id || idx} style={[styles.testCard, isSelected && styles.testCardSelected]}>
+                            <View key={test.id || idx} style={[styles.testCard, isSelected && styles.testCardSelected, !bookable && styles.testCardDisabled]}>
                                 <View style={styles.testHeaderRow}>
                                     <TouchableOpacity
-                                        style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+                                        style={[styles.checkbox, isSelected && styles.checkboxSelected, !bookable && styles.checkboxDisabled]}
                                         onPress={() => toggleTest(test)}
+                                        disabled={!bookable}
                                     >
                                         {isSelected && <Ionicons name="checkmark" size={16} color="#FFF" />}
                                     </TouchableOpacity>
-                                    <Text style={styles.testName}>{test.name}</Text>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.testName, !bookable && { color: '#9CA3AF' }]}>{test.name}</Text>
+                                        <View style={[styles.availPill, { backgroundColor: avail.bg }]}>
+                                            <Text style={[styles.availPillText, { color: avail.color }]}>{avail.label}</Text>
+                                        </View>
+                                    </View>
                                     <Text style={styles.testPrice}>{test.price?.toLocaleString()} ل.س</Text>
                                 </View>
                                 <Text style={styles.testDesc}>{test.description}</Text>
@@ -265,11 +278,12 @@ export default function LabProfileScreen() {
                                     )}
                                 </View>
                                 <TouchableOpacity
-                                    style={[styles.bookBtn, isSelected && styles.bookBtnSelected]}
+                                    style={[styles.bookBtn, isSelected && styles.bookBtnSelected, !bookable && styles.bookBtnDisabled]}
                                     onPress={() => toggleTest(test)}
+                                    disabled={!bookable}
                                 >
-                                    <Text style={[styles.bookBtnText, isSelected && styles.bookBtnTextSelected]}>
-                                        {isSelected ? 'موجود في السلة' : 'إضافة للسلة'}
+                                    <Text style={[styles.bookBtnText, isSelected && styles.bookBtnTextSelected, !bookable && { color: '#9CA3AF' }]}>
+                                        {!bookable ? avail.label : isSelected ? 'موجود في السلة' : 'إضافة للسلة'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -422,9 +436,13 @@ const styles = StyleSheet.create({
     emptyText: { fontFamily: 'Cairo_400Regular', color: '#9CA3AF' },
     testCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 15, borderWidth: 1, borderColor: '#F3F4F6', elevation: 2 },
     testCardSelected: { borderColor: '#43A047', backgroundColor: '#F8FFF9' },
+    testCardDisabled: { opacity: 0.75, backgroundColor: '#F9FAFB' },
     testHeaderRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    availPill: { alignSelf: 'flex-end', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 },
+    availPillText: { fontSize: 10, fontFamily: 'Cairo_700Bold' },
     checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
     checkboxSelected: { backgroundColor: '#43A047', borderColor: '#43A047' },
+    checkboxDisabled: { borderColor: '#E5E7EB', backgroundColor: '#F3F4F6' },
     testName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#111827', flex: 1, textAlign: 'right', marginLeft: 10 },
     testPrice: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#43A047' },
     testDesc: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'right', marginBottom: 12 },
@@ -433,6 +451,7 @@ const styles = StyleSheet.create({
     metaBadgeText: { fontSize: 10, fontFamily: 'Cairo_700Bold', color: '#1E88E5' },
     bookBtn: { width: '100%', height: 42, borderRadius: 10, backgroundColor: '#1E88E5', justifyContent: 'center', alignItems: 'center' },
     bookBtnSelected: { backgroundColor: '#DCFCE7', borderWidth: 1, borderColor: '#86EFAC' },
+    bookBtnDisabled: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' },
     bookBtnText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
     bookBtnTextSelected: { color: '#166534' },
     // Modal styles

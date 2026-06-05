@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import OrderItemsList from '../../src/components/OrderItemsList';
 
 const { width } = Dimensions.get('window');
 const C = {
@@ -149,6 +150,13 @@ export default function PharmacyDashboard() {
                                 <Text style={styles.infoText}>{(ord.items || []).length} أصناف</Text>
                                 <MaterialCommunityIcons name="package-variant" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
                             </View>
+                            {(ord.prescription_code || ord.prescription?.prescription_code) && (
+                                <View style={styles.rxRow}>
+                                    <MaterialCommunityIcons name="file-document-outline" size={14} color="#FF9500" style={{ marginLeft: 6 }} />
+                                    <Text style={styles.rxText}>وصفة: {ord.prescription_code || ord.prescription?.prescription_code}</Text>
+                                </View>
+                            )}
+                            <OrderItemsList items={ord.items} compact />
                             <View style={styles.orderFooter}>
                                 <Text style={styles.orderTotal}>{(ord.total || 0).toLocaleString()} ل.س</Text>
                                 <View style={styles.orderActions}>
@@ -184,6 +192,7 @@ export default function PharmacyDashboard() {
                                 <Text style={styles.infoText}>{ord.delivery_address || 'بدون عنوان'}</Text>
                                 <MaterialCommunityIcons name="map-marker" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
                             </View>
+                            <OrderItemsList items={ord.items} compact />
                             <View style={styles.orderFooter}>
                                 <Text style={styles.orderTotal}>{(ord.total || 0).toLocaleString()} ل.س</Text>
                                 <TouchableOpacity style={styles.deliveredBtn} onPress={() => updateOrderStatus(ord.id, 'delivered')}>
@@ -229,6 +238,8 @@ const styles = StyleSheet.create({
     statusText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     infoRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 4 },
     infoText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec },
+    rxRow: { flexDirection: 'row-reverse', alignItems: 'center', marginTop: 4 },
+    rxText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#FF9500' },
     orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
     orderTotal: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.primary },
     orderActions: { flexDirection: 'row', gap: 8 },

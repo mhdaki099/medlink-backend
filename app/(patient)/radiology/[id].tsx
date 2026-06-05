@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../../src/services/api';
 import { useAuth } from '../../../src/contexts/AuthContext';
+import { getServiceAvailability, isServiceBookable } from '../../../src/constants/serviceAvailability';
 import ArabicCalendar from '../../../src/components/ArabicCalendar';
 
 const DEFAULT_TIME_SLOTS = [
@@ -50,6 +51,10 @@ export default function RadiologyProfileScreen() {
     const selectedTotal = selectedTests.reduce((sum, t) => sum + Number(t.price || 0), 0);
 
     const toggleTest = (test: any) => {
+        if (!isServiceBookable(test.availability_status)) {
+            Alert.alert('غير متاح', `هذه الخدمة حالياً: ${getServiceAvailability(test.availability_status).label}`);
+            return;
+        }
         setSelectedTests(prev => (
             prev.some(item => item.id === test.id)
                 ? prev.filter(item => item.id !== test.id)
@@ -219,25 +224,34 @@ export default function RadiologyProfileScreen() {
                     ) : (
                         tests.map((test, idx) => {
                             const isSelected = selectedTests.some(item => item.id === test.id);
+                            const bookable = isServiceBookable(test.availability_status);
+                            const avail = getServiceAvailability(test.availability_status);
                             return (
-                                <View key={test.id || idx} style={[styles.testCard, isSelected && styles.testCardSelected]}>
+                                <View key={test.id || idx} style={[styles.testCard, isSelected && styles.testCardSelected, !bookable && styles.testCardDisabled]}>
                                     <View style={styles.testHeaderRow}>
                                         <TouchableOpacity
-                                            style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+                                            style={[styles.checkbox, isSelected && styles.checkboxSelected, !bookable && styles.checkboxDisabled]}
                                             onPress={() => toggleTest(test)}
+                                            disabled={!bookable}
                                         >
                                             {isSelected && <Ionicons name="checkmark" size={16} color="#FFF" />}
                                         </TouchableOpacity>
-                                        <Text style={styles.testName}>{test.name}</Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.testName, !bookable && { color: '#9CA3AF' }]}>{test.name}</Text>
+                                            <View style={[styles.availPill, { backgroundColor: avail.bg }]}>
+                                                <Text style={[styles.availPillText, { color: avail.color }]}>{avail.label}</Text>
+                                            </View>
+                                        </View>
                                         <Text style={styles.testPrice}>{test.price?.toLocaleString()} ل.س</Text>
                                     </View>
                                     {test.description ? <Text style={styles.testDesc}>{test.description}</Text> : null}
                                     <TouchableOpacity
-                                        style={[styles.selectBtn, isSelected && styles.selectBtnActive]}
+                                        style={[styles.selectBtn, isSelected && styles.selectBtnActive, !bookable && styles.selectBtnDisabled]}
                                         onPress={() => toggleTest(test)}
+                                        disabled={!bookable}
                                     >
-                                        <Text style={[styles.selectBtnText, isSelected && styles.selectBtnTextActive]}>
-                                            {isSelected ? 'مختار' : 'اختيار'}
+                                        <Text style={[styles.selectBtnText, isSelected && styles.selectBtnTextActive, !bookable && { color: '#9CA3AF' }]}>
+                                            {!bookable ? avail.label : isSelected ? 'مختار' : 'اختيار'}
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -450,6 +464,11 @@ const styles = StyleSheet.create({
     emptyServicesText: { fontSize: 14, color: '#9CA3AF' },
     testCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F3F4F6' },
     testCardSelected: { borderColor: '#8B5CF6', backgroundColor: '#FAF5FF' },
+    testCardDisabled: { opacity: 0.75, backgroundColor: '#F9FAFB' },
+    availPill: { alignSelf: 'flex-end', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 },
+    availPillText: { fontSize: 10, fontWeight: '700' },
+    checkboxDisabled: { borderColor: '#E5E7EB', backgroundColor: '#F3F4F6' },
+    selectBtnDisabled: { borderColor: '#E5E7EB' },
     testHeaderRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 8 },
     testName: { flex: 1, fontSize: 14, fontWeight: '700', color: '#111827', textAlign: 'right' },
     testPrice: { fontSize: 13, fontWeight: '800', color: '#8B5CF6' },

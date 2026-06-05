@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import OrderItemsList from '../../src/components/OrderItemsList';
 
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
@@ -101,6 +102,15 @@ export default function PharmacyOrders() {
                                 <MaterialCommunityIcons name="package-variant" size={14} color={C.textSec} style={{ marginLeft: 6 }} />
                             </View>
 
+                            {(ord.prescription_code || ord.prescription?.prescription_code) && (
+                                <View style={styles.rxRow}>
+                                    <MaterialCommunityIcons name="file-document-outline" size={14} color="#FF9500" style={{ marginLeft: 6 }} />
+                                    <Text style={styles.rxText}>وصفة: {ord.prescription_code || ord.prescription?.prescription_code}</Text>
+                                </View>
+                            )}
+
+                            <OrderItemsList items={ord.items} />
+
                             <View style={styles.orderFooter}>
                                 <Text style={styles.orderTotal}>{(ord.total || 0).toLocaleString()} ل.س</Text>
                                 {['pending', 'pending_confirmation'].includes(ord.status) && (
@@ -152,6 +162,8 @@ const styles = StyleSheet.create({
     statusText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     infoRow: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 4 },
     infoText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec },
+    rxRow: { flexDirection: 'row-reverse', alignItems: 'center', marginTop: 6 },
+    rxText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#FF9500' },
     orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
     orderTotal: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.primary },
     actions: { flexDirection: 'row', gap: 8 },

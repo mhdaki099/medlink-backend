@@ -10,6 +10,11 @@ from utils.helpers import model_to_dict
 
 router = APIRouter()
 
+VALID_TEST_AVAILABILITY = {
+    "available", "limited", "unavailable", "out_of_stock", "out_of_service",
+}
+BOOKABLE_TEST_AVAILABILITY = {"available", "limited"}
+
 @router.get("")
 def list_labs(q: str = None, province: str = None, district: str = None, db: Session = Depends(get_db)):
     query = db.query(User).filter(User.role == "lab", User.is_active == True)
@@ -95,6 +100,13 @@ def create_service_booking(data: dict, current_user: dict = Depends(get_current_
             raise HTTPException(400, "بعض التحاليل المختارة غير متوفرة في هذا المركز")
 
         ordered_tests = [tests_by_id[test_id] for test_id in requested_ids]
+        unavailable = [
+            test.name
+            for test in ordered_tests
+            if (test.availability_status or "available") not in BOOKABLE_TEST_AVAILABILITY
+        ]
+        if unavailable:
+            raise HTTPException(400, f"بعض الخدمات غير متاحة للحجز: {', '.join(unavailable)}")
         service_items = [
             {
                 "id": test.id,
@@ -319,6 +331,9 @@ def add_provider_test(
         raise HTTPException(404, "المزود غير موجود")
     if not (data.get("name") or "").strip():
         raise HTTPException(400, "اسم الفحص مطلوب")
+    availability = data.get("availability_status", "available")
+    if availability not in VALID_TEST_AVAILABILITY:
+        raise HTTPException(400, "حالة التوفر غير صحيحة")
     test = LabTest(
         id=f"lt_{uuid.uuid4().hex[:8]}",
         lab_id=provider_id,
@@ -329,6 +344,7 @@ def add_provider_test(
         duration_hours=int(data.get("duration_hours", 24) or 24),
         description=data.get("description", ""),
         preparation=data.get("preparation", ""),
+        availability_status=availability,
     )
     db.add(test)
     db.commit()
@@ -364,6 +380,11 @@ def update_provider_test(
         test.description = data["description"]
     if "preparation" in data:
         test.preparation = data["preparation"]
+    if "availability_status" in data:
+        status = data["availability_status"]
+        if status not in VALID_TEST_AVAILABILITY:
+            raise HTTPException(400, "حالة التوفر غير صحيحة")
+        test.availability_status = status
     db.commit()
     db.refresh(test)
     return model_to_dict(test)

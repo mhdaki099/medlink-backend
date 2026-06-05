@@ -2,23 +2,32 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, TextInput, Modal, Platform, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
+import {
+    SERVICE_AVAILABILITY,
+    SERVICE_AVAILABILITY_OPTIONS,
+    getServiceAvailability,
+    type ServiceAvailabilityKey,
+} from '../../src/constants/serviceAvailability';
 
 const C = {
     primary: '#8E24AA', accent: '#CE93D8', bg: '#F8FAFC', white: '#FFF',
     text: '#111827', textSec: '#6B7280', border: '#F1F5F9',
 };
 
-const EMPTY_FORM = { name: '', category: 'عام', price: '', duration_hours: '24', description: '', preparation: '' };
+const EMPTY_FORM = {
+    name: '', category: 'عام', price: '', duration_hours: '24',
+    description: '', preparation: '', availability_status: 'available' as ServiceAvailabilityKey,
+};
 
 export default function LabTests() {
     const { user } = useAuth();
-    const router = useRouter();
     const [tests, setTests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | ServiceAvailabilityKey>('all');
     const [selected, setSelected] = useState<any>(null);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState<any>(null);
@@ -51,6 +60,7 @@ export default function LabTests() {
             duration_hours: String(test.duration_hours || 24),
             description: test.description || '',
             preparation: test.preparation || '',
+            availability_status: (test.availability_status || 'available') as ServiceAvailabilityKey,
         });
         setSelected(null);
         setShowForm(true);
@@ -70,6 +80,7 @@ export default function LabTests() {
                 duration_hours: Number(form.duration_hours) || 24,
                 description: form.description.trim(),
                 preparation: form.preparation.trim(),
+                availability_status: form.availability_status,
             };
             if (editing) {
                 await api.updateLabTest(editing.id, payload);
@@ -103,24 +114,51 @@ export default function LabTests() {
         ]);
     };
 
-    const filtered = tests.filter(t => !search || t.name?.includes(search) || t.category?.includes(search));
+    const filtered = tests.filter(t => {
+        const matchesSearch = !search || t.name?.includes(search) || t.category?.includes(search);
+        const matchesStatus = statusFilter === 'all' || (t.availability_status || 'available') === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
+    const statusCounts = SERVICE_AVAILABILITY_OPTIONS.reduce((acc, key) => {
+        acc[key] = tests.filter(t => (t.availability_status || 'available') === key).length;
+        return acc;
+    }, {} as Record<ServiceAvailabilityKey, number>);
 
     return (
         <View style={styles.container}>
             <LinearGradient colors={['#6A1B9A', C.primary, C.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
                 <View style={styles.headerBlob} />
                 <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <MaterialCommunityIcons name="arrow-right" size={22} color="#FFF" />
-                    </TouchableOpacity>
                     <View style={styles.headerIcon}>
                         <MaterialCommunityIcons name={isRadiology ? 'radiology-box' : 'flask'} size={26} color={C.primary} />
                     </View>
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
                         <Text style={styles.headerTitle}>{isRadiology ? 'خدمات الأشعة' : 'قائمة الفحوصات'}</Text>
-                        <Text style={styles.headerSub}>{tests.length} خدمة متاحة</Text>
+                        <Text style={styles.headerSub}>
+                            {statusCounts.available || 0} متاح | {statusCounts.out_of_service || 0} خارج الخدمة
+                        </Text>
                     </View>
                 </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+                    <TouchableOpacity
+                        style={[styles.filterChip, statusFilter === 'all' && styles.filterChipActive]}
+                        onPress={() => setStatusFilter('all')}
+                    >
+                        <Text style={[styles.filterChipText, statusFilter === 'all' && styles.filterChipTextActive]}>الكل ({tests.length})</Text>
+                    </TouchableOpacity>
+                    {SERVICE_AVAILABILITY_OPTIONS.map(key => (
+                        <TouchableOpacity
+                            key={key}
+                            style={[styles.filterChip, statusFilter === key && styles.filterChipActive]}
+                            onPress={() => setStatusFilter(key)}
+                        >
+                            <Text style={[styles.filterChipText, statusFilter === key && styles.filterChipTextActive]}>
+                                {SERVICE_AVAILABILITY[key].label} ({statusCounts[key] || 0})
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
                 <View style={styles.searchBar}>
                     <MaterialCommunityIcons name="magnify" size={20} color="rgba(255,255,255,0.7)" />
                     <TextInput style={styles.searchInput} placeholder="ابحث..." placeholderTextColor="rgba(255,255,255,0.6)"
@@ -128,7 +166,7 @@ export default function LabTests() {
                 </View>
             </LinearGradient>
 
-            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <ScrollView style={styles.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE + 70 }}>
                 {loading ? <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" /> :
                     filtered.length === 0 ? (
                         <View style={styles.empty}>
@@ -138,8 +176,15 @@ export default function LabTests() {
                     ) : filtered.map((t: any) => (
                         <TouchableOpacity key={t.id} style={styles.testCard} onPress={() => setSelected(t)} activeOpacity={0.85}>
                             <View style={styles.cardTop}>
-                                <View style={styles.catBadge}>
-                                    <Text style={styles.catText}>{t.category || 'عام'}</Text>
+                                <View style={styles.badgeRow}>
+                                    <View style={[styles.availBadge, { backgroundColor: getServiceAvailability(t.availability_status).bg }]}>
+                                        <Text style={[styles.availBadgeText, { color: getServiceAvailability(t.availability_status).color }]}>
+                                            {getServiceAvailability(t.availability_status).label}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.catBadge}>
+                                        <Text style={styles.catText}>{t.category || 'عام'}</Text>
+                                    </View>
                                 </View>
                                 <Text style={styles.testName}>{t.name}</Text>
                             </View>
@@ -158,7 +203,7 @@ export default function LabTests() {
                     ))}
             </ScrollView>
 
-            <TouchableOpacity style={styles.fab} onPress={openAdd} activeOpacity={0.9}>
+            <TouchableOpacity style={[styles.fab, { bottom: TAB_BAR_CLEARANCE }]} onPress={openAdd} activeOpacity={0.9}>
                 <LinearGradient colors={['#6A1B9A', C.primary]} style={styles.fabGrad}>
                     <MaterialCommunityIcons name="plus" size={28} color="#FFF" />
                 </LinearGradient>
@@ -188,6 +233,12 @@ export default function LabTests() {
                                 <View style={styles.detailRow}>
                                     <Text style={styles.detailVal}>{selected.duration_hours} ساعة</Text>
                                     <Text style={styles.detailLabel}>مدة النتيجة</Text>
+                                </View>
+                                <View style={styles.detailRow}>
+                                    <Text style={[styles.detailVal, { color: getServiceAvailability(selected.availability_status).color }]}>
+                                        {getServiceAvailability(selected.availability_status).label}
+                                    </Text>
+                                    <Text style={styles.detailLabel}>حالة التوفر</Text>
                                 </View>
                                 {selected.description ? (
                                     <View style={styles.descBox}>
@@ -242,6 +293,22 @@ export default function LabTests() {
                                 />
                             </View>
                         ))}
+                        <Text style={styles.fieldLabel}>حالة التوفر</Text>
+                        <View style={styles.statusPicker}>
+                            {SERVICE_AVAILABILITY_OPTIONS.map(key => {
+                                const active = form.availability_status === key;
+                                const meta = SERVICE_AVAILABILITY[key];
+                                return (
+                                    <TouchableOpacity
+                                        key={key}
+                                        style={[styles.statusOption, active && { backgroundColor: meta.bg, borderColor: meta.color }]}
+                                        onPress={() => setForm(f => ({ ...f, availability_status: key }))}
+                                    >
+                                        <Text style={[styles.statusOptionText, active && { color: meta.color }]}>{meta.label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
                         <View style={styles.formBtns}>
                             <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowForm(false)}>
                                 <Text style={styles.cancelBtnText}>إلغاء</Text>
@@ -263,8 +330,15 @@ const styles = StyleSheet.create({
     header: { paddingTop: Platform.OS === 'ios' ? 60 : 48, paddingBottom: 20, paddingHorizontal: 20, overflow: 'hidden' },
     headerBlob: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.08)', top: -40, right: -30 },
     headerRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginBottom: 16 },
-    backBtn: { padding: 8 },
     headerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
+    filterRow: { marginBottom: 10 },
+    filterChip: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, marginLeft: 8 },
+    filterChipActive: { backgroundColor: '#FFF' },
+    filterChipText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: 'rgba(255,255,255,0.9)' },
+    filterChipTextActive: { color: C.primary },
+    badgeRow: { flexDirection: 'row-reverse', gap: 6 },
+    availBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    availBadgeText: { fontSize: 10, fontFamily: 'Cairo_700Bold' },
     headerTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#FFF' },
     headerSub: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.8)' },
     searchBar: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 14, paddingHorizontal: 14, height: 44, gap: 8 },
@@ -281,7 +355,10 @@ const styles = StyleSheet.create({
     cardFooter: { flexDirection: 'row-reverse', gap: 8, flexWrap: 'wrap' },
     metaPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
     metaText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
-    fab: { position: 'absolute', bottom: 90, left: 20, borderRadius: 28, elevation: 8 },
+    fab: { position: 'absolute', left: 20, borderRadius: 28, elevation: 8 },
+    statusPicker: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
+    statusOption: { borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', paddingHorizontal: 10, paddingVertical: 8 },
+    statusOptionText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
     fabGrad: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modal: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '75%' },

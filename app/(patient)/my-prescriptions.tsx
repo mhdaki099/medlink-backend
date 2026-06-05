@@ -267,7 +267,13 @@ export default function MyPrescriptionsScreen() {
                             style={styles.pharmacySearchBtn}
                             onPress={() => {
                                 setShowDetailModal(false);
-                                router.push('/(patient)/pharmacies' as any);
+                                router.push({
+                                    pathname: '/(patient)/pharmacies',
+                                    params: {
+                                        prescription_code: selectedPrescription.prescription_code,
+                                        prescription_id: selectedPrescription.id,
+                                    },
+                                } as any);
                             }}
                         >
                             <MaterialCommunityIcons name="pharmacy" size={20} color="#FFF" />

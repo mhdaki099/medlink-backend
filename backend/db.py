@@ -111,11 +111,31 @@ def ensure_sqlite_columns():
             "rejection_note": "TEXT",
             "reason": "TEXT",
         },
+        "lab_tests": {
+            "availability_status": "TEXT DEFAULT 'available'",
+        },
+        "orders": {
+            "prescription_id": "TEXT",
+            "prescription_code": "TEXT",
+        },
     }
+    is_postgres = not SQLALCHEMY_DATABASE_URL.startswith("sqlite")
     with engine.begin() as conn:
         for table, columns in migrations.items():
             try:
-                existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+                if is_postgres:
+                    existing = {
+                        row[0]
+                        for row in conn.execute(
+                            text(
+                                "SELECT column_name FROM information_schema.columns "
+                                "WHERE table_name = :table_name"
+                            ),
+                            {"table_name": table},
+                        )
+                    }
+                else:
+                    existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
             except Exception:
                 continue
             for column, ddl_type in columns.items():

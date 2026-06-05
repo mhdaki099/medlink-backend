@@ -130,6 +130,7 @@ class LabTest(Base):
     duration_hours = Column(Integer)
     description = Column(String)
     preparation = Column(String, nullable=True)
+    availability_status = Column(String, default="available")  # available | limited | unavailable | out_of_stock | out_of_service
 
 
 class WarehouseInventory(Base):
@@ -209,6 +210,8 @@ class Order(Base):
     id = Column(String, primary_key=True, index=True)
     patient_id = Column(String, ForeignKey("users.id"))
     pharmacy_id = Column(String, ForeignKey("users.id"))
+    prescription_id = Column(String, ForeignKey("prescriptions.id"), nullable=True)
+    prescription_code = Column(String, nullable=True)
     items = Column(JSON)
     total = Column(Float)
     status = Column(String)

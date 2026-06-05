@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { Colors } from '../../src/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { api } from '../../src/services/api';
+import { TAB_BAR_CLEARANCE } from '../../src/constants/layout';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -21,7 +22,6 @@ function servicesLabel(bk: any): string {
 
 export default function LabDashboard() {
     const { user, logout } = useAuth();
-    const router = useRouter();
     const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -62,16 +62,10 @@ export default function LabDashboard() {
                         <MaterialCommunityIcons name={isRadiology ? 'radiology-box' : 'flask'} size={28} color="#FFF" />
                     </View>
                 </View>
-                <View style={styles.quickActions}>
-                    <TouchableOpacity style={styles.quickBtn} onPress={() => router.push('/(lab)/tests')}>
-                        <MaterialCommunityIcons name="playlist-plus" size={18} color="#FFF" />
-                        <Text style={styles.quickBtnText}>إدارة الخدمات</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickBtn} onPress={() => router.push('/(lab)/bookings')}>
-                        <MaterialCommunityIcons name="calendar-check" size={18} color="#FFF" />
-                        <Text style={styles.quickBtnText}>كل الحجوزات</Text>
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.quickBtnSingle} onPress={() => router.replace('/(lab)/bookings' as any)}>
+                    <MaterialCommunityIcons name="calendar-check" size={18} color="#FFF" />
+                    <Text style={styles.quickBtnText}>عرض كل الحجوزات</Text>
+                </TouchableOpacity>
             </LinearGradient>
 
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}
@@ -110,7 +104,7 @@ export default function LabDashboard() {
                             )}
                         </View>
                     ))}
-                <View style={{ height: 20 }} />
+                <View style={{ height: TAB_BAR_CLEARANCE }} />
             </ScrollView>
         </View>
     );
@@ -124,8 +118,7 @@ const styles = StyleSheet.create({
     logoutBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12 },
     headerTitle: { fontSize: 22, fontFamily: 'Cairo_700Bold', color: '#FFF' },
     statsBar: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.85)', marginTop: 2 },
-    quickActions: { flexDirection: 'row-reverse', gap: 10, marginTop: 16 },
-    quickBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingVertical: 10 },
+    quickBtnSingle: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingVertical: 10, marginTop: 16 },
     quickBtnText: { color: '#FFF', fontFamily: 'Cairo_600SemiBold', fontSize: 12 },
     list: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
     empty: { alignItems: 'center', marginTop: 60, gap: 8, paddingHorizontal: 24 },
