@@ -9,6 +9,7 @@ from db import get_db
 from models import Prescription, User, Notification, MedicalRecord
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict
+from utils.secretary_permissions import require_secretary_permission, get_secretary_user
 
 router = APIRouter()
 
@@ -65,7 +66,12 @@ def prescription_with_people(db: Session, p: Prescription):
 
 
 @router.post("")
-def create_prescription(data: dict, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
+def create_prescription(data: dict, current_user: dict = Depends(require_role("doctor", "secretary", "admin")), db: Session = Depends(get_db)):
+    if current_user.get("role") == "secretary":
+        require_secretary_permission(db, current_user, "prescriptions_create")
+        sec = get_secretary_user(db, current_user["sub"])
+        if sec and sec.supervisor_id:
+            data["doctor_id"] = sec.supervisor_id
     now = datetime.now(timezone.utc).isoformat()
     presc_id = f"pre_{uuid.uuid4().hex[:8]}"
     medications = data.get("medications", [])

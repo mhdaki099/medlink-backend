@@ -12,6 +12,13 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { api, BASE_URL } from '../../src/services/api';
 import { Colors } from '../../src/theme';
+import SecretaryPermissionsEditor from '../../src/components/SecretaryPermissionsEditor';
+import {
+    SecretaryPermissions,
+    buildAllPermissions,
+    countEnabledPermissions,
+    normalizeSecretaryPermissions,
+} from '../../src/constants/secretaryPermissions';
 
 export default function DoctorProfile() {
     const { user, logout, login } = useAuth();
@@ -56,7 +63,11 @@ export default function DoctorProfile() {
     };
 
     // Secretary State
-    const [secData, setSecData] = useState({ name: '', email: '', password: '', phone: '' });
+    const [secData, setSecData] = useState({
+        name: '', email: '', password: '', phone: '',
+        permissions: buildAllPermissions(true) as SecretaryPermissions,
+    });
+    const [editingSecretaryId, setEditingSecretaryId] = useState<string | null>(null);
 
     React.useEffect(() => {
         loadSecretaries();
@@ -78,13 +89,54 @@ export default function DoctorProfile() {
         }
     };
 
-    const handleAddSecretary = async () => {
+    const resetSecForm = () => {
+        setSecData({
+            name: '', email: '', password: '', phone: '',
+            permissions: buildAllPermissions(true),
+        });
+        setEditingSecretaryId(null);
+    };
+
+    const openCreateSecretary = () => {
+        resetSecForm();
+        setShowSecModal(true);
+    };
+
+    const openEditSecretary = (sec: any) => {
+        setEditingSecretaryId(sec.id);
+        setSecData({
+            name: sec.name || '',
+            email: sec.email || '',
+            password: '',
+            phone: sec.phone || '',
+            permissions: normalizeSecretaryPermissions(sec.secretary_permissions),
+        });
+        setShowSecModal(true);
+    };
+
+    const handleSaveSecretary = async () => {
         try {
-            if (!secData.name || !secData.email) return Alert.alert('تنبيه', 'يرجى إكمال البيانات');
-            await api.addSecretary(user.id, secData);
-            Alert.alert('✅ تم', 'تم إنشاء حساب السكرتارية بنجاح');
+            if (!secData.name) return Alert.alert('تنبيه', 'يرجى إدخال الاسم');
+            if (!editingSecretaryId && !secData.email) return Alert.alert('تنبيه', 'يرجى إدخال البريد الإلكتروني');
+            if (countEnabledPermissions(secData.permissions) === 0) {
+                return Alert.alert('تنبيه', 'يرجى اختيار صلاحية واحدة على الأقل');
+            }
+            const payload = {
+                name: secData.name,
+                phone: secData.phone,
+                permissions: secData.permissions,
+                ...(secData.password ? { password: secData.password } : {}),
+                ...(!editingSecretaryId ? { email: secData.email, password: secData.password || '123456' } : {}),
+            };
+            if (editingSecretaryId) {
+                await api.updateSecretary(user.id, editingSecretaryId, payload);
+                Alert.alert('✅ تم', 'تم تحديث صلاحيات السكرتارية');
+            } else {
+                await api.addSecretary(user.id, payload);
+                Alert.alert('✅ تم', 'تم إنشاء حساب السكرتارية بنجاح');
+            }
             setShowSecModal(false);
-            setSecData({ name: '', email: '', password: '', phone: '' });
+            resetSecForm();
             loadSecretaries();
         } catch (e: any) {
             Alert.alert('خطأ', e.message);
@@ -241,22 +293,26 @@ export default function DoctorProfile() {
                         <View style={styles.secPlaceholder}>
                             {secretaries.length > 0 ? (
                                 <View style={{ width: '100%', marginBottom: 15 }}>
-                                    {secretaries.map((sec, idx) => (
-                                        <View key={sec.id} style={styles.secItem}>
-                                            <View style={styles.secIcon}>
-                                                <Ionicons name="person" size={16} color="#1E88E5" />
-                                            </View>
+                                    {secretaries.map((sec) => (
+                                        <TouchableOpacity key={sec.id} style={styles.secItem} onPress={() => openEditSecretary(sec)}>
+                                            <Ionicons name="chevron-back" size={16} color="#94A3B8" />
                                             <View style={styles.secInfo}>
                                                 <Text style={styles.secName}>{sec.name}</Text>
                                                 <Text style={styles.secEmail}>{sec.email}</Text>
+                                                <Text style={styles.secPerms}>
+                                                    {countEnabledPermissions(normalizeSecretaryPermissions(sec.secretary_permissions))} صلاحية مفعّلة
+                                                </Text>
                                             </View>
-                                        </View>
+                                            <View style={styles.secIcon}>
+                                                <Ionicons name="person" size={16} color="#1E88E5" />
+                                            </View>
+                                        </TouchableOpacity>
                                     ))}
                                 </View>
                             ) : (
                                 <Text style={styles.secDesc}>قم بإنشاء حساب خاص لسكرتارية العيادة لإدارة المواعيد والملفات.</Text>
                             )}
-                            <TouchableOpacity style={styles.addSecBtn} onPress={() => setShowSecModal(true)}>
+                            <TouchableOpacity style={styles.addSecBtn} onPress={openCreateSecretary}>
                                 <Text style={styles.addSecTxt}>إضافة حساب سكرتارية جديد</Text>
                                 <Ionicons name="person-add" size={18} color="#FFF" style={{ marginLeft: 8 }} />
                             </TouchableOpacity>
@@ -290,32 +346,49 @@ export default function DoctorProfile() {
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <TouchableOpacity onPress={() => setShowSecModal(false)}>
+                            <TouchableOpacity onPress={() => { setShowSecModal(false); resetSecForm(); }}>
                                 <Ionicons name="close" size={24} color="#64748B" />
                             </TouchableOpacity>
-                            <Text style={styles.modalTitle}>حساب سكرتارية جديد</Text>
+                            <Text style={styles.modalTitle}>
+                                {editingSecretaryId ? 'تعديل صلاحيات السكرتارية' : 'حساب سكرتارية جديد'}
+                            </Text>
                         </View>
 
-                        <ScrollView style={{ padding: 20 }}>
+                        <ScrollView style={{ padding: 20 }} showsVerticalScrollIndicator={false}>
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>الاسم الكامل</Text>
                                 <TextInput style={styles.input} value={secData.name} onChangeText={(t) => setSecData({ ...secData, name: t })} textAlign="right" />
                             </View>
+                            {!editingSecretaryId ? (
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>البريد الإلكتروني</Text>
+                                    <TextInput style={styles.input} value={secData.email} onChangeText={(t) => setSecData({ ...secData, email: t })} keyboardType="email-address" textAlign="right" />
+                                </View>
+                            ) : (
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.label}>البريد الإلكتروني</Text>
+                                    <Text style={[styles.input, { lineHeight: 48, color: '#64748B' }]}>{secData.email}</Text>
+                                </View>
+                            )}
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>البريد الإلكتروني</Text>
-                                <TextInput style={styles.input} value={secData.email} onChangeText={(t) => setSecData({ ...secData, email: t })} keyboardType="email-address" textAlign="right" />
-                            </View>
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>كلمة المرور</Text>
-                                <TextInput style={styles.input} value={secData.password} onChangeText={(t) => setSecData({ ...secData, password: t })} secureTextEntry textAlign="right" />
+                                <Text style={styles.label}>{editingSecretaryId ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'}</Text>
+                                <TextInput style={styles.input} value={secData.password} onChangeText={(t) => setSecData({ ...secData, password: t })} secureTextEntry textAlign="right" placeholder={editingSecretaryId ? 'اتركه فارغاً للإبقاء على الحالية' : ''} />
                             </View>
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>رقم الهاتف</Text>
                                 <TextInput style={styles.input} value={secData.phone} onChangeText={(t) => setSecData({ ...secData, phone: t })} keyboardType="phone-pad" textAlign="right" />
                             </View>
 
-                            <TouchableOpacity style={styles.submitSecBtn} onPress={handleAddSecretary}>
-                                <Text style={styles.submitSecTxt}>إنشاء الحساب</Text>
+                            <Text style={styles.permSectionTitle}>صلاحيات الوصول</Text>
+                            <SecretaryPermissionsEditor
+                                permissions={secData.permissions}
+                                onChange={(permissions) => setSecData({ ...secData, permissions })}
+                            />
+
+                            <TouchableOpacity style={styles.submitSecBtn} onPress={handleSaveSecretary}>
+                                <Text style={styles.submitSecTxt}>
+                                    {editingSecretaryId ? 'حفظ التعديلات' : 'إنشاء الحساب'}
+                                </Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
@@ -361,6 +434,8 @@ const styles = StyleSheet.create({
     secInfo: { flex: 1, alignItems: 'flex-end' },
     secName: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
     secEmail: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#64748B' },
+    secPerms: { fontSize: 10, fontFamily: 'Cairo_600SemiBold', color: '#1E88E5', marginTop: 2 },
+    permSectionTitle: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right', marginTop: 16, marginBottom: 10 },
     addSecBtn: { flexDirection: 'row', backgroundColor: '#1E88E5', paddingHorizontal: 20, height: 48, borderRadius: 15, justifyContent: 'center', alignItems: 'center', width: '100%' },
     addSecTxt: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#FFF' },
 

@@ -7,6 +7,7 @@ from db import get_db
 from models import MedicalHistoryRequest, User, Appointment, Notification
 from auth_utils import get_current_user
 from utils.helpers import model_to_dict
+from utils.secretary_permissions import require_secretary_permission
 
 router = APIRouter()
 
@@ -38,6 +39,8 @@ def _grant_record_access(db: Session, patient_id: str, doctor_id: str):
 @router.post("")
 def create_request(patient_id: str, doctor_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     _assert_doctor_or_secretary_access(doctor_id, current_user, db)
+    if current_user.get("role") == "secretary":
+        require_secretary_permission(db, current_user, "history_request")
     approved = db.query(MedicalHistoryRequest).filter(
         MedicalHistoryRequest.patient_id == patient_id,
         MedicalHistoryRequest.doctor_id == doctor_id,

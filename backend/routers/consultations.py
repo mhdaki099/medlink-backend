@@ -13,6 +13,7 @@ from models import (
     Prescription, MedicalRecord, Notification
 )
 from auth_utils import get_current_user, require_role
+from utils.secretary_permissions import require_secretary_permission, get_secretary_user
 from utils.helpers import model_to_dict
 
 router = APIRouter()
@@ -146,10 +147,15 @@ def _report_payload(db: Session, report: ConsultationReport) -> dict:
 
 
 @router.post("")
-def create_consultation_report(data: dict, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
+def create_consultation_report(data: dict, current_user: dict = Depends(require_role("doctor", "secretary", "admin")), db: Session = Depends(get_db)):
     """Create a consultation report after ending a session."""
+    if current_user.get("role") == "secretary":
+        require_secretary_permission(db, current_user, "reports_edit")
     appointment_id = data.get("appointment_id")
     doctor_id = data.get("doctor_id") or current_user["sub"]
+    if current_user.get("role") == "secretary":
+        sec = get_secretary_user(db, current_user["sub"])
+        doctor_id = sec.supervisor_id if sec else doctor_id
     patient_id = data.get("patient_id")
 
     if not appointment_id or not patient_id:

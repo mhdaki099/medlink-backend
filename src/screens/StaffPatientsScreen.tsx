@@ -11,6 +11,7 @@ import Animated, { FadeInUp, FadeInRight, FadeInDown } from 'react-native-reanim
 import { api } from '../services/api';
 import { Colors } from '../theme';
 import { TAB_BAR_CLEARANCE } from '../constants/layout';
+import { useSecretaryPermissions } from '../hooks/useSecretaryPermissions';
 
 type StaffPatientsScreenProps = {
     doctorId?: string;
@@ -100,6 +101,7 @@ export default function StaffPatientsScreen({
     doctorId,
     headerTitle = 'مرضاي',
 }: StaffPatientsScreenProps) {
+    const { can } = useSecretaryPermissions();
     const [patients, setPatients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -178,6 +180,10 @@ export default function StaffPatientsScreen({
     };
 
     const handleRequestAccess = async (patientId: string) => {
+        if (!can('history_request')) {
+            Alert.alert('تنبيه', 'ليس لديك صلاحية طلب الوصول للسجل');
+            return;
+        }
         try {
             await api.requestMedicalHistory(patientId, doctorId!);
             Alert.alert('✅ تم', 'تم إرسال طلب الوصول للمريض — بانتظار موافقته مرة واحدة');
@@ -207,6 +213,10 @@ export default function StaffPatientsScreen({
     };
 
     const openPatientHistory = async (p: any) => {
+        if (!can('history_view')) {
+            Alert.alert('تنبيه', 'ليس لديك صلاحية عرض السجل الطبي');
+            return;
+        }
         if (!hasRecordAccess(p)) {
             handlePatientPress(p);
             return;
@@ -435,16 +445,18 @@ export default function StaffPatientsScreen({
                                 style={{ marginLeft: 8 }}
                             />
                         </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.actionBtnCompact, { backgroundColor: '#8B5CF6' }]}
-                            onPress={() => {
-                                setSelectedPatient(p);
-                                setShowPrescriptionModal(true);
-                            }}
-                        >
-                            <Text style={styles.actionBtnText}>وصفة</Text>
-                            <Ionicons name="document-text-outline" size={16} color="#FFF" style={{ marginLeft: 8 }} />
-                        </TouchableOpacity>
+                        {can('prescriptions_create') ? (
+                            <TouchableOpacity
+                                style={[styles.actionBtnCompact, { backgroundColor: '#8B5CF6' }]}
+                                onPress={() => {
+                                    setSelectedPatient(p);
+                                    setShowPrescriptionModal(true);
+                                }}
+                            >
+                                <Text style={styles.actionBtnText}>وصفة</Text>
+                                <Ionicons name="document-text-outline" size={16} color="#FFF" style={{ marginLeft: 8 }} />
+                            </TouchableOpacity>
+                        ) : null}
                     </View>
                 </TouchableOpacity>
             </Animated.View>
@@ -614,6 +626,7 @@ export default function StaffPatientsScreen({
                             </View>
                         ) : null}
 
+                        {can('notes_create') ? (
                         <View style={styles.noteInputSection}>
                             <Text style={styles.sectionTitle}>إضافة ملاحظة طبية</Text>
                             <TextInput
@@ -640,7 +653,9 @@ export default function StaffPatientsScreen({
                                 )}
                             </TouchableOpacity>
                         </View>
+                        ) : null}
 
+                        {can('notes_view') ? (
                         <View style={styles.notesList}>
                             <Text style={styles.sectionTitle}>ملاحظات سابقة</Text>
                             {notes.length === 0 ? (
@@ -657,8 +672,9 @@ export default function StaffPatientsScreen({
                                 ))
                             )}
                         </View>
+                        ) : null}
                         
-                        {patientPrescriptions.length > 0 ? (
+                        {can('prescriptions_view') && patientPrescriptions.length > 0 ? (
                             <View style={styles.historySection}>
                                 <Text style={styles.sectionTitle}>الوصفات الصادرة</Text>
                                 {patientPrescriptions.slice(0, 5).map((rx: any, idx: number) => (
@@ -693,10 +709,12 @@ export default function StaffPatientsScreen({
                                         </View>
 
                                         {visit.type === 'medical_record' ? (
+                                            can('photos_view') ? (
                                             <>
                                                 <Text style={styles.visitReportLabel}>{visit.title}</Text>
                                                 <Text style={styles.visitReportText}>{visit.content}</Text>
                                             </>
+                                            ) : null
                                         ) : (
                                             <>
                                                 {visit.complaint ? (
@@ -706,7 +724,7 @@ export default function StaffPatientsScreen({
                                                     </View>
                                                 ) : null}
 
-                                                {visit.consultation_report ? (
+                                                {can('reports_view') && visit.consultation_report ? (
                                                     <View style={styles.visitReportBox}>
                                                         <Text style={styles.visitReportLabel}>📋 تقرير الاستشارة</Text>
                                                         {visit.consultation_report.is_healthy ? (
@@ -724,7 +742,7 @@ export default function StaffPatientsScreen({
                                                     </View>
                                                 ) : null}
 
-                                                {visit.prescription?.prescription_code || visit.prescription?.medications?.length > 0 ? (
+                                                {can('prescriptions_view') && (visit.prescription?.prescription_code || visit.prescription?.medications?.length > 0) ? (
                                                     <View style={styles.visitPrescBox}>
                                                         <Text style={styles.visitPrescLabel}>💊 الوصفة</Text>
                                                         {visit.prescription.prescription_code ? (
@@ -741,7 +759,7 @@ export default function StaffPatientsScreen({
                                                     </View>
                                                 ) : null}
 
-                                                {visit.service_requests?.length > 0 ? (
+                                                {can('analysis_view') && visit.service_requests?.length > 0 ? (
                                                     <View style={styles.visitServicesBox}>
                                                         <Text style={styles.visitServicesLabel}>🧪 التحاليل والأشعة</Text>
                                                         {visit.service_requests.map((req: any, rIdx: number) => (

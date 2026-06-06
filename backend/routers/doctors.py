@@ -7,6 +7,11 @@ from db import get_db
 from models import User, Appointment, Review, Favorite, PatientNote, Prescription, MedicalRecord, Notification
 from auth_utils import get_current_user, require_role, hash_password
 from utils.helpers import model_to_dict, safe_update
+from utils.secretary_permissions import (
+    parse_permissions_payload,
+    get_effective_permissions,
+    require_secretary_permission,
+)
 
 router = APIRouter()
 
@@ -93,34 +98,80 @@ def get_my_doctors(patient_id: str = Query(...), current_user: dict = Depends(ge
 def get_secretaries(doctor_id: str, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
     if current_user["role"] == "doctor" and current_user["sub"] != doctor_id:
         raise HTTPException(403, "ليس لديك صلاحية")
-    return [model_to_dict(s, ["password"]) for s in db.query(User).filter(User.role == 'secretary', User.supervisor_id == doctor_id).all()]
+    results = []
+    for s in db.query(User).filter(User.role == 'secretary', User.supervisor_id == doctor_id).all():
+        d = model_to_dict(s, ["password"])
+        d["secretary_permissions"] = get_effective_permissions(s)
+        results.append(d)
+    return results
 
 @router.post("/secretary")
 def add_secretary(doctor_id: str, data: dict, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
     if current_user["role"] == "doctor" and current_user["sub"] != doctor_id:
         raise HTTPException(403, "ليس لديك صلاحية")
     raw_pwd = data.get("password", "123456")
+    permissions = parse_permissions_payload(data)
     new_sec = User(
         id=f"sec_{uuid.uuid4().hex[:8]}", role="secretary", supervisor_id=doctor_id,
         name=data.get("name"), email=data.get("email"),
-        password=hash_password(raw_pwd),  # FIX: was storing plaintext
-        phone=data.get("phone"), created_at=datetime.now(timezone.utc).isoformat()
+        password=hash_password(raw_pwd),
+        phone=data.get("phone"),
+        secretary_permissions=permissions,
+        created_at=datetime.now(timezone.utc).isoformat()
     )
     db.add(new_sec); db.commit()
-    return model_to_dict(new_sec, ["password"])
+    d = model_to_dict(new_sec, ["password"])
+    d["secretary_permissions"] = permissions
+    return d
+
+
+@router.put("/secretary/{secretary_id}")
+def update_secretary(
+    secretary_id: str,
+    doctor_id: str,
+    data: dict,
+    current_user: dict = Depends(require_role("doctor", "admin")),
+    db: Session = Depends(get_db),
+):
+    if current_user["role"] == "doctor" and current_user["sub"] != doctor_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    sec = db.query(User).filter(
+        User.id == secretary_id,
+        User.role == "secretary",
+        User.supervisor_id == doctor_id,
+    ).first()
+    if not sec:
+        raise HTTPException(404, "حساب السكرتارية غير موجود")
+    if data.get("name"):
+        sec.name = data["name"]
+    if data.get("phone") is not None:
+        sec.phone = data["phone"]
+    if data.get("password"):
+        sec.password = hash_password(data["password"])
+    if "permissions" in data or "secretary_permissions" in data:
+        sec.secretary_permissions = parse_permissions_payload(data)
+    db.commit()
+    db.refresh(sec)
+    d = model_to_dict(sec, ["password"])
+    d["secretary_permissions"] = get_effective_permissions(sec)
+    return d
 
 @router.post("/notes")
 def add_patient_note(doctor_id: str, patient_id: str, note_text: str, current_user: dict = Depends(require_role("doctor", "secretary", "admin")), db: Session = Depends(get_db)):
     if current_user["role"] == "doctor" and current_user["sub"] != doctor_id:
         raise HTTPException(403, "ليس لديك صلاحية")
-    if current_user["role"] == "secretary" and not db.query(User).filter(User.id == current_user["sub"], User.supervisor_id == doctor_id).first():
-        raise HTTPException(403, "ليس لديك صلاحية")
+    if current_user["role"] == "secretary":
+        if not db.query(User).filter(User.id == current_user["sub"], User.supervisor_id == doctor_id).first():
+            raise HTTPException(403, "ليس لديك صلاحية")
+        require_secretary_permission(db, current_user, "notes_create")
     n = PatientNote(id=f"not_{uuid.uuid4().hex[:8]}", doctor_id=doctor_id, patient_id=patient_id, note_text=note_text, created_at=datetime.now(timezone.utc).isoformat())
     db.add(n); db.commit(); db.refresh(n)
     return model_to_dict(n)
 
 @router.get("/notes/{patient_id}")
 def get_patient_notes(patient_id: str, doctor_id: str, current_user: dict = Depends(require_role("doctor", "secretary", "admin")), db: Session = Depends(get_db)):
+    if current_user["role"] == "secretary":
+        require_secretary_permission(db, current_user, "notes_view")
     return [model_to_dict(n) for n in db.query(PatientNote).filter(PatientNote.patient_id == patient_id, PatientNote.doctor_id == doctor_id).order_by(PatientNote.created_at.desc()).all()]
 
 @router.get("/favorites/{patient_id}")
@@ -256,6 +307,43 @@ def _generate_slots_from_working_hours(doctor: User, wh: dict) -> list:
     return slots
 
 
+@router.get("/{doctor_id}/patients")
+def get_doctor_patients(
+    doctor_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Patients who have at least one appointment with this doctor."""
+    role = current_user.get("role")
+    uid = current_user.get("sub")
+    if role == "doctor" and uid != doctor_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    if role == "secretary":
+        sec = db.query(User).filter(User.id == uid, User.role == "secretary").first()
+        if not sec or sec.supervisor_id != doctor_id:
+            raise HTTPException(403, "ليس لديك صلاحية")
+    elif role not in ("doctor", "secretary", "admin"):
+        raise HTTPException(403, "ليس لديك صلاحية")
+
+    apts = db.query(Appointment).filter(Appointment.doctor_id == doctor_id).all()
+    patient_ids = list({a.patient_id for a in apts if a.patient_id})
+    results = []
+    for pid in patient_ids:
+        p = db.query(User).filter(User.id == pid, User.role == "patient").first()
+        if not p:
+            continue
+        d = model_to_dict(p, ["password"])
+        patient_apts = [a for a in apts if a.patient_id == pid]
+        d["appointment_count"] = len(patient_apts)
+        if patient_apts:
+            latest = max(patient_apts, key=lambda a: f"{a.date or ''} {a.time or ''}")
+            d["last_visit"] = latest.date
+            d["last_visit_time"] = latest.time
+        results.append(d)
+    results.sort(key=lambda x: (x.get("name") or ""))
+    return results
+
+
 @router.get("/{doctor_id}/availability")
 def get_availability(doctor_id: str, date: str = Query(None), db: Session = Depends(get_db)):
     d = db.query(User).filter(User.id == doctor_id, User.role == "doctor").first()
@@ -358,9 +446,13 @@ def get_doctor_analytics(doctor_id: str, current_user: dict = Depends(require_ro
     }
 
 @router.post("/prescription")
-def add_prescription(doctor_id: str, patient_id: str, data: dict, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
+def add_prescription(doctor_id: str, patient_id: str, data: dict, current_user: dict = Depends(require_role("doctor", "secretary", "admin")), db: Session = Depends(get_db)):
     if current_user["role"] == "doctor" and current_user["sub"] != doctor_id:
         raise HTTPException(403, "ليس لديك صلاحية")
+    if current_user["role"] == "secretary":
+        if not db.query(User).filter(User.id == current_user["sub"], User.supervisor_id == doctor_id).first():
+            raise HTTPException(403, "ليس لديك صلاحية")
+        require_secretary_permission(db, current_user, "prescriptions_create")
     doctor = db.query(User).filter(User.id == doctor_id).first()
     patient = db.query(User).filter(User.id == patient_id).first()
     now = datetime.now(timezone.utc)

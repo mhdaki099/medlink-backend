@@ -8,7 +8,8 @@ export default function SecretaryHome() {
         <StaffAppointmentsScreen
             doctorId={user?.supervisor_id}
             newAppointmentPath="/(secretary)/new-appointment"
-            showConsultationActions={false}
+            consultationReportPath="/(secretary)/consultation-report"
+            showConsultationActions
             headerTitle="إدارة المواعيد"
         />
     );

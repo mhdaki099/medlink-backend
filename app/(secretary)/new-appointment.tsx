@@ -8,22 +8,26 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useSecretaryPermissions } from '../../src/hooks/useSecretaryPermissions';
+import AppointmentDateTimePicker from '../../src/components/AppointmentDateTimePicker';
+import { isSlotBookedForDate } from '../../src/utils/appointmentTime';
 
 export default function SecretaryNewAppointment() {
     const router = useRouter();
     const { user } = useAuth();
     const doctorId = user?.supervisor_id;
+    const { can } = useSecretaryPermissions();
 
     const [patients, setPatients] = useState<any[]>([]);
     const [selectedPatient, setSelectedPatient] = useState<any>(null);
     const [search, setSearch] = useState('');
-    const [date, setDate] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [time, setTime] = useState('');
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [availability, setAvailability] = useState<any>({ time_slots: [], booked_slots: [] });
     const [sessionPrice, setSessionPrice] = useState(0);
+    const [bookedSlots, setBookedSlots] = useState<any[]>([]);
 
     useEffect(() => {
         if (!doctorId) {
@@ -31,40 +35,41 @@ export default function SecretaryNewAppointment() {
             return;
         }
         Promise.all([
-            api.getPatients(),
+            api.getDoctorPatients(doctorId),
             api.getDoctor(doctorId),
         ])
             .then(([pts, doc]) => {
                 setPatients(pts);
                 setSessionPrice(doc?.price_per_session || 0);
             })
+            .catch((e: any) => Alert.alert('خطأ', e.message || 'تعذر تحميل المرضى'))
             .finally(() => setLoading(false));
     }, [doctorId]);
 
     useEffect(() => {
         if (!doctorId || !date) return;
         api.getDoctorAvailability(doctorId, date)
-            .then((av) => {
-                setAvailability(av);
-                if (av.day_off) {
-                    setTime('');
-                    Alert.alert('تنبيه', 'لا توجد ساعات عمل في هذا اليوم');
-                }
-            })
-            .catch((e: any) => Alert.alert('خطأ', e.message || 'تعذر تحميل الأوقات'));
+            .then((av) => setBookedSlots(av.booked_slots || []))
+            .catch(() => setBookedSlots([]));
     }, [doctorId, date]);
 
-    const filteredPatients = patients.filter(p =>
-        p.name?.includes(search) || p.phone?.includes(search)
-    );
-
-    const isSlotBooked = (t: string) =>
-        availability.booked_slots?.some((s: any) => s.date === date && s.time === t);
+    const filteredPatients = patients.filter(p => {
+        const q = search.trim();
+        if (!q) return true;
+        return (
+            p.name?.includes(q) ||
+            p.phone?.includes(q) ||
+            p.patient_unique_id?.includes(q)
+        );
+    });
 
     const handleCreate = async () => {
         if (!doctorId) return Alert.alert('خطأ', 'لم يتم ربط حسابك بطبيب');
         if (!selectedPatient) return Alert.alert('تنبيه', 'يرجى اختيار مريض');
         if (!date || !time) return Alert.alert('تنبيه', 'يرجى تحديد التاريخ والوقت');
+        if (isSlotBookedForDate(bookedSlots, date, time)) {
+            return Alert.alert('محجوز', 'هذا الموعد محجوز بالفعل — اختر وقتاً آخر');
+        }
         setSubmitting(true);
         try {
             await api.createManualAppointment({
@@ -79,11 +84,19 @@ export default function SecretaryNewAppointment() {
                 { text: 'حسناً', onPress: () => router.back() },
             ]);
         } catch (e: any) {
-            Alert.alert('خطأ', e.message);
+            Alert.alert('خطأ', e.message?.includes('booked') ? 'هذا الموعد محجوز بالفعل' : (e.message || 'فشل إنشاء الموعد'));
         } finally {
             setSubmitting(false);
         }
     };
+
+    if (!can('appointments_create')) {
+        return (
+            <View style={styles.center}>
+                <Text style={{ fontFamily: 'Cairo_600SemiBold', color: '#64748B' }}>ليس لديك صلاحية إنشاء مواعيد</Text>
+            </View>
+        );
+    }
 
     if (loading) {
         return (
@@ -107,27 +120,38 @@ export default function SecretaryNewAppointment() {
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
                 <View style={styles.card}>
-                    <Text style={styles.label}>اختر المريض</Text>
+                    <Text style={styles.label}>مرضى الطبيب</Text>
+                    <Text style={styles.subLabel}>تظهر فقط المرضى المرتبطون بمواعيد مع طبيبك</Text>
                     {!selectedPatient ? (
                         <>
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="ابحث بالاسم أو الهاتف..."
+                                placeholder="ابحث بالاسم أو الهاتف أو الرقم..."
                                 value={search}
                                 onChangeText={setSearch}
                                 textAlign="right"
                             />
-                            {filteredPatients.slice(0, 5).map(p => (
-                                <TouchableOpacity key={p.id} style={styles.patientItem} onPress={() => setSelectedPatient(p)}>
-                                    <View style={styles.patientIcon}>
-                                        <Ionicons name="person" size={18} color="#1E88E5" />
-                                    </View>
-                                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                                        <Text style={styles.patientName}>{p.name}</Text>
-                                        <Text style={styles.patientPhone}>{p.phone}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
+                            {filteredPatients.length === 0 ? (
+                                <View style={styles.emptyPatients}>
+                                    <Ionicons name="people-outline" size={32} color="#CBD5E1" />
+                                    <Text style={styles.emptyText}>لا يوجد مرضى لهذا الطبيب بعد</Text>
+                                </View>
+                            ) : (
+                                filteredPatients.slice(0, 8).map(p => (
+                                    <TouchableOpacity key={p.id} style={styles.patientItem} onPress={() => setSelectedPatient(p)}>
+                                        <View style={styles.patientIcon}>
+                                            <Ionicons name="person" size={18} color="#1E88E5" />
+                                        </View>
+                                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                            <Text style={styles.patientName}>{p.name}</Text>
+                                            <Text style={styles.patientPhone}>{p.phone || '—'}</Text>
+                                            {p.last_visit ? (
+                                                <Text style={styles.patientMeta}>آخر زيارة: {p.last_visit} {p.last_visit_time || ''}</Text>
+                                            ) : null}
+                                        </View>
+                                    </TouchableOpacity>
+                                ))
+                            )}
                         </>
                     ) : (
                         <View style={styles.selectedBox}>
@@ -143,44 +167,17 @@ export default function SecretaryNewAppointment() {
                     )}
                 </View>
 
-                <View style={styles.card}>
-                    <Text style={styles.label}>التاريخ (YYYY-MM-DD)</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="2025-01-15"
-                        value={date}
-                        onChangeText={setDate}
-                        textAlign="right"
-                    />
-
-                    <Text style={[styles.label, { marginTop: 16 }]}>الوقت</Text>
-                    {availability.time_slots?.length > 0 ? (
-                        <View style={styles.slotsGrid}>
-                            {availability.time_slots.map((slot: string, idx: number) => {
-                                const booked = isSlotBooked(slot);
-                                const selected = time === slot;
-                                return (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        style={[styles.slotBtn, selected && styles.slotBtnActive, booked && styles.slotBtnBooked]}
-                                        onPress={() => !booked && setTime(slot)}
-                                        disabled={booked}
-                                    >
-                                        <Text style={[styles.slotText, selected && { color: '#FFF' }, booked && { color: '#FFF' }]}>{slot}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    ) : (
-                        <TextInput
-                            style={styles.input}
-                            placeholder="09:00 AM"
-                            value={time}
-                            onChangeText={setTime}
-                            textAlign="right"
+                {doctorId ? (
+                    <View style={styles.card}>
+                        <AppointmentDateTimePicker
+                            doctorId={doctorId}
+                            date={date}
+                            time={time}
+                            onDateChange={setDate}
+                            onTimeChange={setTime}
                         />
-                    )}
-                </View>
+                    </View>
+                ) : null}
 
                 <View style={styles.card}>
                     <Text style={styles.label}>ملاحظات (اختياري)</Text>
@@ -224,20 +221,19 @@ const styles = StyleSheet.create({
     backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     content: { flex: 1, paddingHorizontal: 20, paddingTop: 20 },
     card: { backgroundColor: '#FFF', borderRadius: 20, padding: 16, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8 },
-    label: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right', marginBottom: 10 },
+    label: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B', textAlign: 'right', marginBottom: 6 },
+    subLabel: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#94A3B8', textAlign: 'right', marginBottom: 10 },
     searchInput: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', height: 48, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular', fontSize: 14, marginBottom: 10 },
     input: { backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', height: 48, paddingHorizontal: 14, fontFamily: 'Cairo_400Regular', fontSize: 14 },
     patientItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
     patientIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#E3F2FD', justifyContent: 'center', alignItems: 'center' },
     patientName: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
     patientPhone: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#64748B' },
+    patientMeta: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#94A3B8', marginTop: 2 },
     selectedBox: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12 },
     selectedName: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: '#1E293B' },
-    slotsGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-    slotBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },
-    slotBtnActive: { backgroundColor: '#1E88E5', borderColor: '#1E88E5' },
-    slotBtnBooked: { backgroundColor: '#374151', borderColor: '#374151', opacity: 0.6 },
-    slotText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#374151' },
+    emptyPatients: { alignItems: 'center', paddingVertical: 24, gap: 8 },
+    emptyText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#94A3B8' },
     createBtn: { height: 56, borderRadius: 28, overflow: 'hidden', marginTop: 8 },
     createBtnGrad: { flex: 1, flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', gap: 10 },
     createBtnText: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#FFF' },

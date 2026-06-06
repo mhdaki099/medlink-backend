@@ -164,6 +164,7 @@ def ensure_demo_secretary():
     try:
         if db.query(User).filter(User.email == "sec.amal@medlink.sy").first():
             return
+        from utils.secretary_permissions import ALL_SECRETARY_PERMISSIONS
         db.add(
             User(
                 id="sec_amal",
@@ -174,6 +175,7 @@ def ensure_demo_secretary():
                 phone="+963-933-445566",
                 city="دمشق",
                 supervisor_id="d1",
+                secretary_permissions=ALL_SECRETARY_PERMISSIONS,
                 is_active=True,
                 verified=True,
                 created_at=datetime.now(timezone.utc).isoformat(),

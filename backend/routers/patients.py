@@ -4,6 +4,12 @@ from db import get_db
 from models import User, Appointment, Order, LabBooking, LabTest, MedicalRecord, Notification, MedicalHistoryRequest, FamilyLink, PatientNote
 from auth_utils import get_current_user, hash_password
 from utils.helpers import model_to_dict, safe_update
+from utils.secretary_permissions import (
+    require_secretary_permission,
+    get_secretary_user,
+    get_effective_permissions,
+    filter_visits_for_secretary,
+)
 import uuid
 from datetime import datetime, timezone
 
@@ -243,7 +249,18 @@ def get_patient_visits(patient_id: str, current_user: dict = Depends(get_current
             ).first()
             if not apt_with_access:
                 raise HTTPException(403, "ليس لديك صلاحية للوصول إلى سجل هذا المريض")
-    elif current_user["role"] not in ("admin", "secretary"):
+    elif current_user["role"] == "secretary":
+        sec = get_secretary_user(db, current_user["sub"])
+        if not sec or not sec.supervisor_id:
+            raise HTTPException(403, "سكرتير غير مرتبط بطبيب")
+        require_secretary_permission(db, current_user, "history_view")
+        has_access = db.query(Appointment).filter(
+            Appointment.patient_id == patient_id,
+            Appointment.doctor_id == sec.supervisor_id,
+        ).first() is not None
+        if not has_access:
+            raise HTTPException(403, "ليس لديك صلاحية للوصول إلى سجل هذا المريض")
+    elif current_user["role"] != "admin":
         raise HTTPException(403, "ليس لديك صلاحية")
     
     patient_user = db.query(User).filter(User.id == patient_id).first()
@@ -360,6 +377,11 @@ def get_patient_visits(patient_id: str, current_user: dict = Depends(get_current
         key=lambda v: v.get("created_at") or f"{v.get('visit_date', '')} {v.get('visit_time', '')}",
         reverse=True,
     )
+
+    if current_user["role"] == "secretary":
+        sec = get_secretary_user(db, current_user["sub"])
+        perms = get_effective_permissions(sec) if sec else {}
+        visits = filter_visits_for_secretary(visits, perms)
     
     return {
         "patient_id": patient_id,

@@ -9,6 +9,7 @@ import Animated, { FadeInUp, FadeInRight, FadeInDown } from 'react-native-reanim
 import { api } from '../services/api';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { TAB_BAR_CLEARANCE, TAB_BAR_FAB_BOTTOM } from '../constants/layout';
+import { useSecretaryPermissions } from '../hooks/useSecretaryPermissions';
 
 type StaffAppointmentsScreenProps = {
     doctorId?: string;
@@ -26,6 +27,10 @@ export default function StaffAppointmentsScreen({
     headerTitle = 'المواعيد',
 }: StaffAppointmentsScreenProps) {
     const router = useRouter();
+    const { can } = useSecretaryPermissions();
+    const allowConsultation = showConsultationActions && can('reports_edit');
+    const allowReportView = can('reports_view');
+    const allowCall = can('call_patient');
     const [allAppointments, setAllAppointments] = useState<any[]>([]);
     const [filter, setFilter] = useState<string>('upcoming');
     const [loading, setLoading] = useState(true);
@@ -247,6 +252,10 @@ export default function StaffAppointmentsScreen({
     };
 
     const callPatient = (phone?: string) => {
+        if (!allowCall) {
+            Alert.alert('تنبيه', 'ليس لديك صلاحية الاتصال بالمريض');
+            return;
+        }
         if (!phone?.trim()) {
             Alert.alert('تنبيه', 'لا يوجد رقم هاتف مسجل للمريض');
             return;
@@ -379,7 +388,7 @@ export default function StaffAppointmentsScreen({
                                 </View>
                             )}
 
-                            {apt.status === 'reschedule_requested' && (
+                            {apt.status === 'reschedule_requested' && can('appointments_respond') && (
                                 <View style={styles.actions}>
                                     <TouchableOpacity style={[styles.actionBtn, styles.cancelBtn]} onPress={() => api.respondReschedule(apt.id, { action: 'reject', rejection_note: 'تم رفض طلب إعادة الجدولة' }).then(loadData)}>
                                         <Text style={styles.cancelBtnText}>رفض الطلب</Text>
@@ -390,7 +399,7 @@ export default function StaffAppointmentsScreen({
                                 </View>
                             )}
 
-                            {apt.status === 'cancellation_requested' && (
+                            {apt.status === 'cancellation_requested' && can('appointments_respond') && (
                                 <>
                                     {apt.rejection_note ? (
                                         <View style={[styles.dateTimePill, { backgroundColor: '#FEF2F2', marginBottom: 8 }]}>
@@ -424,68 +433,74 @@ export default function StaffAppointmentsScreen({
                                 </View>
                             )}
 
-                            {apt.status === 'pending' && (
+                            {apt.status === 'pending' && (can('appointments_accept') || can('appointments_reject') || can('appointments_edit')) && (
                                 <View style={styles.actions}>
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, styles.cancelBtn]}
-                                        onPress={() => openReasonModal(apt.id, 'rejected')}
-                                    >
-                                        <Text style={styles.cancelBtnText}>رفض</Text>
-                                    </TouchableOpacity>
-                                    {apt.status !== 'schedule_change_pending' && (
+                                    {can('appointments_reject') ? (
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, styles.cancelBtn]}
+                                            onPress={() => openReasonModal(apt.id, 'rejected')}
+                                        >
+                                            <Text style={styles.cancelBtnText}>رفض</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    {can('appointments_edit') && apt.status !== 'schedule_change_pending' ? (
                                         <TouchableOpacity 
                                             style={[styles.actionBtn, { backgroundColor: '#6366F1' }]}
                                             onPress={() => openEditModal(apt)}
                                         >
                                             <Text style={styles.confirmBtnText}>تعديل</Text>
                                         </TouchableOpacity>
-                                    )}
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, styles.confirmBtn]}
-                                        onPress={() => handleStatusUpdate(apt.id, 'confirmed')}
-                                    >
-                                        <Text style={styles.confirmBtnText}>تأكيد</Text>
-                                    </TouchableOpacity>
+                                    ) : null}
+                                    {can('appointments_accept') ? (
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, styles.confirmBtn]}
+                                            onPress={() => handleStatusUpdate(apt.id, 'confirmed')}
+                                        >
+                                            <Text style={styles.confirmBtnText}>تأكيد</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
                                 </View>
                             )}
 
-                            {apt.status === 'confirmed' && (
+                            {apt.status === 'confirmed' && (can('appointments_remove') || can('appointments_edit') || allowConsultation || allowCall) && (
                                 <View style={styles.actions}>
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, styles.cancelBtn]}
-                                        onPress={() => openReasonModal(apt.id, 'cancelled')}
-                                    >
-                                        <Text style={styles.cancelBtnText}>إلغاء</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity 
-                                        style={[styles.actionBtn, { backgroundColor: '#6366F1' }]}
-                                        onPress={() => openEditModal(apt)}
-                                    >
-                                        <Text style={styles.confirmBtnText}>تعديل</Text>
-                                    </TouchableOpacity>
-                                    {showConsultationActions ? (
+                                    {can('appointments_remove') ? (
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, styles.cancelBtn]}
+                                            onPress={() => openReasonModal(apt.id, 'cancelled')}
+                                        >
+                                            <Text style={styles.cancelBtnText}>إلغاء</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    {can('appointments_edit') ? (
+                                        <TouchableOpacity 
+                                            style={[styles.actionBtn, { backgroundColor: '#6366F1' }]}
+                                            onPress={() => openEditModal(apt)}
+                                        >
+                                            <Text style={styles.confirmBtnText}>تعديل</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    {allowConsultation ? (
                                         <TouchableOpacity 
                                             style={[styles.actionBtn, styles.confirmBtn]}
                                             onPress={() => router.push({ pathname: consultationReportPath, params: { appointmentId: apt.id, patientId: apt.patient_id, patientName: apt.patient?.name || '' } } as any)}
                                         >
                                             <Text style={styles.confirmBtnText}>إنهاء الجلسة</Text>
                                         </TouchableOpacity>
-                                    ) : (
-                                        apt.patient?.phone ? (
-                                            <TouchableOpacity
-                                                style={[styles.actionBtn, styles.confirmBtn]}
-                                                onPress={() => callPatient(apt.patient.phone)}
-                                            >
-                                                <Text style={styles.confirmBtnText}>اتصال</Text>
-                                            </TouchableOpacity>
-                                        ) : null
-                                    )}
+                                    ) : allowCall && apt.patient?.phone ? (
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.confirmBtn]}
+                                            onPress={() => callPatient(apt.patient.phone)}
+                                        >
+                                            <Text style={styles.confirmBtnText}>اتصال</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
                                 </View>
                             )}
 
-                            {apt.status === 'completed' && (
+                            {apt.status === 'completed' && (allowReportView || allowCall) && (
                                 <View style={styles.actions}>
-                                    {showConsultationActions ? (
+                                    {allowReportView && allowConsultation ? (
                                         <TouchableOpacity
                                             style={[styles.actionBtn, { backgroundColor: '#6366F1', flex: 1 }]}
                                             onPress={() => router.push({
@@ -500,7 +515,7 @@ export default function StaffAppointmentsScreen({
                                             <Text style={styles.confirmBtnText}>عرض التقرير</Text>
                                         </TouchableOpacity>
                                     ) : null}
-                                    {apt.patient?.phone ? (
+                                    {allowCall && apt.patient?.phone ? (
                                         <TouchableOpacity
                                             style={[styles.actionBtn, styles.confirmBtn, { flex: 1 }]}
                                             onPress={() => callPatient(apt.patient.phone)}
@@ -633,6 +648,7 @@ export default function StaffAppointmentsScreen({
             </Modal>
 
             {/* Manual Appointment FAB */}
+            {can('appointments_create') ? (
             <TouchableOpacity
                 style={styles.fab}
                 onPress={() => router.push(newAppointmentPath as any)}
@@ -641,6 +657,7 @@ export default function StaffAppointmentsScreen({
                     <MaterialCommunityIcons name="calendar-plus" size={26} color="#FFF" />
                 </LinearGradient>
             </TouchableOpacity>
+            ) : null}
         </View>
     );
 }

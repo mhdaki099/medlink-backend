@@ -10,6 +10,7 @@ from db import get_db
 from models import User, RegistrationRequest
 from auth_utils import create_access_token, verify_password, hash_password, get_current_user
 from utils.helpers import model_to_dict
+from utils.secretary_permissions import get_effective_permissions
 from .doctors import SPEC_AR_TO_EN
 
 router = APIRouter()
@@ -68,6 +69,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     # Exclude password from response
     user_data = model_to_dict(user, ["password"])
+    if user.role == "secretary":
+        user_data["secretary_permissions"] = get_effective_permissions(user)
     
     token = create_access_token({"sub": user.id, "role": user.role, "email": user.email})
     return {"access_token": token, "token_type": "bearer", "user": user_data}

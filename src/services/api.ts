@@ -146,6 +146,9 @@ class ApiClient {
     getDoctorFavorites(patientId: string) {
         return this.get<any[]>(`/doctors/favorites/${patientId}`);
     }
+    getDoctorPatients(doctorId: string) {
+        return this.get<any[]>(`/doctors/${doctorId}/patients`);
+    }
     getDoctorAvailability(id: string, date?: string) {
         const q = date ? `?date=${encodeURIComponent(date)}` : '';
         return this.get<any>(`/doctors/${id}/availability${q}`);
@@ -161,6 +164,9 @@ class ApiClient {
     getSecretaries(doctorId: string) { return this.get<any[]>(`/doctors/secretaries?doctor_id=${doctorId}`); }
     addSecretary(doctorId: string, data: any) {
         return this.post<any>(`/doctors/secretary?doctor_id=${doctorId}`, data);
+    }
+    updateSecretary(doctorId: string, secretaryId: string, data: any) {
+        return this.put<any>(`/doctors/secretary/${secretaryId}?doctor_id=${doctorId}`, data);
     }
     addPrescription(doctorId: string, patientId: string, medications: any[], notes: string) {
         return this.post<any>(`/doctors/prescription?doctor_id=${doctorId}&patient_id=${patientId}`, {

@@ -44,6 +44,8 @@ export default function ConsultationReportScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const insets = useSafeAreaInsets();
+    const doctorId = user?.role === 'secretary' ? user?.supervisor_id : user?.id;
+    const appointmentsHome = user?.role === 'secretary' ? '/(secretary)/' : '/(doctor)/appointments';
 
     const [isHealthy, setIsHealthy] = useState(false);
     const [conditionSummary, setConditionSummary] = useState('');
@@ -231,7 +233,7 @@ export default function ConsultationReportScreen() {
         try {
             const payload: any = {
                 appointment_id: appointmentId,
-                doctor_id: user?.id,
+                doctor_id: doctorId,
                 patient_id: patientId,
                 condition_summary: isHealthy ? 'المريض بصحة جيدة' : conditionSummary,
                 is_healthy: isHealthy,
@@ -554,7 +556,7 @@ export default function ConsultationReportScreen() {
                     {savedReportId ? (
                         <TouchableOpacity
                             style={styles.doneBtn}
-                            onPress={() => router.replace('/(doctor)/appointments' as any)}
+                            onPress={() => router.replace(appointmentsHome as any)}
                         >
                             <Text style={styles.doneBtnText}>العودة للمواعيد</Text>
                         </TouchableOpacity>

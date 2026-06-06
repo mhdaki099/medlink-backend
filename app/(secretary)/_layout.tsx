@@ -8,7 +8,7 @@ const TABS: ProviderTab[] = [
     { name: 'profile', icon: 'account', label: 'الحساب', path: '/(secretary)/profile' },
 ];
 
-const HIDE_TAB_BAR_ROUTES = new Set(['new-appointment']);
+const HIDE_TAB_BAR_ROUTES = new Set(['new-appointment', 'consultation-report']);
 
 const ACTIVE_ROUTE_MAP: Record<string, string> = {
     appointments: 'index',
@@ -36,6 +36,7 @@ export default function SecretaryLayout() {
             <Tabs.Screen name="profile" options={{ title: 'الحساب' }} />
             <Tabs.Screen name="appointments" options={{ href: null }} />
             <Tabs.Screen name="new-appointment" options={{ href: null }} />
+            <Tabs.Screen name="consultation-report" options={{ href: null }} />
         </Tabs>
     );
 }

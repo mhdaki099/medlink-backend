@@ -11,6 +11,7 @@ import { useAuth } from '../../../src/contexts/AuthContext';
 import ProviderStatsBar from '../../../src/components/ProviderStatsBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabBarClearance } from '../../../src/constants/layout';
+import { isSlotBookedForDate } from '../../../src/utils/appointmentTime';
 
 const { width, height } = Dimensions.get('window');
 const BOOKING_BTN_HEIGHT = 64;
@@ -347,7 +348,7 @@ export default function DoctorProfile() {
                     <View style={styles.timeGrid}>
                         {(availability.time_slots?.length ? availability.time_slots : DEFAULT_TIME_SLOTS).map((time: string, idx: number) => {
                             const isSelected = selectedTime === time;
-                            const isBooked = availability.booked_slots?.some((slot: any) => slot.date === selectedDate && slot.time === time);
+                            const isBooked = isSlotBookedForDate(availability.booked_slots, selectedDate, time);
                             return (
                                 <TouchableOpacity 
                                     key={idx} 

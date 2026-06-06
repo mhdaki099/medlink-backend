@@ -8,6 +8,7 @@ from db import get_db
 from models import Appointment, User, AuditLog, Notification, AppointmentAuditLog
 from auth_utils import get_current_user
 from utils.helpers import model_to_dict
+from utils.secretary_permissions import require_secretary_permission
 
 router = APIRouter()
 
@@ -63,7 +64,7 @@ def ensure_slot_available(db: Session, doctor_id: str, date: str, time: str, app
     if appointment_id:
         query = query.filter(Appointment.id != appointment_id)
     if query.first():
-        raise HTTPException(status_code=409, detail="This appointment is already booked.")
+        raise HTTPException(status_code=409, detail="هذا الموعد محجوز بالفعل")
 
     pending_change = db.query(Appointment).filter(
         Appointment.doctor_id == doctor_id,
@@ -74,7 +75,7 @@ def ensure_slot_available(db: Session, doctor_id: str, date: str, time: str, app
     if appointment_id:
         pending_change = pending_change.filter(Appointment.id != appointment_id)
     if pending_change.first():
-        raise HTTPException(status_code=409, detail="This appointment slot is pending approval.")
+        raise HTTPException(status_code=409, detail="هذا الموعد بانتظار موافقة المريض")
 
 
 def appointment_with_people(db: Session, apt: Appointment):
@@ -173,6 +174,7 @@ def create_manual_appointment(appointment: dict, current_user: dict = Depends(ge
     if current_user["role"] == "doctor":
         appointment["doctor_id"] = current_user["sub"]
     elif current_user["role"] == "secretary":
+        require_secretary_permission(db, current_user, "appointments_create")
         appointment["doctor_id"] = _secretary_supervisor_id(db, current_user["sub"])
     return create_appointment(appointment, current_user, db)
 
@@ -200,6 +202,23 @@ def _assert_appointment_access(apt: Appointment, current_user: dict, db: Session
         raise HTTPException(403, "ليس لديك صلاحية على هذا الموعد")
 
 
+def _check_secretary_status_permission(db: Session, current_user: dict, apt: Appointment, new_status: str):
+    if current_user.get("role") != "secretary":
+        return
+    if apt.status == "cancellation_requested" and new_status != "cancelled":
+        require_secretary_permission(db, current_user, "appointments_respond")
+        return
+    if new_status == "confirmed":
+        require_secretary_permission(db, current_user, "appointments_accept")
+    elif new_status == "rejected":
+        require_secretary_permission(db, current_user, "appointments_reject")
+    elif new_status == "cancelled":
+        if apt.status == "cancellation_requested":
+            require_secretary_permission(db, current_user, "appointments_respond")
+        else:
+            require_secretary_permission(db, current_user, "appointments_remove")
+
+
 @router.put("/{appointment_id}/status")
 def update_appointment_status(appointment_id: str, status_update: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     apt = _get_appointment_or_404(db, appointment_id)
@@ -207,6 +226,7 @@ def update_appointment_status(appointment_id: str, status_update: dict, current_
 
     old_status = apt.status
     new_status = status_update.get("status", apt.status)
+    _check_secretary_status_permission(db, current_user, apt, new_status)
     rejection_note = status_update.get("rejection_note") or apt.rejection_note
     rejection_reason_type = status_update.get("rejection_reason_type")
     recommended_specialty = status_update.get("recommended_specialty")
@@ -297,6 +317,8 @@ def propose_schedule_change(
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
     apt = _get_appointment_or_404(db, appointment_id)
     _assert_appointment_access(apt, current_user, db)
+    if current_user.get("role") == "secretary":
+        require_secretary_permission(db, current_user, "appointments_edit")
 
     if apt.status in ("schedule_change_pending", "reschedule_requested", "cancellation_requested"):
         raise HTTPException(status_code=409, detail="يوجد طلب تعديل معلق بالفعل")
@@ -453,6 +475,8 @@ def respond_reschedule(appointment_id: str, data: dict, current_user: dict = Dep
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
     apt = _get_appointment_or_404(db, appointment_id)
     _assert_appointment_access(apt, current_user, db)
+    if current_user.get("role") == "secretary":
+        require_secretary_permission(db, current_user, "appointments_respond")
     if apt.status != "reschedule_requested":
         raise HTTPException(status_code=400, detail="لا يوجد طلب إعادة جدولة معلق")
     action = data.get("action")  # approve, reject, suggest

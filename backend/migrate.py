@@ -24,6 +24,7 @@ MIGRATIONS = {
         "emergency_contact": "JSON",
         "services": "JSON",
         "supervisor_id": "TEXT",
+        "secretary_permissions": "JSON",
         "patient_unique_id": "TEXT",
         "qr_code_url": "TEXT",
         "specialization_en": "TEXT",

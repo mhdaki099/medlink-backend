@@ -72,6 +72,7 @@ class User(Base):
     # General / Corporate
     services = Column(JSON, nullable=True) # List of services offered
     supervisor_id = Column(String, ForeignKey("users.id"), nullable=True) # For Secretary -> Doctor link
+    secretary_permissions = Column(JSON, nullable=True)  # Granular access for secretary accounts
 
 
 class MedicalHistoryRequest(Base):
