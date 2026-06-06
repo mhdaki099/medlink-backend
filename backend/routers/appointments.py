@@ -89,6 +89,13 @@ def appointment_with_people(db: Session, apt: Appointment):
     return apt_dict
 
 
+def _secretary_supervisor_id(db: Session, user_id: str) -> str:
+    sec = db.query(User).filter(User.id == user_id, User.role == "secretary").first()
+    if not sec or not sec.supervisor_id:
+        raise HTTPException(status_code=403, detail="سكرتير غير مرتبط بطبيب")
+    return sec.supervisor_id
+
+
 @router.get("")
 def list_appointments(
     patient_id: str = Query(None),
@@ -97,6 +104,11 @@ def list_appointments(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if current_user["role"] == "secretary":
+        supervisor_id = _secretary_supervisor_id(db, current_user["sub"])
+        if doctor_id and doctor_id != supervisor_id:
+            raise HTTPException(status_code=403, detail="ليس لديك صلاحية على مواعيد هذا الطبيب")
+        doctor_id = supervisor_id
     query = db.query(Appointment)
     if patient_id:
         query = query.filter(Appointment.patient_id == patient_id)
@@ -160,6 +172,8 @@ def create_manual_appointment(appointment: dict, current_user: dict = Depends(ge
     appointment["status"] = "manual"
     if current_user["role"] == "doctor":
         appointment["doctor_id"] = current_user["sub"]
+    elif current_user["role"] == "secretary":
+        appointment["doctor_id"] = _secretary_supervisor_id(db, current_user["sub"])
     return create_appointment(appointment, current_user, db)
 
 
@@ -170,10 +184,15 @@ def _get_appointment_or_404(db: Session, appointment_id: str) -> Appointment:
     return apt
 
 
-def _assert_appointment_access(apt: Appointment, current_user: dict):
+def _assert_appointment_access(apt: Appointment, current_user: dict, db: Session):
     role = current_user.get("role")
     uid = current_user.get("sub")
-    if role in ("admin", "secretary"):
+    if role == "admin":
+        return
+    if role == "secretary":
+        supervisor_id = _secretary_supervisor_id(db, uid)
+        if apt.doctor_id != supervisor_id:
+            raise HTTPException(403, "ليس لديك صلاحية على هذا الموعد")
         return
     if role == "doctor" and apt.doctor_id != uid:
         raise HTTPException(403, "ليس لديك صلاحية على هذا الموعد")
@@ -184,7 +203,7 @@ def _assert_appointment_access(apt: Appointment, current_user: dict):
 @router.put("/{appointment_id}/status")
 def update_appointment_status(appointment_id: str, status_update: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
 
     old_status = apt.status
     new_status = status_update.get("status", apt.status)
@@ -277,7 +296,7 @@ def propose_schedule_change(
     if current_user.get("role") not in ("doctor", "secretary", "admin"):
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
 
     if apt.status in ("schedule_change_pending", "reschedule_requested", "cancellation_requested"):
         raise HTTPException(status_code=409, detail="يوجد طلب تعديل معلق بالفعل")
@@ -336,7 +355,7 @@ def respond_schedule_change(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
     if apt.status != "schedule_change_pending":
         raise HTTPException(status_code=400, detail="لا يوجد طلب تعديل من الطبيب")
 
@@ -403,7 +422,7 @@ def respond_schedule_change(
 @router.put("/{appointment_id}/request-reschedule")
 def request_reschedule(appointment_id: str, data: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
     if apt.status in ("schedule_change_pending", "reschedule_requested", "cancellation_requested"):
         raise HTTPException(status_code=409, detail="يوجد طلب تعديل معلق بالفعل")
     if apt.reschedule_requested:
@@ -433,7 +452,7 @@ def respond_reschedule(appointment_id: str, data: dict, current_user: dict = Dep
     if current_user["role"] not in ("doctor", "secretary", "admin"):
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
     if apt.status != "reschedule_requested":
         raise HTTPException(status_code=400, detail="لا يوجد طلب إعادة جدولة معلق")
     action = data.get("action")  # approve, reject, suggest
@@ -494,7 +513,7 @@ def request_cancel(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="يمكن للمريض فقط طلب الإلغاء")
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
 
     reason = (data.get("reason") or data.get("cancellation_reason") or "").strip()
     if not reason:
@@ -561,7 +580,7 @@ def withdraw_cancel_request(
     if current_user.get("role") != "patient":
         raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
     if apt.status != "cancellation_requested":
         raise HTTPException(status_code=400, detail="لا يوجد طلب إلغاء معلق")
 
@@ -588,7 +607,7 @@ def withdraw_cancel_request(
 @router.put("/{appointment_id}/access")
 def toggle_record_access(appointment_id: str, access_update: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
     apt.record_access_granted = access_update.get("granted", False)
     db.commit()
     db.refresh(apt)
@@ -598,7 +617,7 @@ def toggle_record_access(appointment_id: str, access_update: dict, current_user:
 @router.delete("/{appointment_id}")
 def cancel_appointment(appointment_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     apt = _get_appointment_or_404(db, appointment_id)
-    _assert_appointment_access(apt, current_user)
+    _assert_appointment_access(apt, current_user, db)
     apt.status = "cancelled"
     db.commit()
     return {"message": "تم إلغاء الموعد"}

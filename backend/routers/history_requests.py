@@ -10,6 +10,21 @@ from utils.helpers import model_to_dict
 
 router = APIRouter()
 
+
+def _assert_doctor_or_secretary_access(doctor_id: str, current_user: dict, db: Session):
+    role = current_user.get("role")
+    uid = current_user.get("sub")
+    if role == "admin":
+        return
+    if role == "doctor" and uid == doctor_id:
+        return
+    if role == "secretary":
+        sec = db.query(User).filter(User.id == uid, User.role == "secretary").first()
+        if sec and sec.supervisor_id == doctor_id:
+            return
+    raise HTTPException(status_code=403, detail="ليس لديك صلاحية")
+
+
 def _grant_record_access(db: Session, patient_id: str, doctor_id: str):
     """Persist access after patient approval — applies to all appointments for this pair."""
     appointments = db.query(Appointment).filter(
@@ -22,6 +37,7 @@ def _grant_record_access(db: Session, patient_id: str, doctor_id: str):
 
 @router.post("")
 def create_request(patient_id: str, doctor_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    _assert_doctor_or_secretary_access(doctor_id, current_user, db)
     approved = db.query(MedicalHistoryRequest).filter(
         MedicalHistoryRequest.patient_id == patient_id,
         MedicalHistoryRequest.doctor_id == doctor_id,
@@ -52,6 +68,7 @@ def create_request(patient_id: str, doctor_id: str, current_user: dict = Depends
 
 @router.get("/doctor/{doctor_id}")
 def get_doctor_requests(doctor_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    _assert_doctor_or_secretary_access(doctor_id, current_user, db)
     reqs = db.query(MedicalHistoryRequest, User.name.label("patient_name")).join(User, MedicalHistoryRequest.patient_id == User.id).filter(MedicalHistoryRequest.doctor_id == doctor_id).all()
     results = []
     for r, p_name in reqs:
