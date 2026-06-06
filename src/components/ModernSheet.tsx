@@ -31,12 +31,13 @@ type Props = {
 export default function ModernSheet({
     visible, onClose, title, subtitle, icon = 'information-outline',
     iconColors = ['#1E88E5', '#43A047'], children, actions = [],
-    bodyMaxHeight = 280,
+    bodyMaxHeight = 320,
 }: Props) {
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <Pressable style={styles.overlay} onPress={onClose}>
-                <Pressable style={styles.sheet} onPress={e => e.stopPropagation()}>
+            <View style={styles.overlay}>
+                <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
+                <View style={styles.sheet}>
                     <View style={styles.handle} />
                     <LinearGradient colors={iconColors} style={styles.iconCircle}>
                         <MaterialCommunityIcons name={icon} size={32} color="#FFF" />
@@ -45,10 +46,12 @@ export default function ModernSheet({
                     {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
                     {children ? (
                         <ScrollView
-                            style={[styles.body, { maxHeight: bodyMaxHeight }]}
+                            style={{ maxHeight: bodyMaxHeight }}
+                            contentContainerStyle={styles.scrollContent}
                             showsVerticalScrollIndicator
                             nestedScrollEnabled
                             keyboardShouldPersistTaps="handled"
+                            bounces
                         >
                             {children}
                         </ScrollView>
@@ -90,16 +93,20 @@ export default function ModernSheet({
                             })}
                         </View>
                     )}
-                </Pressable>
-            </Pressable>
+                </View>
+            </View>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
     overlay: {
-        flex: 1, backgroundColor: 'rgba(15,23,42,0.55)',
+        flex: 1,
         justifyContent: 'flex-end',
+    },
+    backdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(15,23,42,0.55)',
     },
     sheet: {
         backgroundColor: '#FFF',
@@ -108,7 +115,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingBottom: Platform.OS === 'ios' ? 34 : 24,
         paddingTop: 12,
-        maxHeight: '88%',
+        maxHeight: '92%',
     },
     handle: {
         width: 44, height: 5, borderRadius: 3,
@@ -127,7 +134,10 @@ const styles = StyleSheet.create({
         fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#64748B',
         textAlign: 'center', lineHeight: 22, marginBottom: 12,
     },
-    body: { maxHeight: 280, marginBottom: 8 },
+    scrollContent: {
+        paddingBottom: 8,
+        flexGrow: 1,
+    },
     actions: { gap: 10, marginTop: 8 },
     primaryBtn: { borderRadius: 16, overflow: 'hidden' },
     primaryGrad: { paddingVertical: 15, alignItems: 'center' },

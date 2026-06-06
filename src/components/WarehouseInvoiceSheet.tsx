@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Share, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Share, Platform, Alert, Dimensions } from 'react-native';
+
+const INVOICE_SCROLL_HEIGHT = Math.round(Dimensions.get('window').height * 0.5);
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Print from 'expo-print';
@@ -158,7 +160,7 @@ function PromoterPicker({
                         <Text style={pickerStyles.emptyText}>لا يوجد مندوبون — أضفهم من صفحة المندوبين أولاً</Text>
                     </View>
                 ) : (
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={pickerStyles.chips}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={pickerStyles.chips}>
                         <TouchableOpacity
                             style={[pickerStyles.chip, !selectedPromoterId && pickerStyles.chipActive]}
                             onPress={() => onSelect(null)}
@@ -383,7 +385,7 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
             subtitle={`${draft.pharmacy?.name || 'الصيدلية'} ← ${draft.warehouse?.name || 'المستودع'}`}
             icon="file-document-outline"
             iconColors={['#1E88E5', '#6366F1']}
-            bodyMaxHeight={Platform.OS === 'ios' ? 520 : 500}
+            bodyMaxHeight={INVOICE_SCROLL_HEIGHT}
             actions={editable ? [
                 { label: 'إلغاء', onPress: onClose, variant: 'secondary' },
                 { label: 'حفظ الفاتورة', onPress: handleSave, variant: 'primary', loading: saving },
