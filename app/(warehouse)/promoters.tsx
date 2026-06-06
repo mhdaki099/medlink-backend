@@ -37,7 +37,7 @@ function shiftMonth(year: number, month: number, delta: number) {
 }
 
 export default function WarehousePromoters() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const router = useRouter();
     const bottomPad = useSubscreenBottomPadding();
     const [promoters, setPromoters] = useState<any[]>([]);
@@ -46,7 +46,8 @@ export default function WarehousePromoters() {
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState<any | null>(null);
     const [saving, setSaving] = useState(false);
-    const [form, setForm] = useState({ name: '', phone: '', commission_percent: '' });
+    const [form, setForm] = useState({ name: '', phone: '', code: '', commission_percent: '' });
+    const [authError, setAuthError] = useState('');
     const [reportYm, setReportYm] = useState(currentYm);
     const [commissions, setCommissions] = useState<any | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -67,11 +68,22 @@ export default function WarehousePromoters() {
     };
 
     const load = async () => {
+        if (!user?.id || !token) {
+            setAuthError('يرجى تسجيل الدخول كمستودع');
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
+        api.setToken(token);
+        setAuthError('');
         try {
             const rows = await api.getWarehousePromoters();
             setPromoters(rows.filter((r: any) => r.is_active !== false));
             await loadCommissions();
         } catch (e: any) {
+            if (e.message?.includes('authenticated') || e.message?.includes('Not authenticated')) {
+                setAuthError('انتهت الجلسة — سجّل الدخول مرة أخرى');
+            }
             console.warn(e);
         } finally {
             setLoading(false);
@@ -79,9 +91,18 @@ export default function WarehousePromoters() {
         }
     };
 
-    useEffect(() => { load(); }, [user]);
+    useEffect(() => {
+        if (token) api.setToken(token);
+    }, [token]);
 
-    useEffect(() => { if (!loading) loadCommissions(); }, [reportYm.year, reportYm.month]);
+    useEffect(() => {
+        if (!user?.id || !token) return;
+        load();
+    }, [user?.id, token]);
+
+    useEffect(() => {
+        if (!loading && token && user?.id) loadCommissions();
+    }, [reportYm.year, reportYm.month, loading, token, user?.id]);
 
     const commissionByPromoter = useMemo(() => {
         const map: Record<string, any> = {};
@@ -93,7 +114,7 @@ export default function WarehousePromoters() {
 
     const openAdd = () => {
         setEditing(null);
-        setForm({ name: '', phone: '', commission_percent: '5' });
+        setForm({ name: '', phone: '', code: '', commission_percent: '5' });
         setShowForm(true);
     };
 
@@ -102,6 +123,7 @@ export default function WarehousePromoters() {
         setForm({
             name: row.name || '',
             phone: row.phone || '',
+            code: row.code || '',
             commission_percent: String(row.commission_percent ?? ''),
         });
         setShowForm(true);
@@ -122,7 +144,8 @@ export default function WarehousePromoters() {
         if (pct < 0 || pct > 100) { Alert.alert('تنبيه', 'نسبة العمولة بين 0 و 100'); return; }
         setSaving(true);
         try {
-            const payload = { name, phone: form.phone.trim() || undefined, commission_percent: pct };
+            const payload: any = { name, phone: form.phone.trim() || undefined, commission_percent: pct };
+            if (form.code.trim()) payload.code = form.code.trim().toUpperCase();
             if (editing) {
                 await api.updateWarehousePromoter(editing.id, payload);
             } else {
@@ -180,7 +203,7 @@ export default function WarehousePromoters() {
                 <View style={styles.howToBox}>
                     <MaterialCommunityIcons name="file-document-edit-outline" size={20} color={C.primary} />
                     <Text style={styles.howToText}>
-                        لإضافة المندوب للفاتورة: طلبات الشحن → شحن الطلب → اختر المندوب في الفاتورة → حفظ. تُحسب العمولة = إجمالي الفاتورة × النسبة.
+                        لإضافة المندوب للفاتورة: طلبات الشحن → شحن الطلب → أدخل كود المندوب أو اختره من القائمة → حفظ. تُحسب العمولة = إجمالي الفاتورة × النسبة.
                     </Text>
                 </View>
 
@@ -213,7 +236,12 @@ export default function WarehousePromoters() {
                     </View>
                 </View>
 
-                {loading ? (
+                {authError ? (
+                    <View style={styles.empty}>
+                        <MaterialCommunityIcons name="lock-outline" size={48} color={C.danger} />
+                        <Text style={styles.emptyTitle}>{authError}</Text>
+                    </View>
+                ) : loading ? (
                     <ActivityIndicator color={C.primary} style={{ marginTop: 40 }} size="large" />
                 ) : promoters.length === 0 ? (
                     <View style={styles.empty}>
@@ -247,6 +275,12 @@ export default function WarehousePromoters() {
                             </LinearGradient>
                             <View style={{ flex: 1, alignItems: 'flex-end' }}>
                                 <Text style={styles.cardName}>{row.name}</Text>
+                                {row.code ? (
+                                    <View style={styles.codePill}>
+                                        <MaterialCommunityIcons name="barcode" size={12} color={C.purple} />
+                                        <Text style={styles.codePillText}>{row.code}</Text>
+                                    </View>
+                                ) : null}
                                 {row.phone ? (
                                     <View style={styles.phoneRow}>
                                         <Text style={styles.phoneText}>{row.phone}</Text>
@@ -365,6 +399,20 @@ export default function WarehousePromoters() {
                                     placeholder="09xxxxxxxx"
                                     placeholderTextColor={C.muted}
                                     keyboardType="phone-pad"
+                                    textAlign="right"
+                                />
+                            </View>
+
+                            <Text style={styles.fieldLabel}>كود المندوب (للفاتورة)</Text>
+                            <View style={styles.inputWrap}>
+                                <MaterialCommunityIcons name="barcode" size={20} color={C.muted} />
+                                <TextInput
+                                    style={styles.input}
+                                    value={form.code}
+                                    onChangeText={v => setForm(f => ({ ...f, code: v.toUpperCase() }))}
+                                    placeholder={editing ? 'P-A1B2' : 'يُولَّد تلقائياً إن تُرك فارغاً'}
+                                    placeholderTextColor={C.muted}
+                                    autoCapitalize="characters"
                                     textAlign="right"
                                 />
                             </View>
@@ -507,6 +555,8 @@ const styles = StyleSheet.create({
     avatar: { width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
     avatarLetter: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#FFF' },
     cardName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.text },
+    codePill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginTop: 4, alignSelf: 'flex-end', backgroundColor: C.purple + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    codePillText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: C.purple },
     phoneRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, marginTop: 3 },
     phoneText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec },
     noPhone: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: C.muted, marginTop: 3 },

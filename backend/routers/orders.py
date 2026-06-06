@@ -159,8 +159,21 @@ def _generate_purchase_order_number(wo_id: str, created_at: str) -> str:
     return f"PO-{date_part}-{short}"
 
 
+def _promoter_invoice_payload(promoter: WarehousePromoter, pct: float, total: float) -> dict:
+    return {
+        "id": promoter.id,
+        "code": promoter.code,
+        "name": promoter.name,
+        "phone": promoter.phone,
+        "commission_percent": pct,
+        "commission_amount": round(total * pct / 100, 2),
+    }
+
+
 def _apply_promoter_to_invoice(db: Session, invoice: dict, body: dict, warehouse_id: str) -> None:
+    promoter = None
     promoter_id = body.get("promoter_id")
+    promoter_code = str(body.get("promoter_code") or "").strip().upper().replace(" ", "-")
     if promoter_id:
         promoter = db.query(WarehousePromoter).filter(
             WarehousePromoter.id == promoter_id,
@@ -168,11 +181,18 @@ def _apply_promoter_to_invoice(db: Session, invoice: dict, body: dict, warehouse
         ).first()
         if not promoter:
             raise HTTPException(400, "المندوب غير موجود")
-        pct = float(body["commission_percent"]) if body.get("commission_percent") is not None else float(promoter.commission_percent or 0)
+    elif promoter_code:
+        promoter = db.query(WarehousePromoter).filter(
+            WarehousePromoter.warehouse_id == warehouse_id,
+            WarehousePromoter.code == promoter_code,
+        ).first()
+        if not promoter:
+            raise HTTPException(400, "كود المندوب غير موجود")
     elif body.get("promoter_name"):
         pct = float(body.get("commission_percent") or 0)
         invoice["promoter"] = {
             "id": None,
+            "code": promoter_code or None,
             "name": str(body.get("promoter_name")).strip(),
             "commission_percent": pct,
             "commission_amount": round(float(invoice.get("total") or 0) * pct / 100, 2),
@@ -180,14 +200,12 @@ def _apply_promoter_to_invoice(db: Session, invoice: dict, body: dict, warehouse
         return
     else:
         return
+    if not promoter.code:
+        from routers.warehouses import _ensure_promoter_code
+        _ensure_promoter_code(db, promoter)
+    pct = float(body["commission_percent"]) if body.get("commission_percent") is not None else float(promoter.commission_percent or 0)
     total = float(invoice.get("total") or 0)
-    invoice["promoter"] = {
-        "id": promoter.id,
-        "name": promoter.name,
-        "phone": promoter.phone,
-        "commission_percent": pct,
-        "commission_amount": round(total * pct / 100, 2),
-    }
+    invoice["promoter"] = _promoter_invoice_payload(promoter, pct, total)
 
 
 def build_warehouse_invoice(db: Session, order: WarehouseOrder) -> dict:
@@ -566,7 +584,7 @@ def update_warehouse_order_invoice(order_id: str, body: dict, current_user: dict
         current["total"] = float(body.get("total") or 0)
     else:
         current["total"] = current.get("subtotal") or order.total
-    if "promoter_id" in body or "promoter_name" in body or "commission_percent" in body:
+    if "promoter_id" in body or "promoter_code" in body or "promoter_name" in body or "commission_percent" in body:
         _apply_promoter_to_invoice(db, current, body, order.warehouse_id)
     elif body.get("clear_promoter"):
         current["promoter"] = {}

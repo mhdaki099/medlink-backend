@@ -7,6 +7,7 @@ import ModernSheet from './ModernSheet';
 
 type Promoter = {
     id?: string | null;
+    code?: string;
     name?: string;
     phone?: string;
     commission_percent?: number;
@@ -58,7 +59,7 @@ function invoiceText(inv: Invoice): string {
         ),
         '',
         `المجموع: ${(inv.total || 0).toLocaleString()} ل.س`,
-        promo?.name ? `المندوب: ${promo.name} — عمولة ${promo.commission_percent ?? 0}% = ${(promo.commission_amount || 0).toLocaleString()} ل.س` : '',
+        promo?.name ? `المندوب: ${promo.name}${promo.code ? ` (${promo.code})` : ''} — عمولة ${promo.commission_percent ?? 0}% = ${(promo.commission_amount || 0).toLocaleString()} ل.س` : '',
         inv.notes ? `\nملاحظات: ${inv.notes}` : '',
     ];
     return lines.filter(Boolean).join('\n');
@@ -75,7 +76,7 @@ function invoiceHtml(inv: Invoice): string {
         </tr>
     `).join('');
     const promoBlock = promo?.name ? `
-        <div class="meta">المندوب: <b>${promo.name}</b> — عمولة ${promo.commission_percent ?? 0}% = ${(promo.commission_amount || 0).toLocaleString()} ل.س</div>
+        <div class="meta">المندوب: <b>${promo.name}</b>${promo.code ? ` — كود: <b>${promo.code}</b>` : ''} — عمولة ${promo.commission_percent ?? 0}% = ${(promo.commission_amount || 0).toLocaleString()} ل.س</div>
     ` : '';
     return `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/>
     <style>
@@ -104,15 +105,19 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
     const [draft, setDraft] = useState<Invoice | null>(invoice);
     const [selectedPromoterId, setSelectedPromoterId] = useState<string | null>(null);
     const [customPercent, setCustomPercent] = useState('');
+    const [promoterCodeInput, setPromoterCodeInput] = useState('');
 
     useEffect(() => {
         setDraft(invoice);
         const p = invoice?.promoter;
         setSelectedPromoterId(p?.id || null);
         setCustomPercent(p?.commission_percent != null ? String(p.commission_percent) : '');
+        setPromoterCodeInput(p?.code || '');
     }, [invoice, visible]);
 
     if (!draft) return null;
+
+    const activePromoters = promoters.filter(p => p.is_active !== false);
 
     const shareInvoice = async () => {
         try {
@@ -136,6 +141,7 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
         if (!promoterId) {
             setDraft(prev => prev ? { ...prev, promoter: {} } : prev);
             setCustomPercent('');
+            setPromoterCodeInput('');
             return;
         }
         const p = promoters.find(x => x.id === promoterId);
@@ -143,16 +149,32 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
         const pct = pctOverride !== undefined ? (parseFloat(pctOverride) || 0) : (parseFloat(customPercent) || p.commission_percent || 0);
         setCustomPercent(String(pct));
         const total = draft.total || 0;
+        setPromoterCodeInput(p.code || '');
         setDraft(prev => prev ? {
             ...prev,
             promoter: {
                 id: p.id,
+                code: p.code,
                 name: p.name,
                 phone: p.phone,
                 commission_percent: pct,
                 commission_amount: calcCommission(total, pct),
             },
         } : prev);
+    };
+
+    const applyPromoterByCode = () => {
+        const code = promoterCodeInput.trim().toUpperCase().replace(/\s+/g, '-');
+        if (!code) {
+            Alert.alert('تنبيه', 'أدخل كود المندوب');
+            return;
+        }
+        const p = activePromoters.find(x => (x.code || '').toUpperCase() === code);
+        if (!p) {
+            Alert.alert('غير موجود', `لا يوجد مندوب بالكود ${code}`);
+            return;
+        }
+        applyPromoter(p.id);
     };
 
     const updateItem = (itemId: string, field: string, value: string) => {
@@ -185,6 +207,7 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
                     ...prev,
                     promoter: {
                         id: p.id,
+                        code: p.code,
                         name: p.name,
                         phone: p.phone,
                         commission_percent: pct,
@@ -212,13 +235,14 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
         if (selectedPromoterId) {
             payload.promoter_id = selectedPromoterId;
             payload.commission_percent = parseFloat(customPercent) || 0;
+        } else if (promoterCodeInput.trim()) {
+            payload.promoter_code = promoterCodeInput.trim().toUpperCase().replace(/\s+/g, '-');
+            payload.commission_percent = parseFloat(customPercent) || 0;
         } else if (draft.promoter?.name) {
             payload.clear_promoter = true;
         }
         await onSave(payload);
     };
-
-    const activePromoters = promoters.filter(p => p.is_active !== false);
 
     return (
         <ModernSheet
@@ -306,6 +330,22 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
                 {editable && (
                     <View style={styles.promoterSection}>
                         <Text style={styles.promoterTitle}>المندوب / المسوق</Text>
+                        <View style={styles.codeSearchRow}>
+                            <TouchableOpacity style={styles.codeSearchBtn} onPress={applyPromoterByCode}>
+                                <MaterialCommunityIcons name="check" size={18} color="#FFF" />
+                            </TouchableOpacity>
+                            <TextInput
+                                style={styles.codeInput}
+                                value={promoterCodeInput}
+                                onChangeText={setPromoterCodeInput}
+                                placeholder="كود المندوب — مثال: P-A1B2"
+                                placeholderTextColor="#94A3B8"
+                                autoCapitalize="characters"
+                                textAlign="right"
+                                onSubmitEditing={applyPromoterByCode}
+                            />
+                            <MaterialCommunityIcons name="barcode" size={18} color="#64748B" />
+                        </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promoterChips}>
                             <TouchableOpacity
                                 style={[styles.promoterChip, !selectedPromoterId && styles.promoterChipActive]}
@@ -320,7 +360,7 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
                                     onPress={() => applyPromoter(p.id)}
                                 >
                                     <Text style={[styles.promoterChipText, selectedPromoterId === p.id && styles.promoterChipTextActive]}>
-                                        {p.name} ({p.commission_percent}%)
+                                        {p.name}{p.code ? ` • ${p.code}` : ''} ({p.commission_percent}%)
                                     </Text>
                                 </TouchableOpacity>
                             ))}
@@ -344,7 +384,9 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
                     <View style={styles.commissionBox}>
                         <MaterialCommunityIcons name="account-tie" size={18} color="#F59E0B" />
                         <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                            <Text style={styles.commissionName}>{draft.promoter.name}</Text>
+                            <Text style={styles.commissionName}>
+                                {draft.promoter.name}{draft.promoter.code ? ` — ${draft.promoter.code}` : ''}
+                            </Text>
                             <Text style={styles.commissionDetail}>
                                 عمولة {draft.promoter.commission_percent ?? 0}% = {(draft.promoter.commission_amount || 0).toLocaleString()} ل.س
                             </Text>
@@ -391,6 +433,13 @@ const styles = StyleSheet.create({
     totalVal: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: '#EA580C' },
     promoterSection: { marginTop: 12, gap: 8 },
     promoterTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#0F172A', textAlign: 'right' },
+    codeSearchRow: {
+        flexDirection: 'row-reverse', alignItems: 'center', gap: 8,
+        backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0',
+        paddingHorizontal: 10, paddingVertical: 6,
+    },
+    codeInput: { flex: 1, fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#0F172A', paddingVertical: 6 },
+    codeSearchBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#1E88E5', alignItems: 'center', justifyContent: 'center' },
     promoterChips: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 4 },
     promoterChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
     promoterChipActive: { backgroundColor: '#1E88E518', borderColor: '#1E88E5' },

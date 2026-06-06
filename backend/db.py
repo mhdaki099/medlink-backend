@@ -123,6 +123,9 @@ def ensure_sqlite_columns():
             "invoice": "JSON",
             "purchase_order_number": "TEXT",
         },
+        "warehouse_promoters": {
+            "code": "TEXT",
+        },
     }
     is_postgres = not SQLALCHEMY_DATABASE_URL.startswith("sqlite")
     with engine.begin() as conn:

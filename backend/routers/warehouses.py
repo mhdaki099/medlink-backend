@@ -11,6 +11,31 @@ from utils.helpers import model_to_dict
 router = APIRouter()
 
 
+def _normalize_promoter_code(raw: str) -> str:
+    return str(raw or "").strip().upper().replace(" ", "-")
+
+
+def _generate_promoter_code(db: Session, warehouse_id: str) -> str:
+    for _ in range(20):
+        candidate = f"P-{uuid.uuid4().hex[:4].upper()}"
+        exists = db.query(WarehousePromoter).filter(
+            WarehousePromoter.warehouse_id == warehouse_id,
+            WarehousePromoter.code == candidate,
+        ).first()
+        if not exists:
+            return candidate
+    return f"P-{uuid.uuid4().hex[:6].upper()}"
+
+
+def _ensure_promoter_code(db: Session, row: WarehousePromoter) -> str:
+    if row.code:
+        return row.code
+    row.code = _generate_promoter_code(db, row.warehouse_id)
+    db.commit()
+    db.refresh(row)
+    return row.code
+
+
 def _order_item_qty(item: dict) -> int:
     return max(1, int(item.get("qty") or item.get("quantity") or 1))
 
@@ -186,7 +211,12 @@ def list_warehouse_promoters(
     rows = db.query(WarehousePromoter).filter(
         WarehousePromoter.warehouse_id == warehouse_id,
     ).order_by(WarehousePromoter.name).all()
-    return [model_to_dict(r) for r in rows]
+    result = []
+    for row in rows:
+        if not row.code:
+            _ensure_promoter_code(db, row)
+        result.append(model_to_dict(row))
+    return result
 
 
 @router.post("/promoters")
@@ -200,10 +230,21 @@ def create_warehouse_promoter(body: dict, current_user: dict = Depends(require_r
     pct = float(body.get("commission_percent") or 0)
     if pct < 0 or pct > 100:
         raise HTTPException(400, "نسبة العمولة بين 0 و 100")
+    code = _normalize_promoter_code(body.get("code"))
+    if not code:
+        code = _generate_promoter_code(db, warehouse_id)
+    else:
+        taken = db.query(WarehousePromoter).filter(
+            WarehousePromoter.warehouse_id == warehouse_id,
+            WarehousePromoter.code == code,
+        ).first()
+        if taken:
+            raise HTTPException(400, "كود المندوب مستخدم مسبقاً")
     now = datetime.now(timezone.utc).isoformat()
     row = WarehousePromoter(
         id=f"wp_{uuid.uuid4().hex[:8]}",
         warehouse_id=warehouse_id,
+        code=code,
         name=name,
         phone=str(body.get("phone") or "").strip() or None,
         commission_percent=pct,
@@ -230,6 +271,18 @@ def update_warehouse_promoter(promoter_id: str, body: dict, current_user: dict =
         row.name = name
     if "phone" in body:
         row.phone = str(body.get("phone") or "").strip() or None
+    if "code" in body:
+        code = _normalize_promoter_code(body.get("code"))
+        if not code:
+            raise HTTPException(400, "كود المندوب مطلوب")
+        taken = db.query(WarehousePromoter).filter(
+            WarehousePromoter.warehouse_id == row.warehouse_id,
+            WarehousePromoter.code == code,
+            WarehousePromoter.id != row.id,
+        ).first()
+        if taken:
+            raise HTTPException(400, "كود المندوب مستخدم مسبقاً")
+        row.code = code
     if "commission_percent" in body:
         pct = float(body.get("commission_percent") or 0)
         if pct < 0 or pct > 100:

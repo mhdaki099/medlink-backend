@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing:
 const STATUS_ICONS: Record<string, string> = { pending: 'clock-outline', processing: 'package-variant', shipped: 'truck-fast-outline', delivered: 'check-circle-outline', cancelled: 'close-circle-outline' };
 
 export default function WarehouseOrders() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const bottomPad = useProviderTabBarClearance();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -27,8 +27,11 @@ export default function WarehouseOrders() {
     const [invoiceEdit, setInvoiceEdit] = useState(false);
     const [promoters, setPromoters] = useState<any[]>([]);
 
+    useEffect(() => { if (token) api.setToken(token); }, [token]);
+
     const load = async () => {
-        if (!user?.id) return;
+        if (!user?.id || !token) return;
+        api.setToken(token);
         try {
             const [ords, promos] = await Promise.all([
                 api.getWarehouseOrders(user.id),
@@ -40,7 +43,7 @@ export default function WarehouseOrders() {
         catch (e) { console.warn(e); } finally { setLoading(false); setRefreshing(false); }
     };
 
-    useEffect(() => { load(); }, [user]);
+    useEffect(() => { load(); }, [user?.id, token]);
 
     const update = async (id: string, status: string) => {
         try {

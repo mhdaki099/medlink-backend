@@ -238,6 +238,7 @@ class WarehousePromoter(Base):
     __tablename__ = "warehouse_promoters"
     id = Column(String, primary_key=True, index=True)
     warehouse_id = Column(String, ForeignKey("users.id"))
+    code = Column(String, nullable=True, index=True)
     name = Column(String)
     phone = Column(String, nullable=True)
     commission_percent = Column(Float, default=0)
