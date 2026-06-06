@@ -208,6 +208,15 @@ def _apply_promoter_to_invoice(db: Session, invoice: dict, body: dict, warehouse
     invoice["promoter"] = _promoter_invoice_payload(promoter, pct, total)
 
 
+def _pharmacy_safe_invoice(invoice: dict) -> dict:
+    """Strip internal warehouse fields (promoter commission) from invoices shown to pharmacies."""
+    if not isinstance(invoice, dict):
+        return invoice
+    safe = dict(invoice)
+    safe.pop("promoter", None)
+    return safe
+
+
 def build_warehouse_invoice(db: Session, order: WarehouseOrder) -> dict:
     wh = db.query(User).filter(User.id == order.warehouse_id).first()
     ph = db.query(User).filter(User.id == order.pharmacy_id).first()
@@ -531,6 +540,8 @@ def list_warehouse_orders(warehouse_id: str = Query(None), pharmacy_id: str = Qu
             odict["pharmacy"] = model_to_dict(ph, ["password"])
         if wh:
             odict["warehouse"] = model_to_dict(wh, ["password"])
+        if role == "pharmacy" and isinstance(odict.get("invoice"), dict):
+            odict["invoice"] = _pharmacy_safe_invoice(odict["invoice"])
         results.append(odict)
     return results
 
@@ -545,7 +556,10 @@ def get_warehouse_order_invoice(order_id: str, current_user: dict = Depends(get_
         raise HTTPException(403, "غير مصرح")
     if role == "warehouse" and current_user.get("sub") != order.warehouse_id:
         raise HTTPException(403, "غير مصرح")
-    return build_warehouse_invoice(db, order)
+    invoice = build_warehouse_invoice(db, order)
+    if role == "pharmacy":
+        return _pharmacy_safe_invoice(invoice)
+    return invoice
 
 
 @router.put("/warehouse/{order_id}/invoice")
@@ -626,7 +640,7 @@ def pharmacy_confirm_warehouse_order(order_id: str, current_user: dict = Depends
     result = model_to_dict(order)
     result["items"] = _enrich_warehouse_order_items(db, result.get("items") or [])
     result["stock_updates"] = stock_updates
-    result["invoice"] = build_warehouse_invoice(db, order)
+    result["invoice"] = _pharmacy_safe_invoice(build_warehouse_invoice(db, order))
     wh = db.query(User).filter(User.id == order.warehouse_id).first()
     if wh:
         result["warehouse"] = model_to_dict(wh, ["password"])

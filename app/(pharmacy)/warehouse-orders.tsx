@@ -308,6 +308,7 @@ export default function PharmacyWarehouseOrders() {
                 visible={!!invoiceData}
                 onClose={() => setInvoiceData(null)}
                 invoice={invoiceData}
+                hidePromoter
             />
 
             <ModernSheet

@@ -34,6 +34,8 @@ type Props = {
     onClose: () => void;
     invoice: Invoice | null;
     editable?: boolean;
+    /** Hide promoter/commission — for pharmacy-facing invoice view and share */
+    hidePromoter?: boolean;
     promoters?: any[];
     onSave?: (data: any) => Promise<void>;
     saving?: boolean;
@@ -43,8 +45,8 @@ function calcCommission(total: number, pct: number) {
     return Math.round(total * pct / 100 * 100) / 100;
 }
 
-function invoiceText(inv: Invoice): string {
-    const promo = inv.promoter;
+function invoiceText(inv: Invoice, hidePromoter = false): string {
+    const promo = hidePromoter ? null : inv.promoter;
     const lines = [
         `فاتورة توريد — ${inv.number || ''}`,
         `التاريخ: ${inv.date || ''}`,
@@ -66,8 +68,8 @@ function invoiceText(inv: Invoice): string {
     return lines.filter(Boolean).join('\n');
 }
 
-function invoiceHtml(inv: Invoice): string {
-    const promo = inv.promoter;
+function invoiceHtml(inv: Invoice, hidePromoter = false): string {
+    const promo = hidePromoter ? null : inv.promoter;
     const rows = (inv.items || []).map((it: any) => `
         <tr>
             <td>${it.name || ''}</td>
@@ -194,7 +196,7 @@ function PromoterPicker({
     );
 }
 
-export default function WarehouseInvoiceSheet({ visible, onClose, invoice, editable, promoters = [], onSave, saving }: Props) {
+export default function WarehouseInvoiceSheet({ visible, onClose, invoice, editable, hidePromoter = false, promoters = [], onSave, saving }: Props) {
     const [draft, setDraft] = useState<Invoice | null>(invoice);
     const [selectedPromoterId, setSelectedPromoterId] = useState<string | null>(null);
     const [customPercent, setCustomPercent] = useState('');
@@ -214,13 +216,13 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
 
     const shareInvoice = async () => {
         try {
-            await Share.share({ message: invoiceText(draft), title: `فاتورة ${draft.number}` });
+            await Share.share({ message: invoiceText(draft, hidePromoter), title: `فاتورة ${draft.number}` });
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
     const printInvoice = async () => {
         try {
-            const { uri } = await Print.printToFileAsync({ html: invoiceHtml(draft) });
+            const { uri } = await Print.printToFileAsync({ html: invoiceHtml(draft, hidePromoter) });
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'فاتورة المستودع' });
             } else {
@@ -436,7 +438,7 @@ export default function WarehouseInvoiceSheet({ visible, onClose, invoice, edita
                 <Text style={styles.totalVal}>{(draft.total || 0).toLocaleString()} ل.س</Text>
             </View>
 
-            {draft.promoter?.name ? (
+            {!hidePromoter && draft.promoter?.name ? (
                 <View style={styles.commissionBox}>
                     <MaterialCommunityIcons name="account-tie" size={18} color="#F59E0B" />
                     <View style={{ flex: 1, alignItems: 'flex-end' }}>
