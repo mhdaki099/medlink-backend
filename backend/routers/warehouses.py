@@ -77,7 +77,7 @@ def list_warehouse_promoters(current_user: dict = Depends(require_role("warehous
     return [model_to_dict(r) for r in rows]
 
 
-@router.get("/promoters/commissions")
+@router.get("/promoter-commissions")
 def get_promoter_commissions(
     year: int = Query(None),
     month: int = Query(None),

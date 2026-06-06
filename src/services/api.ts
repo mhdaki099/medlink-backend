@@ -297,7 +297,7 @@ class ApiClient {
         if (month) q.set('month', String(month));
         if (promoterId) q.set('promoter_id', promoterId);
         const qs = q.toString();
-        return this.get<any>(`/warehouses/promoters/commissions${qs ? '?' + qs : ''}`);
+        return this.get<any>(`/warehouses/promoter-commissions${qs ? '?' + qs : ''}`);
     }
     createWarehousePromoter(data: { name: string; phone?: string; commission_percent: number }) {
         return this.post<any>('/warehouses/promoters', data);
