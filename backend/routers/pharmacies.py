@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from db import get_db
-from models import User, Medicine, FavoriteMedicine, CartItem, Favorite, Order, Review
+from models import User, Medicine, FavoriteMedicine, CartItem, Favorite, Order, Review, PharmacyStockLog
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict, safe_update
 
@@ -196,6 +196,48 @@ def adjust_medicine_stock(medicine_id: str, body: dict, current_user: dict = Dep
     _sync_medicine_stock_status(med)
     db.commit(); db.refresh(med)
     return model_to_dict(med)
+
+
+@router.post("/medicines/{medicine_id}/stock-receive")
+def receive_medicine_stock(medicine_id: str, body: dict, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):
+    med = db.query(Medicine).filter(Medicine.id == medicine_id).first()
+    if not med:
+        raise HTTPException(404, "الدواء غير موجود")
+    if current_user.get("role") == "pharmacy" and current_user.get("sub") != med.pharmacy_id:
+        raise HTTPException(403, "غير مصرح لك بتعديل مخزون هذا الدواء")
+    before = med.quantity or 0
+    quantity_add = int(body.get("quantity_add") or 0)
+    if "quantity" in body:
+        after = max(0, int(body.get("quantity") or 0))
+        added = after - before
+    elif quantity_add > 0:
+        after = before + quantity_add
+        added = quantity_add
+    else:
+        raise HTTPException(400, "أدخل كمية للإضافة أو المخزون الجديد")
+    med.quantity = after
+    if body.get("price") is not None:
+        med.price = max(0, float(body.get("price") or 0))
+    _sync_medicine_stock_status(med)
+    invoice_number = (body.get("invoice_number") or "").strip() or None
+    db.add(PharmacyStockLog(
+        id=f"psl_{uuid.uuid4().hex[:8]}",
+        pharmacy_id=med.pharmacy_id,
+        medicine_id=med.id,
+        warehouse_order_id=body.get("warehouse_order_id"),
+        invoice_number=invoice_number,
+        quantity_added=added,
+        quantity_before=before,
+        quantity_after=after,
+        unit_price=med.price,
+        notes=(body.get("notes") or "").strip() or None,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    ))
+    db.commit()
+    db.refresh(med)
+    result = model_to_dict(med)
+    result["stock_log"] = {"quantity_added": added, "invoice_number": invoice_number}
+    return result
 
 @router.delete("/medicines/{medicine_id}")
 def delete_medicine(medicine_id: str, current_user: dict = Depends(require_role("pharmacy", "admin")), db: Session = Depends(get_db)):

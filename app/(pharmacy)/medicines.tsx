@@ -44,7 +44,10 @@ export default function PharmacyMedicines() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [form, setForm] = useState<MedForm>(EMPTY_FORM);
-    const [stockModal, setStockModal] = useState<{ id: string; name: string; qty: string } | null>(null);
+    const [stockModal, setStockModal] = useState<{
+        id: string; name: string; currentQty: number; price: string;
+        quantityAdd: string; invoiceNumber: string; notes: string;
+    } | null>(null);
 
     const load = async () => {
         if (!user?.id) return;
@@ -125,13 +128,32 @@ export default function PharmacyMedicines() {
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
-    const saveStockQuantity = async () => {
+    const openStockReceive = (med: any) => {
+        setStockModal({
+            id: med.id,
+            name: med.name,
+            currentQty: med.quantity || 0,
+            price: String(med.price || 0),
+            quantityAdd: '',
+            invoiceNumber: '',
+            notes: '',
+        });
+    };
+
+    const saveStockReceive = async () => {
         if (!stockModal) return;
-        const qty = Math.max(0, parseInt(stockModal.qty) || 0);
+        const quantityAdd = parseInt(stockModal.quantityAdd) || 0;
+        if (quantityAdd <= 0) return Alert.alert('تنبيه', 'أدخل كمية للإضافة');
         try {
-            await api.setMedicineQuantity(stockModal.id, qty);
+            await api.receiveMedicineStock(stockModal.id, {
+                quantity_add: quantityAdd,
+                invoice_number: stockModal.invoiceNumber.trim() || undefined,
+                price: parseFloat(stockModal.price) || undefined,
+                notes: stockModal.notes.trim() || undefined,
+            });
             setStockModal(null);
             load();
+            Alert.alert('✅ تم', `أُضيف ${quantityAdd} وحدة للمخزون`);
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
@@ -221,14 +243,15 @@ export default function PharmacyMedicines() {
                                     <TouchableOpacity style={styles.stockBtn} onPress={() => adjustStock(med.id, -1)}>
                                         <MaterialCommunityIcons name="minus" size={18} color={C.danger} />
                                     </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => setStockModal({ id: med.id, name: med.name, qty: String(med.quantity || 0) })}>
+                                    <TouchableOpacity onPress={() => openStockReceive(med)}>
                                         <Text style={[styles.stockQty, (med.quantity || 0) <= 0 && { color: C.danger }]}>{med.quantity || 0}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity style={styles.stockBtn} onPress={() => adjustStock(med.id, 1)}>
                                         <MaterialCommunityIcons name="plus" size={18} color={C.success} />
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={styles.stockSetBtn} onPress={() => setStockModal({ id: med.id, name: med.name, qty: String(med.quantity || 0) })}>
-                                        <Text style={styles.stockSetText}>تعيين</Text>
+                                    <TouchableOpacity style={styles.stockSetBtn} onPress={() => openStockReceive(med)}>
+                                        <MaterialCommunityIcons name="package-variant-closed" size={14} color={C.primary} />
+                                        <Text style={styles.stockSetText}>توريد</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
@@ -313,35 +336,62 @@ export default function PharmacyMedicines() {
                 </View>
             </Modal>
 
-            <Modal visible={!!stockModal} transparent animationType="fade">
+            <Modal visible={!!stockModal} transparent animationType="slide">
                 <View style={styles.overlay}>
-                    <View style={[styles.modal, { marginHorizontal: 24, borderRadius: 20 }]}>
-                        <Text style={styles.modalTitle}>تعيين المخزون</Text>
-                        <Text style={styles.stockModalName}>{stockModal?.name}</Text>
-                        <Text style={styles.fieldLabel}>الكمية الحالية</Text>
-                        <View style={styles.inputWrap}>
-                            <MaterialCommunityIcons name="package-variant" size={18} color={C.textMuted} style={{ marginLeft: 8 }} />
-                            <TextInput
-                                style={styles.input}
-                                value={stockModal?.qty || ''}
-                                onChangeText={v => stockModal && setStockModal({ ...stockModal, qty: v })}
-                                keyboardType="numeric"
-                                textAlign="right"
-                                placeholder="212"
-                                placeholderTextColor={C.textMuted}
-                            />
+                    <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
+                        <View style={[styles.modal, { marginHorizontal: 16, borderRadius: 24 }]}>
+                            <View style={styles.modalHandle} />
+                            <Text style={styles.modalTitle}>توريد مخزون</Text>
+                            <Text style={styles.stockModalName}>{stockModal?.name}</Text>
+                            <View style={styles.currentStockBox}>
+                                <Text style={styles.currentStockLbl}>المخزون الحالي</Text>
+                                <Text style={styles.currentStockVal}>{stockModal?.currentQty ?? 0} وحدة</Text>
+                            </View>
+                            {[
+                                { key: 'quantityAdd', label: 'كمية الإضافة *', placeholder: '50', icon: 'plus-box' },
+                                { key: 'invoiceNumber', label: 'رقم الفاتورة', placeholder: 'INV-2026-001', icon: 'file-document-outline' },
+                                { key: 'price', label: 'سعر البيع (ل.س)', placeholder: '5000', icon: 'cash' },
+                            ].map(({ key, label, placeholder, icon }) => (
+                                <View key={key}>
+                                    <Text style={styles.fieldLabel}>{label}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <MaterialCommunityIcons name={icon as any} size={18} color={C.textMuted} style={{ marginLeft: 8 }} />
+                                        <TextInput
+                                            style={styles.input}
+                                            value={(stockModal as any)?.[key] || ''}
+                                            onChangeText={v => stockModal && setStockModal({ ...stockModal, [key]: v })}
+                                            keyboardType={key === 'invoiceNumber' ? 'default' : 'numeric'}
+                                            textAlign="right"
+                                            placeholder={placeholder}
+                                            placeholderTextColor={C.textMuted}
+                                        />
+                                    </View>
+                                </View>
+                            ))}
+                            <Text style={styles.fieldLabel}>ملاحظات</Text>
+                            <View style={[styles.inputWrap, { alignItems: 'flex-start', paddingVertical: 8 }]}>
+                                <TextInput
+                                    style={[styles.input, { minHeight: 56, textAlignVertical: 'top' }]}
+                                    value={stockModal?.notes || ''}
+                                    onChangeText={v => stockModal && setStockModal({ ...stockModal, notes: v })}
+                                    textAlign="right"
+                                    multiline
+                                    placeholder="ملاحظات التوريد..."
+                                    placeholderTextColor={C.textMuted}
+                                />
+                            </View>
+                            <View style={styles.modalBtns}>
+                                <TouchableOpacity style={styles.cancelBtn} onPress={() => setStockModal(null)}>
+                                    <Text style={styles.cancelBtnText}>إلغاء</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.saveBtn} onPress={saveStockReceive}>
+                                    <LinearGradient colors={[C.primary, C.accent]} style={styles.saveBtnGrad}>
+                                        <Text style={styles.saveBtnText}>تأكيد التوريد</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <View style={styles.modalBtns}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setStockModal(null)}>
-                                <Text style={styles.cancelBtnText}>إلغاء</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.saveBtn} onPress={saveStockQuantity}>
-                                <LinearGradient colors={[C.primary, C.accent]} style={styles.saveBtnGrad}>
-                                    <Text style={styles.saveBtnText}>حفظ</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                    </ScrollView>
                 </View>
             </Modal>
         </View>
@@ -378,8 +428,11 @@ const styles = StyleSheet.create({
     stockControls: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
     stockBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.white, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: C.border },
     stockQty: { fontSize: 20, fontFamily: 'Cairo_700Bold', color: C.primary, minWidth: 48, textAlign: 'center' },
-    stockSetBtn: { backgroundColor: C.primary + '12', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+    stockSetBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.primary + '12', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
     stockSetText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: C.primary },
+    currentStockBox: { flexDirection: 'row-reverse', justifyContent: 'space-between', backgroundColor: C.bg, borderRadius: 12, padding: 12, marginBottom: 12 },
+    currentStockLbl: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
+    currentStockVal: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.primary },
     stockModalName: { fontSize: 14, fontFamily: 'Cairo_600SemiBold', color: C.textSec, textAlign: 'center', marginBottom: 12 },
     medFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.border },
     medPrice: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.primary },

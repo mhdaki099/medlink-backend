@@ -13,7 +13,7 @@ const TABS = [
   { name: 'profile', icon: 'account', label: 'البروفايل', path: '/(warehouse)/profile' },
 ];
 
-const HIDE_TAB_BAR_ROUTES = new Set(['inventory']);
+const HIDE_TAB_BAR_ROUTES = new Set(['inventory', 'promoters']);
 
 const TAB_WIDTH = width / 3;
 const TAB_BAR_BASE_HEIGHT = PROVIDER_TAB_BAR_BASE_HEIGHT;
@@ -99,6 +99,7 @@ export default function WarehouseLayout() {
       <Tabs.Screen name="orders" options={{ title: 'الطلبات' }} />
       <Tabs.Screen name="profile" options={{ title: 'البروفايل' }} />
       <Tabs.Screen name="inventory" options={{ href: null }} />
+      <Tabs.Screen name="promoters" options={{ href: null }} />
     </Tabs>
   );
 }

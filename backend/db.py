@@ -22,7 +22,7 @@ def init_db():
     """Create all tables once at application startup. Call from main.py lifespan."""
     from models import (  # noqa: F401 – import triggers table registration
         User, MedicalHistoryRequest, RegistrationRequest, Medicine, LabTest,
-        WarehouseInventory, Appointment, Order, WarehouseOrder, LabBooking,
+        WarehouseInventory, Appointment, Order, WarehouseOrder, PharmacyStockLog, WarehousePromoter, LabBooking,
         LabResult, MedicalRecord, AuditLog, Review, Prescription, Payment,
         Favorite, FavoriteMedicine, CartItem, PatientNote, Notification,
         FamilyLink, ServiceBooking, DrugCatalog, AppointmentAuditLog,
@@ -118,6 +118,10 @@ def ensure_sqlite_columns():
         "orders": {
             "prescription_id": "TEXT",
             "prescription_code": "TEXT",
+        },
+        "warehouse_orders": {
+            "invoice": "JSON",
+            "purchase_order_number": "TEXT",
         },
     }
     is_postgres = not SQLALCHEMY_DATABASE_URL.startswith("sqlite")

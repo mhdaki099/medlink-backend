@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
+from typing import Optional
 import uuid
 import re
 
 from db import get_db
-from models import Order, WarehouseOrder, User, Medicine, WarehouseInventory, AuditLog, Notification, Prescription
+from models import Order, WarehouseOrder, User, Medicine, WarehouseInventory, AuditLog, Notification, Prescription, PharmacyStockLog, WarehousePromoter
 from auth_utils import get_current_user
 from utils.helpers import model_to_dict
 
@@ -106,25 +107,183 @@ def _find_pharmacy_medicine(db: Session, pharmacy_id: str, base_name: str):
     return None
 
 
+def _invoice_line_map(order: WarehouseOrder) -> dict:
+    inv = order.invoice if isinstance(order.invoice, dict) else {}
+    mapping = {}
+    for row in inv.get("items") or []:
+        for key in (row.get("item_id"), row.get("name"), row.get("base_name")):
+            if key:
+                mapping[key] = row
+    return mapping
+
+
+def _log_pharmacy_stock(
+    db: Session,
+    *,
+    pharmacy_id: str,
+    medicine_id: str,
+    quantity_before: int,
+    quantity_after: int,
+    quantity_added: int,
+    invoice_number: Optional[str] = None,
+    unit_price: Optional[float] = None,
+    warehouse_order_id: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> None:
+    db.add(PharmacyStockLog(
+        id=f"psl_{uuid.uuid4().hex[:8]}",
+        pharmacy_id=pharmacy_id,
+        medicine_id=medicine_id,
+        warehouse_order_id=warehouse_order_id,
+        invoice_number=invoice_number,
+        quantity_added=quantity_added,
+        quantity_before=quantity_before,
+        quantity_after=quantity_after,
+        unit_price=unit_price,
+        notes=notes,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    ))
+
+
+def _purchase_order_number(order: WarehouseOrder) -> str:
+    if order.purchase_order_number:
+        return order.purchase_order_number
+    short = order.id.replace("wo_", "").upper()
+    date_part = (order.created_at or datetime.now(timezone.utc).isoformat())[:10].replace("-", "")
+    return f"PO-{date_part}-{short}"
+
+
+def _generate_purchase_order_number(wo_id: str, created_at: str) -> str:
+    date_part = (created_at or "")[:10].replace("-", "")
+    short = wo_id.replace("wo_", "").upper()
+    return f"PO-{date_part}-{short}"
+
+
+def _apply_promoter_to_invoice(db: Session, invoice: dict, body: dict, warehouse_id: str) -> None:
+    promoter_id = body.get("promoter_id")
+    if promoter_id:
+        promoter = db.query(WarehousePromoter).filter(
+            WarehousePromoter.id == promoter_id,
+            WarehousePromoter.warehouse_id == warehouse_id,
+        ).first()
+        if not promoter:
+            raise HTTPException(400, "المندوب غير موجود")
+        pct = float(body["commission_percent"]) if body.get("commission_percent") is not None else float(promoter.commission_percent or 0)
+    elif body.get("promoter_name"):
+        pct = float(body.get("commission_percent") or 0)
+        invoice["promoter"] = {
+            "id": None,
+            "name": str(body.get("promoter_name")).strip(),
+            "commission_percent": pct,
+            "commission_amount": round(float(invoice.get("total") or 0) * pct / 100, 2),
+        }
+        return
+    else:
+        return
+    total = float(invoice.get("total") or 0)
+    invoice["promoter"] = {
+        "id": promoter.id,
+        "name": promoter.name,
+        "phone": promoter.phone,
+        "commission_percent": pct,
+        "commission_amount": round(total * pct / 100, 2),
+    }
+
+
+def build_warehouse_invoice(db: Session, order: WarehouseOrder) -> dict:
+    wh = db.query(User).filter(User.id == order.warehouse_id).first()
+    ph = db.query(User).filter(User.id == order.pharmacy_id).first()
+    enriched = _enrich_warehouse_order_items(db, order.items or [])
+    existing = order.invoice if isinstance(order.invoice, dict) else {}
+    existing_items = {row.get("item_id"): dict(row) for row in (existing.get("items") or []) if row.get("item_id")}
+    invoice_items = []
+    subtotal = 0.0
+    for item in enriched:
+        qty = _order_item_qty(item)
+        saved = existing_items.get(item.get("item_id"), {})
+        unit_price = float(saved.get("unit_price") if saved.get("unit_price") is not None else (item.get("bulk_price") or 0))
+        line_total = float(saved.get("line_total") if saved.get("line_total") is not None else unit_price * qty)
+        subtotal += line_total
+        invoice_items.append({
+            "item_id": item.get("item_id"),
+            "name": item.get("name"),
+            "base_name": item.get("base_name"),
+            "qty": qty,
+            "unit": item.get("unit"),
+            "unit_price": unit_price,
+            "line_total": line_total,
+            "retail_unit_price": saved.get("retail_unit_price"),
+        })
+    total = float(existing.get("total") if existing.get("total") is not None else (order.total or subtotal))
+    po_number = _purchase_order_number(order)
+    promoter = existing.get("promoter") or {}
+    if promoter and promoter.get("commission_percent") is not None and not promoter.get("commission_amount"):
+        promoter["commission_amount"] = round(total * float(promoter["commission_percent"]) / 100, 2)
+    return {
+        "number": existing.get("number") or f"INV-{order.id.replace('wo_', '').upper()}",
+        "date": existing.get("date") or (order.created_at or "")[:10] or datetime.now(timezone.utc).isoformat()[:10],
+        "order_id": order.id,
+        "purchase_order_number": po_number,
+        "order_status": order.status,
+        "warehouse": model_to_dict(wh, ["password"]) if wh else {},
+        "pharmacy": model_to_dict(ph, ["password"]) if ph else {},
+        "items": invoice_items,
+        "subtotal": round(subtotal, 2),
+        "total": round(total, 2),
+        "promoter": promoter,
+        "notes": existing.get("notes") or "",
+    }
+
+
+def ensure_warehouse_invoice(db: Session, order: WarehouseOrder) -> dict:
+    invoice = build_warehouse_invoice(db, order)
+    order.invoice = invoice
+    order.total = invoice.get("total") or order.total
+    return invoice
+
+
 def _apply_warehouse_delivery_to_pharmacy(db: Session, order: WarehouseOrder) -> list:
     """Add received warehouse items to the pharmacy medicine stock on confirm."""
     stock_updates = []
     enriched_items = _enrich_warehouse_order_items(db, order.items or [])
+    price_map = _invoice_line_map(order)
+    invoice_number = (order.invoice or {}).get("number") if isinstance(order.invoice, dict) else None
     for item in enriched_items:
         qty_packs = _order_item_qty(item)
         full_name = item.get("name") or ""
         base_name = item.get("base_name") or _normalize_warehouse_med_name(full_name) or full_name
         pack_units = int(item.get("units_per_pack") or _units_per_bulk_pack(full_name, item.get("unit") or "") or 1)
         units = qty_packs * max(1, pack_units)
+        line = price_map.get(item.get("item_id")) or price_map.get(full_name) or price_map.get(base_name) or {}
+        retail_price = line.get("retail_unit_price")
+        if retail_price is None and line.get("unit_price"):
+            retail_price = round(float(line["unit_price"]) / max(1, pack_units))
         med = _find_pharmacy_medicine(db, order.pharmacy_id, base_name)
         if med:
-            med.quantity = (med.quantity or 0) + units
+            before = med.quantity or 0
+            med.quantity = before + units
+            if retail_price is not None:
+                med.price = float(retail_price)
             _sync_medicine_stock_status(med)
+            _log_pharmacy_stock(
+                db,
+                pharmacy_id=order.pharmacy_id,
+                medicine_id=med.id,
+                quantity_before=before,
+                quantity_after=med.quantity,
+                quantity_added=units,
+                invoice_number=invoice_number,
+                unit_price=float(retail_price) if retail_price is not None else med.price,
+                warehouse_order_id=order.id,
+                notes="توريد من المستودع",
+            )
             stock_updates.append({
                 "medicine_id": med.id,
                 "name": med.name,
                 "added": units,
                 "total": med.quantity,
+                "price": med.price,
+                "invoice_number": invoice_number,
                 "created": False,
             })
             continue
@@ -133,7 +292,10 @@ def _apply_warehouse_delivery_to_pharmacy(db: Session, order: WarehouseOrder) ->
             inv = db.query(WarehouseInventory).filter(WarehouseInventory.id == item["item_id"]).first()
         bulk_price = float(item.get("bulk_price") or (inv.bulk_price if inv else 0) or 0)
         pack_units = _units_per_bulk_pack(full_name, item.get("unit") or "")
-        retail_price = round(bulk_price / pack_units) if bulk_price and pack_units else 0
+        if retail_price is None:
+            retail_price = round(bulk_price / pack_units) if bulk_price and pack_units else 0
+        else:
+            retail_price = float(retail_price)
         med_id = f"m_{uuid.uuid4().hex[:8]}"
         new_med = Medicine(
             id=med_id,
@@ -152,11 +314,25 @@ def _apply_warehouse_delivery_to_pharmacy(db: Session, order: WarehouseOrder) ->
             alternatives=[],
         )
         db.add(new_med)
+        _log_pharmacy_stock(
+            db,
+            pharmacy_id=order.pharmacy_id,
+            medicine_id=med_id,
+            quantity_before=0,
+            quantity_after=units,
+            quantity_added=units,
+            invoice_number=invoice_number,
+            unit_price=retail_price,
+            warehouse_order_id=order.id,
+            notes="توريد جديد من المستودع",
+        )
         stock_updates.append({
             "medicine_id": med_id,
             "name": base_name,
             "added": units,
             "total": units,
+            "price": retail_price,
+            "invoice_number": invoice_number,
             "created": True,
         })
     return stock_updates
@@ -341,6 +517,66 @@ def list_warehouse_orders(warehouse_id: str = Query(None), pharmacy_id: str = Qu
     return results
 
 
+@router.get("/warehouse/{order_id}/invoice")
+def get_warehouse_order_invoice(order_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    order = db.query(WarehouseOrder).filter(WarehouseOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "الطلب غير موجود")
+    role = current_user.get("role")
+    if role == "pharmacy" and current_user.get("sub") != order.pharmacy_id:
+        raise HTTPException(403, "غير مصرح")
+    if role == "warehouse" and current_user.get("sub") != order.warehouse_id:
+        raise HTTPException(403, "غير مصرح")
+    return build_warehouse_invoice(db, order)
+
+
+@router.put("/warehouse/{order_id}/invoice")
+def update_warehouse_order_invoice(order_id: str, body: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.get("role") not in ("warehouse", "admin"):
+        raise HTTPException(403, "تعديل الفاتورة للمستودع فقط")
+    order = db.query(WarehouseOrder).filter(WarehouseOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(404, "الطلب غير موجود")
+    if current_user.get("role") == "warehouse" and current_user.get("sub") != order.warehouse_id:
+        raise HTTPException(403, "غير مصرح")
+    current = build_warehouse_invoice(db, order)
+    if body.get("number"):
+        current["number"] = str(body["number"]).strip()
+    if body.get("date"):
+        current["date"] = str(body["date"]).strip()
+    if body.get("notes") is not None:
+        current["notes"] = str(body.get("notes") or "")
+    if body.get("items"):
+        by_id = {row.get("item_id"): row for row in current.get("items") or []}
+        for upd in body["items"]:
+            item_id = upd.get("item_id")
+            if not item_id or item_id not in by_id:
+                continue
+            row = by_id[item_id]
+            if "unit_price" in upd:
+                row["unit_price"] = float(upd["unit_price"] or 0)
+            if "qty" in upd:
+                row["qty"] = max(1, int(upd["qty"] or 1))
+            if "retail_unit_price" in upd:
+                row["retail_unit_price"] = float(upd["retail_unit_price"] or 0)
+            row["line_total"] = float(row.get("unit_price") or 0) * int(row.get("qty") or 1)
+        current["items"] = list(by_id.values())
+        current["subtotal"] = round(sum(float(i.get("line_total") or 0) for i in current["items"]), 2)
+    if body.get("total") is not None:
+        current["total"] = float(body.get("total") or 0)
+    else:
+        current["total"] = current.get("subtotal") or order.total
+    if "promoter_id" in body or "promoter_name" in body or "commission_percent" in body:
+        _apply_promoter_to_invoice(db, current, body, order.warehouse_id)
+    elif body.get("clear_promoter"):
+        current["promoter"] = {}
+    order.invoice = current
+    order.total = current["total"]
+    db.commit()
+    db.refresh(order)
+    return build_warehouse_invoice(db, order)
+
+
 @router.put("/warehouse/{order_id}/confirm")
 def pharmacy_confirm_warehouse_order(order_id: str, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.get("role") not in ("pharmacy", "admin"):
@@ -372,6 +608,7 @@ def pharmacy_confirm_warehouse_order(order_id: str, current_user: dict = Depends
     result = model_to_dict(order)
     result["items"] = _enrich_warehouse_order_items(db, result.get("items") or [])
     result["stock_updates"] = stock_updates
+    result["invoice"] = build_warehouse_invoice(db, order)
     wh = db.query(User).filter(User.id == order.warehouse_id).first()
     if wh:
         result["warehouse"] = model_to_dict(wh, ["password"])
@@ -392,8 +629,10 @@ def create_warehouse_order(order: dict, current_user: dict = Depends(get_current
     stored_items = _enrich_warehouse_order_items(db, raw_items)
     now = datetime.now(timezone.utc).isoformat()
     wo_id = f"wo_{uuid.uuid4().hex[:8]}"
+    po_number = _generate_purchase_order_number(wo_id, now)
     new_wo = WarehouseOrder(
         id=wo_id, pharmacy_id=pharmacy_id, warehouse_id=warehouse_id,
+        purchase_order_number=po_number,
         items=stored_items, total=order.get("total", 0), status="pending", created_at=now,
     )
     db.add(new_wo)
@@ -406,7 +645,7 @@ def create_warehouse_order(order: dict, current_user: dict = Depends(get_current
         id=f"ntf_{uuid.uuid4().hex[:8]}",
         user_id=warehouse_id,
         title="طلب جديد من صيدلية 🏭",
-        message=f"طلب من {pharmacy.name if pharmacy else 'صيدلية'}: {item_names}",
+        message=f"طلب شراء {po_number} من {pharmacy.name if pharmacy else 'صيدلية'}: {item_names}",
         type="warehouse_order",
         created_at=now,
     ))

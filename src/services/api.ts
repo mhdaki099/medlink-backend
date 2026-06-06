@@ -194,6 +194,9 @@ class ApiClient {
     updateMedicine(id: string, data: any) { return this.put<any>(`/pharmacies/medicines/${id}`, data); }
     adjustMedicineStock(id: string, delta: number) { return this.post<any>(`/pharmacies/medicines/${id}/stock-adjust`, { delta }); }
     setMedicineQuantity(id: string, quantity: number) { return this.post<any>(`/pharmacies/medicines/${id}/stock-adjust`, { quantity }); }
+    receiveMedicineStock(id: string, data: { quantity_add?: number; quantity?: number; invoice_number?: string; price?: number; notes?: string; warehouse_order_id?: string }) {
+        return this.post<any>(`/pharmacies/medicines/${id}/stock-receive`, data);
+    }
     deleteMedicine(id: string) { return this.delete<any>(`/pharmacies/medicines/${id}`); }
     async uploadMedicineExcel(pharmacyId: string, asset: { uri: string; name?: string }) {
         const formData = new FormData();
@@ -285,6 +288,16 @@ class ApiClient {
     createWarehouseOrder(data: any) { return this.post<any>('/orders/warehouse', data); }
     getPharmacyWarehouseOrders(pharmacyId: string) { return this.get<any[]>(`/orders/warehouse?pharmacy_id=${pharmacyId}`); }
     confirmPharmacyWarehouseOrder(orderId: string) { return this.put<any>(`/orders/warehouse/${orderId}/confirm`, {}); }
+    getWarehouseOrderInvoice(orderId: string) { return this.get<any>(`/orders/warehouse/${orderId}/invoice`); }
+    updateWarehouseOrderInvoice(orderId: string, data: any) { return this.put<any>(`/orders/warehouse/${orderId}/invoice`, data); }
+    getWarehousePromoters() { return this.get<any[]>('/warehouses/promoters'); }
+    createWarehousePromoter(data: { name: string; phone?: string; commission_percent: number }) {
+        return this.post<any>('/warehouses/promoters', data);
+    }
+    updateWarehousePromoter(id: string, data: Partial<{ name: string; phone: string; commission_percent: number; is_active: boolean }>) {
+        return this.put<any>(`/warehouses/promoters/${id}`, data);
+    }
+    deleteWarehousePromoter(id: string) { return this.delete<any>(`/warehouses/promoters/${id}`); }
 
     // ── Appointments ─────────────────────────────────────────────────────────
     getAppointments(params: { patient_id?: string; doctor_id?: string; status?: string } = {}) {

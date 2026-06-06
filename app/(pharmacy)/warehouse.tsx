@@ -24,6 +24,7 @@ export default function PharmacyWarehouse() {
     const [cart, setCart] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [orderSuccess, setOrderSuccess] = useState(false);
+    const [lastPoNumber, setLastPoNumber] = useState('');
     const [placing, setPlacing] = useState(false);
 
     useEffect(() => {
@@ -64,7 +65,8 @@ export default function PharmacyWarehouse() {
         const total = items.reduce((s, row) => s + (row.bulk_price || 0) * row.qty, 0);
         setPlacing(true);
         try {
-            await api.createWarehouseOrder({ pharmacy_id: user.id, warehouse_id: selectedWh, items, total });
+            const created = await api.createWarehouseOrder({ pharmacy_id: user.id, warehouse_id: selectedWh, items, total });
+            setLastPoNumber(created.purchase_order_number || '');
             setCart({});
             setOrderSuccess(true);
         } catch (e: any) { Alert.alert('خطأ', e.message); }
@@ -119,7 +121,12 @@ export default function PharmacyWarehouse() {
                                 <Text style={styles.itemStock}>مخزون: {item.stock}</Text>
                                 <Text style={styles.itemName}>{item.name}</Text>
                             </View>
-                            <Text style={styles.itemCat}>{item.category}</Text>
+                            {item.category ? (
+                                <View style={styles.itemCatPill}>
+                                    <MaterialCommunityIcons name="tag-outline" size={12} color="#EA580C" />
+                                    <Text style={styles.itemCatText} numberOfLines={1}>{item.category}</Text>
+                                </View>
+                            ) : null}
                             <Text style={styles.itemUnit}>الوحدة: {item.unit}</Text>
                             <Text style={styles.itemPrice}>{(item.bulk_price || 0).toLocaleString()} ل.س / وحدة</Text>
                             <Text style={styles.itemMin}>الحد الأدنى للطلب: {item.min_order}</Text>
@@ -151,7 +158,9 @@ export default function PharmacyWarehouse() {
                 visible={orderSuccess}
                 onClose={() => setOrderSuccess(false)}
                 title="تم إرسال الطلب"
-                subtitle="سيُجهّز المستودع طلبك ويشحنه — عند وصول الشحنة أكّد الاستلام لإضافة الأدوية لمخزونك."
+                subtitle={lastPoNumber
+                    ? `رقم أمر الشراء: ${lastPoNumber}\nسيُجهّز المستودع طلبك ويشحنه — عند وصول الشحنة أكّد الاستلام لإضافة الأدوية لمخزونك.`
+                    : 'سيُجهّز المستودع طلبك ويشحنه — عند وصول الشحنة أكّد الاستلام لإضافة الأدوية لمخزونك.'}
                 icon="truck-check"
                 iconColors={['#EA580C', '#F59E0B']}
                 actions={[
@@ -182,7 +191,12 @@ const styles = StyleSheet.create({
     itemTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
     itemName: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: C.text, flex: 1, textAlign: 'right' },
     itemStock: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: C.textMuted },
-    itemCat: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 2 },
+    itemCatPill: {
+        flexDirection: 'row-reverse', alignSelf: 'flex-end', alignItems: 'center', gap: 5,
+        backgroundColor: '#EA580C12', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4,
+        borderWidth: 1, borderColor: '#EA580C30', marginBottom: 6, maxWidth: '100%',
+    },
+    itemCatText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: '#EA580C', flexShrink: 1 },
     itemUnit: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 2 },
     itemPrice: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: C.warehouse, textAlign: 'right', marginBottom: 2 },
     itemMin: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: C.textMuted, textAlign: 'right', marginBottom: 8 },

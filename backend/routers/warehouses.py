@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import uuid
 
 from db import get_db
-from models import User, WarehouseInventory, WarehouseOrder, Notification
+from models import User, WarehouseInventory, WarehouseOrder, Notification, WarehousePromoter
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict
 
@@ -65,6 +65,83 @@ def list_warehouses(db: Session = Depends(get_db)):
     warehouses = db.query(User).filter(User.role == "warehouse").all()
     return [model_to_dict(w, ["password"]) for w in warehouses]
 
+
+@router.get("/promoters")
+def list_warehouse_promoters(current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    warehouse_id = current_user.get("sub")
+    if current_user.get("role") != "warehouse":
+        raise HTTPException(403, "للمستودع فقط")
+    rows = db.query(WarehousePromoter).filter(
+        WarehousePromoter.warehouse_id == warehouse_id,
+    ).order_by(WarehousePromoter.name).all()
+    return [model_to_dict(r) for r in rows]
+
+
+@router.post("/promoters")
+def create_warehouse_promoter(body: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    warehouse_id = current_user.get("sub")
+    if current_user.get("role") != "warehouse":
+        raise HTTPException(403, "للمستودع فقط")
+    name = str(body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "اسم المندوب مطلوب")
+    pct = float(body.get("commission_percent") or 0)
+    if pct < 0 or pct > 100:
+        raise HTTPException(400, "نسبة العمولة بين 0 و 100")
+    now = datetime.now(timezone.utc).isoformat()
+    row = WarehousePromoter(
+        id=f"wp_{uuid.uuid4().hex[:8]}",
+        warehouse_id=warehouse_id,
+        name=name,
+        phone=str(body.get("phone") or "").strip() or None,
+        commission_percent=pct,
+        is_active=True,
+        created_at=now,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return model_to_dict(row)
+
+
+@router.put("/promoters/{promoter_id}")
+def update_warehouse_promoter(promoter_id: str, body: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    row = db.query(WarehousePromoter).filter(WarehousePromoter.id == promoter_id).first()
+    if not row:
+        raise HTTPException(404, "المندوب غير موجود")
+    if current_user.get("role") == "warehouse" and current_user.get("sub") != row.warehouse_id:
+        raise HTTPException(403, "غير مصرح")
+    if "name" in body:
+        name = str(body.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "اسم المندوب مطلوب")
+        row.name = name
+    if "phone" in body:
+        row.phone = str(body.get("phone") or "").strip() or None
+    if "commission_percent" in body:
+        pct = float(body.get("commission_percent") or 0)
+        if pct < 0 or pct > 100:
+            raise HTTPException(400, "نسبة العمولة بين 0 و 100")
+        row.commission_percent = pct
+    if "is_active" in body:
+        row.is_active = bool(body.get("is_active"))
+    db.commit()
+    db.refresh(row)
+    return model_to_dict(row)
+
+
+@router.delete("/promoters/{promoter_id}")
+def delete_warehouse_promoter(promoter_id: str, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
+    row = db.query(WarehousePromoter).filter(WarehousePromoter.id == promoter_id).first()
+    if not row:
+        raise HTTPException(404, "المندوب غير موجود")
+    if current_user.get("role") == "warehouse" and current_user.get("sub") != row.warehouse_id:
+        raise HTTPException(403, "غير مصرح")
+    row.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
 @router.put("/orders/{order_id}/status")
 def update_order_status(order_id: str, status_update: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
     order = db.query(WarehouseOrder).filter(WarehouseOrder.id == order_id).first()
@@ -94,12 +171,14 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
     if "delivery_time" in status_update:
         order.delivery_time = status_update["delivery_time"]
     if new_status == "shipped":
+        from routers.orders import ensure_warehouse_invoice
+        ensure_warehouse_invoice(db, order)
         pharmacy = db.query(User).filter(User.id == order.pharmacy_id).first()
         db.add(Notification(
             id=f"ntf_{uuid.uuid4().hex[:8]}",
             user_id=order.pharmacy_id,
             title="شحنة من المستودع 🚚",
-            message=f"تم شحن طلبك من المستودع — يرجى تأكيد الاستلام عند الوصول",
+            message=f"تم شحن أمر الشراء {order.purchase_order_number or order.id} — يرجى تأكيد الاستلام عند الوصول",
             type="warehouse_order",
             created_at=now,
         ))
@@ -108,8 +187,15 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
 
 @router.post("/orders")
 def create_order(order: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    from routers.orders import _generate_purchase_order_number
     wo_id = f"wo_{uuid.uuid4().hex[:8]}"
-    new_wo = WarehouseOrder(id=wo_id, pharmacy_id=order.get("pharmacy_id"), warehouse_id=order.get("warehouse_id"), items=order.get("items", []), total=order.get("total", 0), status="pending", created_at=datetime.now(timezone.utc).isoformat())
+    now = datetime.now(timezone.utc).isoformat()
+    po_number = _generate_purchase_order_number(wo_id, now)
+    new_wo = WarehouseOrder(
+        id=wo_id, pharmacy_id=order.get("pharmacy_id"), warehouse_id=order.get("warehouse_id"),
+        purchase_order_number=po_number,
+        items=order.get("items", []), total=order.get("total", 0), status="pending", created_at=now,
+    )
     db.add(new_wo); db.commit(); db.refresh(new_wo)
     return model_to_dict(new_wo)
 
@@ -155,12 +241,20 @@ def update_inventory_item(item_id: str, updates: dict, current_user: dict = Depe
     item = db.query(WarehouseInventory).filter(WarehouseInventory.id == item_id).first()
     if not item:
         raise HTTPException(404, "الصنف غير موجود")
+    if current_user.get("role") == "warehouse" and current_user.get("sub") != item.warehouse_id:
+        raise HTTPException(403, "غير مصرح")
+    if "stock_add" in updates:
+        add_qty = max(0, int(updates.get("stock_add") or 0))
+        item.stock = (item.stock or 0) + add_qty
     for key in ["name", "category", "strength", "barcode", "bulk_price", "unit", "stock", "min_order"]:
-        if key in updates:
+        if key in updates and key != "stock_add":
             setattr(item, key, updates[key])
     db.commit()
     db.refresh(item)
-    return model_to_dict(item)
+    result = model_to_dict(item)
+    if updates.get("invoice_number"):
+        result["invoice_number"] = updates.get("invoice_number")
+    return result
 
 @router.get("/{warehouse_id}/orders")
 def get_orders(warehouse_id: str, current_user: dict = Depends(require_role("warehouse", "pharmacy", "admin")), db: Session = Depends(get_db)):

@@ -101,6 +101,16 @@ export default function WarehouseDashboard() {
                     <Text style={styles.quickSub}>{pendingOrders} طلب جديد</Text>
                 </TouchableOpacity>
             </View>
+            <TouchableOpacity style={styles.promoterBanner} onPress={() => router.push('/(warehouse)/promoters' as any)}>
+                <View style={styles.promoterBannerIcon}>
+                    <MaterialCommunityIcons name="account-tie" size={22} color="#6366F1" />
+                </View>
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={styles.promoterBannerTitle}>المندوبون والمسوقون</Text>
+                    <Text style={styles.promoterBannerSub}>إدارة نسب العمولة وربطها بالفواتير</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-left" size={22} color="#94A3B8" />
+            </TouchableOpacity>
 
             {lowStock > 0 && (
                 <View style={styles.alertBox}>
@@ -176,6 +186,10 @@ const styles = StyleSheet.create({
     quickIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
     quickTitle: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#111827', textAlign: 'center' },
     quickSub: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: '#6B7280', textAlign: 'center', marginTop: 2 },
+    promoterBanner: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 12, backgroundColor: '#FFF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+    promoterBannerIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#6366F115', alignItems: 'center', justifyContent: 'center' },
+    promoterBannerTitle: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: '#111827' },
+    promoterBannerSub: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#6B7280', marginTop: 2 },
     alertBox: { marginHorizontal: 16, backgroundColor: '#FEF3C7', borderRadius: 14, padding: 12, marginBottom: 4, marginTop: 12 },
     alertText: { color: '#D97706', fontFamily: 'Cairo_600SemiBold', fontSize: 13, textAlign: 'right' },
     section: { paddingHorizontal: 16, paddingBottom: 10 },

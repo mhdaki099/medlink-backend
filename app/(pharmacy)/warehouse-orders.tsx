@@ -7,6 +7,7 @@ import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSubscreenBottomPadding } from '../../src/constants/layout';
 import ModernSheet from '../../src/components/ModernSheet';
+import WarehouseInvoiceSheet from '../../src/components/WarehouseInvoiceSheet';
 
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
@@ -45,6 +46,8 @@ export default function PharmacyWarehouseOrders() {
     const [pendingOrder, setPendingOrder] = useState<any | null>(null);
     const [successData, setSuccessData] = useState<{ stockUpdates: any[]; warehouseName: string } | null>(null);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [invoiceData, setInvoiceData] = useState<any | null>(null);
+    const [invoiceLoading, setInvoiceLoading] = useState(false);
 
     const load = async () => {
         if (!user?.id) return;
@@ -69,6 +72,18 @@ export default function PharmacyWarehouseOrders() {
     }, [orders, filter]);
 
     const awaitingConfirm = orders.filter(o => o.status === 'shipped').length;
+
+    const openInvoice = async (orderId: string) => {
+        setInvoiceLoading(true);
+        try {
+            const inv = await api.getWarehouseOrderInvoice(orderId);
+            setInvoiceData(inv);
+        } catch (e: any) {
+            setErrorMsg(e.message || 'تعذر تحميل الفاتورة');
+        } finally {
+            setInvoiceLoading(false);
+        }
+    };
 
     const handleConfirm = async () => {
         if (!pendingOrder) return;
@@ -102,6 +117,12 @@ export default function PharmacyWarehouseOrders() {
                 </View>
                 <Text style={styles.whName}>{ord.warehouse?.name || 'المستودع'}</Text>
             </View>
+            {ord.purchase_order_number ? (
+                <View style={styles.poRow}>
+                    <MaterialCommunityIcons name="file-sign" size={14} color={C.primary} />
+                    <Text style={styles.poText}>أمر شراء: {ord.purchase_order_number}</Text>
+                </View>
+            ) : null}
             <Text style={styles.date}>📅 {ord.created_at?.split('T')[0] || 'اليوم'}</Text>
             {ord.status === 'delivered' && (
                 <View style={styles.deliveredNote}>
@@ -118,7 +139,15 @@ export default function PharmacyWarehouseOrders() {
                 ))}
             </View>
             <View style={styles.footer}>
-                <Text style={styles.total}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                <View style={{ gap: 8, alignItems: 'flex-end' }}>
+                    <Text style={styles.total}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                    {['shipped', 'delivered', 'processing'].includes(ord.status) && (
+                        <TouchableOpacity style={styles.invoiceBtn} onPress={() => openInvoice(ord.id)} disabled={invoiceLoading}>
+                            <MaterialCommunityIcons name="file-document-outline" size={16} color={C.primary} />
+                            <Text style={styles.invoiceBtnText}>عرض الفاتورة</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
                 {ord.status === 'shipped' && (
                     <TouchableOpacity
                         style={[styles.confirmBtn, confirmingId === ord.id && { opacity: 0.7 }]}
@@ -275,6 +304,12 @@ export default function PharmacyWarehouseOrders() {
                 )}
             </ModernSheet>
 
+            <WarehouseInvoiceSheet
+                visible={!!invoiceData}
+                onClose={() => setInvoiceData(null)}
+                invoice={invoiceData}
+            />
+
             <ModernSheet
                 visible={!!errorMsg}
                 onClose={() => setErrorMsg(null)}
@@ -312,6 +347,8 @@ const styles = StyleSheet.create({
     cardDelivered: { borderWidth: 1, borderColor: C.success + '30' },
     cardTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     whName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.text },
+    poRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 6, alignSelf: 'flex-end' },
+    poText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: C.primary },
     badge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
     badgeText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     date: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 8 },
@@ -323,6 +360,8 @@ const styles = StyleSheet.create({
     itemQty: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#EA580C' },
     footer: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
     total: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#EA580C' },
+    invoiceBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.primary + '12', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+    invoiceBtnText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: C.primary },
     confirmBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     confirmText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
     sheetItems: { gap: 8 },

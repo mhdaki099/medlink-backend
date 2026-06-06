@@ -33,6 +33,25 @@ const STATUS_CFG: Record<StockStatus, { label: string; color: string; icon: stri
     out: { label: 'نفد', color: C.danger, icon: 'close-circle' },
 };
 
+const CATEGORY_PALETTE = ['#1E88E5', '#8B5CF6', '#EA580C', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#6366F1'];
+
+function categoryColor(name: string): string {
+    if (!name || name === 'الكل') return C.primary;
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return CATEGORY_PALETTE[Math.abs(hash) % CATEGORY_PALETTE.length];
+}
+
+function CategoryBadge({ label }: { label: string }) {
+    const color = categoryColor(label);
+    return (
+        <View style={[styles.categoryBadge, { backgroundColor: color + '15', borderColor: color + '45' }]}>
+            <MaterialCommunityIcons name="tag-outline" size={12} color={color} />
+            <Text style={[styles.categoryBadgeText, { color }]} numberOfLines={1}>{label}</Text>
+        </View>
+    );
+}
+
 export default function WarehouseInventory() {
     const { user } = useAuth();
     const router = useRouter();
@@ -44,6 +63,8 @@ export default function WarehouseInventory() {
     const [categoryFilter, setCategoryFilter] = useState('الكل');
     const [showAdd, setShowAdd] = useState(false);
     const [detailItem, setDetailItem] = useState<any | null>(null);
+    const [stockForm, setStockForm] = useState({ stockAdd: '', invoiceNumber: '', bulkPrice: '', stock: '' });
+    const [stockSaving, setStockSaving] = useState(false);
     const [form, setForm] = useState({ name: '', category: '', strength: '', barcode: '', bulk_price: '', stock: '', unit: 'علبة', min_order: '1' });
 
     const load = async () => {
@@ -57,9 +78,17 @@ export default function WarehouseInventory() {
 
     useEffect(() => { load(); }, [user]);
 
+    const categoryCounts = useMemo(() => {
+        const counts: Record<string, number> = { الكل: inventory.length };
+        inventory.forEach(i => {
+            if (i.category) counts[i.category] = (counts[i.category] || 0) + 1;
+        });
+        return counts;
+    }, [inventory]);
+
     const categories = useMemo(() => {
-        const cats = new Set(inventory.map(i => i.category).filter(Boolean));
-        return ['الكل', ...Array.from(cats)];
+        const cats = Array.from(new Set(inventory.map(i => i.category).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ar'));
+        return ['الكل', ...cats];
     }, [inventory]);
 
     const stats = useMemo(() => {
@@ -102,6 +131,37 @@ export default function WarehouseInventory() {
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
+    const openDetail = (item: any) => {
+        setDetailItem(item);
+        setStockForm({
+            stockAdd: '',
+            invoiceNumber: '',
+            bulkPrice: String(item.bulk_price || ''),
+            stock: String(item.stock || 0),
+        });
+    };
+
+    const saveStockUpdate = async () => {
+        if (!detailItem?.id) return;
+        const stockAdd = parseInt(stockForm.stockAdd) || 0;
+        const payload: any = {};
+        if (stockAdd > 0) payload.stock_add = stockAdd;
+        if (stockForm.bulkPrice) payload.bulk_price = parseFloat(stockForm.bulkPrice) || 0;
+        if (stockForm.stock && !stockAdd) payload.stock = parseInt(stockForm.stock) || 0;
+        if (stockForm.invoiceNumber.trim()) payload.invoice_number = stockForm.invoiceNumber.trim();
+        if (!payload.stock_add && payload.stock === undefined && payload.bulk_price === undefined) {
+            return Alert.alert('تنبيه', 'أدخل كمية للإضافة أو حدّث السعر');
+        }
+        setStockSaving(true);
+        try {
+            await api.updateWarehouseInventoryItem(detailItem.id, payload);
+            setDetailItem(null);
+            load();
+            Alert.alert('✅ تم', stockAdd > 0 ? `أُضيف ${stockAdd} للمخزون` : 'تم تحديث الصنف');
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+        finally { setStockSaving(false); }
+    };
+
     const renderCard = (item: any) => {
         const status = getStockStatus(item);
         const cfg = STATUS_CFG[status];
@@ -109,15 +169,15 @@ export default function WarehouseInventory() {
         const barPct = Math.min(100, ((item.stock || 0) / maxBar) * 100);
 
         return (
-            <TouchableOpacity key={item.id} style={[styles.itemCard, status !== 'ok' && { borderColor: cfg.color + '40' }]} activeOpacity={0.9} onPress={() => setDetailItem(item)}>
+            <TouchableOpacity key={item.id} style={[styles.itemCard, status !== 'ok' && { borderColor: cfg.color + '40' }]} activeOpacity={0.9} onPress={() => openDetail(item)}>
                 <View style={styles.itemHeader}>
                     <View style={[styles.statusPill, { backgroundColor: cfg.color + '18' }]}>
                         <MaterialCommunityIcons name={cfg.icon as any} size={14} color={cfg.color} />
                         <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
                     </View>
-                    <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                        <Text style={styles.itemName}>{item.name}</Text>
-                        {item.category ? <Text style={styles.itemCat}>{item.category}</Text> : null}
+                    <View style={styles.itemTitleCol}>
+                        <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+                        {item.category ? <CategoryBadge label={item.category} /> : null}
                     </View>
                 </View>
 
@@ -190,7 +250,7 @@ export default function WarehouseInventory() {
             <ScrollView
                 horizontal showsHorizontalScrollIndicator={false}
                 style={styles.statsScroll}
-                contentContainerStyle={styles.statsRow}
+                contentContainerStyle={[styles.statsRow, styles.hRowRtl]}
             >
                 {[
                     { label: 'إجمالي الوحدات', val: stats.totalUnits.toLocaleString(), icon: 'cube-outline', color: C.primary },
@@ -206,17 +266,46 @@ export default function WarehouseInventory() {
                 ))}
             </ScrollView>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catRow}>
-                {categories.map(cat => (
-                    <TouchableOpacity
-                        key={cat}
-                        style={[styles.catChip, categoryFilter === cat && styles.catChipActive]}
-                        onPress={() => setCategoryFilter(cat)}
-                    >
-                        <Text style={[styles.catText, categoryFilter === cat && styles.catTextActive]}>{cat}</Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
+            <View style={styles.catSection}>
+                <View style={styles.catSectionHeader}>
+                    <Text style={styles.catSectionTitle}>التصنيف</Text>
+                    <Text style={styles.catSectionHint}>{categoryCounts[categoryFilter] ?? 0} صنف</Text>
+                </View>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={[styles.catRow, styles.hRowRtl]}
+                >
+                    {categories.map(cat => {
+                        const active = categoryFilter === cat;
+                        const color = categoryColor(cat);
+                        const count = categoryCounts[cat] ?? 0;
+                        return (
+                            <TouchableOpacity
+                                key={cat}
+                                style={[
+                                    styles.catChip,
+                                    active && { backgroundColor: color, borderColor: color, shadowColor: color },
+                                ]}
+                                onPress={() => setCategoryFilter(cat)}
+                                activeOpacity={0.85}
+                            >
+                                <MaterialCommunityIcons
+                                    name={cat === 'الكل' ? 'view-grid-outline' : 'tag-outline'}
+                                    size={14}
+                                    color={active ? '#FFF' : color}
+                                />
+                                <Text style={[styles.catText, active && styles.catTextActive]} numberOfLines={1}>
+                                    {cat}
+                                </Text>
+                                <View style={[styles.catCount, active && styles.catCountActive]}>
+                                    <Text style={[styles.catCountText, active && styles.catCountTextActive]}>{count}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </ScrollView>
+            </View>
 
             <ScrollView
                 style={styles.list}
@@ -241,8 +330,15 @@ export default function WarehouseInventory() {
                         <Text style={styles.detailTitle}>{detailItem?.name}</Text>
                         {detailItem && (
                             <ScrollView showsVerticalScrollIndicator={false}>
+                                <View style={styles.detailCategoryRow}>
+                                    <Text style={styles.detailKey}>التصنيف</Text>
+                                    {detailItem.category ? (
+                                        <CategoryBadge label={detailItem.category} />
+                                    ) : (
+                                        <Text style={styles.detailVal}>—</Text>
+                                    )}
+                                </View>
                                 {[
-                                    ['التصنيف', detailItem.category || '—'],
                                     ['العيار', detailItem.strength || '—'],
                                     ['الباركود', detailItem.barcode || '—'],
                                     ['الوحدة', detailItem.unit || '—'],
@@ -258,9 +354,33 @@ export default function WarehouseInventory() {
                                 ))}
                             </ScrollView>
                         )}
-                        <TouchableOpacity style={styles.closeBtn} onPress={() => setDetailItem(null)}>
-                            <Text style={styles.closeBtnText}>إغلاق</Text>
-                        </TouchableOpacity>
+                        <Text style={styles.updateTitle}>تحديث المخزون</Text>
+                        <Text style={styles.updateHint}>المخزون الحالي: {detailItem?.stock} {detailItem?.unit}</Text>
+                        {[
+                            { key: 'stockAdd', label: 'إضافة كمية', placeholder: '100' },
+                            { key: 'invoiceNumber', label: 'رقم فاتورة التوريد', placeholder: 'INV-WH-001' },
+                            { key: 'bulkPrice', label: 'سعر الجملة (ل.س)', placeholder: '380000' },
+                        ].map(({ key, label, placeholder }) => (
+                            <View key={key}>
+                                <Text style={styles.updateLabel}>{label}</Text>
+                                <TextInput
+                                    style={styles.updateInput}
+                                    value={(stockForm as any)[key]}
+                                    onChangeText={v => setStockForm(f => ({ ...f, [key]: v }))}
+                                    placeholder={placeholder}
+                                    keyboardType={key === 'invoiceNumber' ? 'default' : 'numeric'}
+                                    textAlign="right"
+                                />
+                            </View>
+                        ))}
+                        <View style={styles.detailActions}>
+                            <TouchableOpacity style={styles.closeBtn} onPress={() => setDetailItem(null)}>
+                                <Text style={styles.closeBtnText}>إغلاق</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.saveStockBtn, stockSaving && { opacity: 0.7 }]} onPress={saveStockUpdate} disabled={stockSaving}>
+                                <Text style={styles.closeBtnText}>{stockSaving ? 'جاري الحفظ...' : 'حفظ التحديث'}</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -312,23 +432,74 @@ const styles = StyleSheet.create({
     headerSub: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: 'rgba(255,255,255,0.75)', textAlign: 'right' },
     searchBar: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16, paddingHorizontal: 14, height: 46, gap: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
     searchInput: { flex: 1, fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#FFF' },
-    statsScroll: { maxHeight: 110, marginTop: -8 },
+    statsScroll: { maxHeight: 110, marginTop: 4 },
     statsRow: { paddingHorizontal: 16, gap: 10, paddingVertical: 12 },
+    hRowRtl: { flexDirection: 'row-reverse', alignItems: 'center' },
     statCard: { width: 130, backgroundColor: C.white, borderRadius: 16, padding: 14, borderTopWidth: 3, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2, gap: 4 },
     statVal: { fontSize: 18, fontFamily: 'Cairo_700Bold' },
     statLbl: { fontSize: 10, fontFamily: 'Cairo_400Regular', color: C.textSec },
-    catRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 8 },
-    catChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: C.white, borderWidth: 1, borderColor: C.border },
-    catChipActive: { backgroundColor: C.primary, borderColor: C.primary },
-    catText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
+    catSection: {
+        backgroundColor: C.white,
+        marginHorizontal: 16,
+        marginTop: 4,
+        marginBottom: 10,
+        borderRadius: 18,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: C.border,
+        shadowColor: '#000',
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    catSectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, marginBottom: 10 },
+    catSectionTitle: { fontSize: 14, fontFamily: 'Cairo_700Bold', color: C.text },
+    catSectionHint: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec },
+    catRow: { paddingHorizontal: 14, gap: 10, paddingBottom: 2 },
+    catChip: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 22,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1.5,
+        borderColor: C.border,
+        maxWidth: 200,
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 1,
+    },
+    catText: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: C.textSec, flexShrink: 1 },
     catTextActive: { color: '#FFF' },
+    catCount: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
+    catCountActive: { backgroundColor: 'rgba(255,255,255,0.28)' },
+    catCountText: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: C.textSec },
+    catCountTextActive: { color: '#FFF' },
+    categoryBadge: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+        gap: 5,
+        marginTop: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: '#F1F5F9',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        maxWidth: '100%',
+    },
+    categoryBadgeText: { fontSize: 11, fontFamily: 'Cairo_600SemiBold', color: C.textSec, flexShrink: 1 },
+    itemTitleCol: { flex: 1, alignItems: 'flex-end', minWidth: 0 },
     list: { flex: 1, paddingHorizontal: 16 },
     empty: { alignItems: 'center', marginTop: 60, gap: 12 },
     emptyText: { fontSize: 15, fontFamily: 'Cairo_400Regular', color: C.textSec },
     itemCard: { backgroundColor: C.white, borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
     itemHeader: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
     itemName: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: C.text, textAlign: 'right' },
-    itemCat: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginTop: 2 },
+    detailCategoryRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
     statusPill: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
     statusText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     stockBarWrap: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 12 },
@@ -348,7 +519,13 @@ const styles = StyleSheet.create({
     detailRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
     detailKey: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
     detailVal: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: C.text },
-    closeBtn: { marginTop: 16, backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+    updateTitle: { fontSize: 15, fontFamily: 'Cairo_700Bold', color: C.text, textAlign: 'right', marginTop: 12, marginBottom: 4 },
+    updateHint: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 10 },
+    updateLabel: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.textSec, textAlign: 'right', marginBottom: 4, marginTop: 6 },
+    updateInput: { backgroundColor: C.bg, borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingHorizontal: 12, height: 44, fontFamily: 'Cairo_400Regular' },
+    detailActions: { flexDirection: 'row-reverse', gap: 10, marginTop: 16 },
+    closeBtn: { flex: 1, backgroundColor: '#94A3B8', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+    saveStockBtn: { flex: 1, backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
     closeBtnText: { color: '#FFF', fontFamily: 'Cairo_700Bold', fontSize: 15 },
     addSheet: { backgroundColor: '#FFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, gap: 8 },
     addTitle: { fontSize: 18, fontFamily: 'Cairo_700Bold', color: C.text, textAlign: 'center', marginBottom: 8 },

@@ -225,10 +225,38 @@ class WarehouseOrder(Base):
     id = Column(String, primary_key=True, index=True)
     pharmacy_id = Column(String, ForeignKey("users.id"))
     warehouse_id = Column(String, ForeignKey("users.id"))
+    purchase_order_number = Column(String, nullable=True, index=True)
     items = Column(JSON)
     total = Column(Float)
     status = Column(String)
     delivery_time = Column(String, nullable=True)
+    created_at = Column(String)
+    invoice = Column(JSON, nullable=True)
+
+
+class WarehousePromoter(Base):
+    __tablename__ = "warehouse_promoters"
+    id = Column(String, primary_key=True, index=True)
+    warehouse_id = Column(String, ForeignKey("users.id"))
+    name = Column(String)
+    phone = Column(String, nullable=True)
+    commission_percent = Column(Float, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(String)
+
+
+class PharmacyStockLog(Base):
+    __tablename__ = "pharmacy_stock_logs"
+    id = Column(String, primary_key=True, index=True)
+    pharmacy_id = Column(String, ForeignKey("users.id"))
+    medicine_id = Column(String, ForeignKey("medicines.id"))
+    warehouse_order_id = Column(String, nullable=True)
+    invoice_number = Column(String, nullable=True)
+    quantity_added = Column(Integer, default=0)
+    quantity_before = Column(Integer, default=0)
+    quantity_after = Column(Integer, default=0)
+    unit_price = Column(Float, nullable=True)
+    notes = Column(String, nullable=True)
     created_at = Column(String)
 
 

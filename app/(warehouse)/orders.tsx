@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import WarehouseInvoiceSheet from '../../src/components/WarehouseInvoiceSheet';
 
 import { useProviderTabBarClearance } from '../../src/constants/layout';
 const C = {
@@ -21,18 +22,58 @@ export default function WarehouseOrders() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [filter, setFilter] = useState('all');
+    const [invoiceData, setInvoiceData] = useState<any | null>(null);
+    const [invoiceSaving, setInvoiceSaving] = useState(false);
+    const [invoiceEdit, setInvoiceEdit] = useState(false);
+    const [promoters, setPromoters] = useState<any[]>([]);
 
     const load = async () => {
         if (!user?.id) return;
-        try { const ords = await api.getWarehouseOrders(user.id); setOrders(ords); }
+        try {
+            const [ords, promos] = await Promise.all([
+                api.getWarehouseOrders(user.id),
+                api.getWarehousePromoters().catch(() => []),
+            ]);
+            setOrders(ords);
+            setPromoters(promos);
+        }
         catch (e) { console.warn(e); } finally { setLoading(false); setRefreshing(false); }
     };
 
     useEffect(() => { load(); }, [user]);
 
     const update = async (id: string, status: string) => {
-        try { await api.updateWarehouseOrderStatus(id, status); load(); }
+        try {
+            await api.updateWarehouseOrderStatus(id, status);
+            load();
+            if (status === 'shipped') {
+                const inv = await api.getWarehouseOrderInvoice(id);
+                setInvoiceData(inv);
+                setInvoiceEdit(true);
+            }
+        }
         catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
+
+    const openInvoice = async (orderId: string, editable: boolean) => {
+        try {
+            const inv = await api.getWarehouseOrderInvoice(orderId);
+            setInvoiceData(inv);
+            setInvoiceEdit(editable);
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+    };
+
+    const saveInvoice = async (data: any) => {
+        if (!invoiceData?.order_id) return;
+        setInvoiceSaving(true);
+        try {
+            const inv = await api.updateWarehouseOrderInvoice(invoiceData.order_id, data);
+            setInvoiceData(inv);
+            setInvoiceEdit(false);
+            load();
+            Alert.alert('✅ تم', 'تم حفظ الفاتورة');
+        } catch (e: any) { Alert.alert('خطأ', e.message); }
+        finally { setInvoiceSaving(false); }
     };
 
     const filtered = filter === 'all' ? orders : orders.filter(o => o.status === filter);
@@ -83,6 +124,12 @@ export default function WarehouseOrders() {
                                 </View>
                                 <Text style={styles.pharmacyName}>{ord.pharmacy?.name || 'صيدلية'}</Text>
                             </View>
+                            {(ord.purchase_order_number) && (
+                                <View style={styles.poRow}>
+                                    <MaterialCommunityIcons name="file-sign" size={14} color={C.primary} />
+                                    <Text style={styles.poText}>{ord.purchase_order_number}</Text>
+                                </View>
+                            )}
                             <View style={styles.metaRow}>
                                 <View style={styles.metaPill}>
                                     <MaterialCommunityIcons name="calendar-outline" size={13} color={C.textSec} />
@@ -106,7 +153,15 @@ export default function WarehouseOrders() {
                                 </View>
                             )}
                             <View style={styles.cardFooter}>
-                                <Text style={styles.totalText}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                                    <Text style={styles.totalText}>{(ord.total || 0).toLocaleString()} ل.س</Text>
+                                    {ord.status !== 'pending' && ord.status !== 'cancelled' && (
+                                        <TouchableOpacity style={styles.invoiceBtn} onPress={() => openInvoice(ord.id, ord.status !== 'delivered')}>
+                                            <MaterialCommunityIcons name="file-document-edit-outline" size={14} color={C.primary} />
+                                            <Text style={styles.invoiceBtnText}>{ord.status === 'delivered' ? 'عرض الفاتورة' : 'تعديل الفاتورة'}</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                                 {ord.status === 'pending' && (
                                     <View style={styles.actions}>
                                         <TouchableOpacity style={styles.rejectBtn} onPress={() => update(ord.id, 'cancelled')}>
@@ -131,6 +186,16 @@ export default function WarehouseOrders() {
                         </View>
                     ))}
             </ScrollView>
+
+            <WarehouseInvoiceSheet
+                visible={!!invoiceData}
+                onClose={() => { setInvoiceData(null); setInvoiceEdit(false); }}
+                invoice={invoiceData}
+                editable={invoiceEdit}
+                promoters={promoters}
+                onSave={saveInvoice}
+                saving={invoiceSaving}
+            />
         </View>
     );
 }
@@ -154,6 +219,8 @@ const styles = StyleSheet.create({
     card: { backgroundColor: C.white, borderRadius: 20, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 3 },
     cardTop: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     pharmacyName: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: C.text },
+    poRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: 8, alignSelf: 'flex-end' },
+    poText: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: C.primary },
     statusBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
     statusText: { fontSize: 11, fontFamily: 'Cairo_700Bold' },
     metaRow: { flexDirection: 'row-reverse', gap: 8, marginBottom: 10 },
@@ -170,4 +237,6 @@ const styles = StyleSheet.create({
     deliveredBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.success + '12', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     deliveredText: { color: C.success, fontSize: 13, fontFamily: 'Cairo_700Bold' },
     waitingText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.textSec },
+    invoiceBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: C.primary + '12', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
+    invoiceBtnText: { fontSize: 10, fontFamily: 'Cairo_700Bold', color: C.primary },
 });
