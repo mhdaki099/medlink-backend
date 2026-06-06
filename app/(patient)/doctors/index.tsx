@@ -33,7 +33,7 @@ export default function DoctorsScreen() {
     const loadData = async (s?: string) => {
         try {
             const [docs, specs, apts, mine] = await Promise.all([
-                api.getDoctors(s === 'all' ? undefined : s),
+                api.getDoctors({ specialization: s === 'all' ? undefined : s }),
                 api.getSpecializations(),
                 user?.id ? api.getAppointments({ patient_id: user.id }) : Promise.resolve([]),
                 user?.id ? api.getMyDoctors(user.id).catch(() => []) : Promise.resolve([])

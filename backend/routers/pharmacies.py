@@ -8,6 +8,7 @@ from db import get_db
 from models import User, Medicine, FavoriteMedicine, CartItem, Favorite, Order, Review, PharmacyStockLog
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict, safe_update
+from utils.homepage_featured import query_homepage_providers
 
 router = APIRouter()
 
@@ -19,8 +20,11 @@ def list_pharmacies(
     province: str = Query(None),
     district: str = Query(None),
     area: str = Query(None),
+    homepage: bool = Query(False),
     db: Session = Depends(get_db),
 ):
+    if homepage:
+        return [model_to_dict(p, ["password"]) for p in query_homepage_providers(db, "pharmacy")]
     pharmacies = db.query(User).filter(User.role == "pharmacy", User.is_active == True).all()
     results = []
     for p in pharmacies:

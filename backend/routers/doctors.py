@@ -7,6 +7,7 @@ from db import get_db
 from models import User, Appointment, Review, Favorite, PatientNote, Prescription, MedicalRecord, Notification
 from auth_utils import get_current_user, require_role, hash_password
 from utils.helpers import model_to_dict, safe_update
+from utils.homepage_featured import query_homepage_providers
 from utils.secretary_permissions import (
     parse_permissions_payload,
     get_effective_permissions,
@@ -59,7 +60,15 @@ class ReviewRequest(BaseModel):
     comment: str = ""
 
 @router.get("")
-def list_doctors(specialization: str = Query(None), province: str = Query(None), district: str = Query(None), db: Session = Depends(get_db)):
+def list_doctors(
+    specialization: str = Query(None),
+    province: str = Query(None),
+    district: str = Query(None),
+    homepage: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    if homepage:
+        return [model_to_dict(d, ["password"]) for d in query_homepage_providers(db, "doctor")]
     query = db.query(User).filter(User.role == "doctor", User.is_active == True)
     if specialization and specialization.lower() not in ("all", "الكل", ""):
         query = query.filter(

@@ -6,16 +6,23 @@ import { ADMIN_THEME, ADMIN_TAB_BAR_HEIGHT } from '../../src/constants/adminThem
 import { useAdminPermissions } from '../../src/hooks/useAdminPermissions';
 import { useEffect } from 'react';
 
+function tabHref(ready: boolean, allowed: boolean) {
+    if (!ready) return undefined;
+    return allowed ? undefined : null;
+}
+
 export default function AdminLayout() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
-    const { can, isSuperAdmin } = useAdminPermissions();
+    const { can, isSuperAdmin, isReady } = useAdminPermissions();
+    const tabBottom = Math.max(insets.bottom, 12);
 
     useEffect(() => {
+        if (!isReady) return;
         if (!can('dashboard_view') && can('users_view')) router.replace('/(admin)/users');
         else if (!can('dashboard_view') && can('registrations_view')) router.replace('/(admin)/new-accounts');
         else if (!can('dashboard_view') && can('logs_view')) router.replace('/(admin)/logs');
-    }, []);
+    }, [isReady]);
 
     return (
         <Tabs
@@ -25,29 +32,35 @@ export default function AdminLayout() {
                 tabBarInactiveTintColor: ADMIN_THEME.textMuted,
                 tabBarStyle: {
                     position: 'absolute',
-                    bottom: Math.max(insets.bottom, 12),
-                    left: 16,
-                    right: 16,
+                    bottom: tabBottom,
+                    left: 12,
+                    right: 12,
                     height: ADMIN_TAB_BAR_HEIGHT,
                     backgroundColor: ADMIN_THEME.surface,
-                    borderRadius: 20,
+                    borderRadius: 18,
                     borderTopWidth: 0,
-                    paddingTop: 8,
-                    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
+                    paddingTop: 6,
+                    paddingBottom: Platform.OS === 'ios' ? 8 : 6,
+                    zIndex: 999,
                     ...Platform.select({
-                        ios: { shadowColor: ADMIN_THEME.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16 },
-                        android: { elevation: 12 },
+                        ios: {
+                            shadowColor: ADMIN_THEME.shadow,
+                            shadowOffset: { width: 0, height: 6 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 12,
+                        },
+                        android: { elevation: 24 },
                     }),
                 },
-                tabBarLabelStyle: { fontFamily: 'Cairo_700Bold', fontSize: 10, marginTop: 2 },
-                tabBarItemStyle: { paddingVertical: 4 },
+                tabBarLabelStyle: { fontFamily: 'Cairo_700Bold', fontSize: 9, marginTop: 2 },
+                tabBarItemStyle: { paddingVertical: 2 },
             }}
         >
             <Tabs.Screen
                 name="index"
                 options={{
                     title: 'الرئيسية',
-                    href: can('dashboard_view') ? undefined : null,
+                    href: tabHref(isReady, can('dashboard_view')),
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
                             <MaterialCommunityIcons name={focused ? 'view-dashboard' : 'view-dashboard-outline'} size={22} color={color} />
@@ -59,7 +72,7 @@ export default function AdminLayout() {
                 name="users"
                 options={{
                     title: 'المستخدمين',
-                    href: can('users_view') ? undefined : null,
+                    href: tabHref(isReady, can('users_view')),
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
                             <MaterialCommunityIcons name={focused ? 'account-group' : 'account-group-outline'} size={22} color={color} />
@@ -71,7 +84,7 @@ export default function AdminLayout() {
                 name="new-accounts"
                 options={{
                     title: 'الطلبات',
-                    href: can('registrations_view') ? undefined : null,
+                    href: tabHref(isReady, can('registrations_view')),
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
                             <MaterialCommunityIcons name={focused ? 'account-clock' : 'account-clock-outline'} size={22} color={color} />
@@ -83,7 +96,7 @@ export default function AdminLayout() {
                 name="sub-admins"
                 options={{
                     title: 'المدراء',
-                    href: isSuperAdmin ? undefined : null,
+                    href: tabHref(isReady, isSuperAdmin),
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
                             <MaterialCommunityIcons name={focused ? 'shield-account' : 'shield-account-outline'} size={22} color={color} />
@@ -95,7 +108,7 @@ export default function AdminLayout() {
                 name="logs"
                 options={{
                     title: 'السجل',
-                    href: can('logs_view') ? undefined : null,
+                    href: tabHref(isReady, can('logs_view')),
                     tabBarIcon: ({ color, focused }) => (
                         <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
                             <MaterialCommunityIcons name="history" size={22} color={color} />
@@ -103,11 +116,12 @@ export default function AdminLayout() {
                     ),
                 }}
             />
+            <Tabs.Screen name="homepage" options={{ href: null }} />
         </Tabs>
     );
 }
 
 const styles = StyleSheet.create({
-    iconWrap: { width: 36, height: 28, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    iconWrap: { width: 34, height: 26, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
     iconWrapActive: { backgroundColor: ADMIN_THEME.infoBg },
 });

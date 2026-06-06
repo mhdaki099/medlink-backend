@@ -81,3 +81,13 @@ export const normalizeAdminPermissions = (
 
 export const countEnabledAdminPermissions = (perms: AdminPermissions) =>
     ALL_ADMIN_PERMISSION_KEYS.filter(k => perms[k]).length;
+
+/** Main super admin — cannot be edited or deleted from the users list. */
+export const isProtectedSuperAdminUser = (user: {
+    role?: string;
+    admin_tier?: string | null;
+    is_super_admin?: boolean;
+}) =>
+    !!user?.is_super_admin
+    || user?.admin_tier === 'super_admin'
+    || (user?.role === 'admin' && user?.admin_tier !== 'sub_admin');

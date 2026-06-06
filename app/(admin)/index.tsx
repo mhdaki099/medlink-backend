@@ -79,11 +79,23 @@ export default function AdminDashboard() {
     useEffect(() => { loadData(); }, []);
 
     const goUsers = (role?: string) => {
-        if (role) router.push({ pathname: '/(admin)/users', params: { role } } as any);
-        else router.push('/(admin)/users' as any);
+        if (role) {
+            router.push({ pathname: '/(admin)/users', params: { role } } as any);
+        } else {
+            router.push('/(admin)/users' as any);
+        }
+    };
+
+    const goHomepage = (tab?: string) => {
+        if (tab) {
+            router.push({ pathname: '/(admin)/homepage', params: { tab } } as any);
+        } else {
+            router.push('/(admin)/homepage' as any);
+        }
     };
 
     const quickLinks = [
+        can('users_feature') ? { label: 'الصفحة الرئيسية', icon: 'home-star', color: '#F59E0B', route: '/(admin)/homepage' } : null,
         can('users_view') ? { label: 'المستخدمين', icon: 'account-cog', color: ADMIN_THEME.accent, route: '/(admin)/users' } : null,
         can('registrations_view') ? { label: 'طلبات التسجيل', icon: 'account-plus', color: ADMIN_THEME.warning, route: '/(admin)/new-accounts', badge: dashboard?.pending_registrations } : null,
         isSuperAdmin ? { label: 'المدراء الفرعيون', icon: 'shield-account', color: '#F59E0B', route: '/(admin)/sub-admins' } : null,
@@ -149,10 +161,10 @@ export default function AdminDashboard() {
             <AdminSectionTitle title="المستخدمون حسب الدور" />
             <View style={styles.statGrid}>
                 <StatTile label="المرضى" value={dashboard?.patients || 0} icon="account-heart" color="#3B82F6" onPress={() => goUsers('patient')} />
-                <StatTile label="الأطباء" value={dashboard?.doctors || 0} icon="stethoscope" color="#059669" onPress={() => goUsers('doctor')} />
-                <StatTile label="الصيدليات" value={dashboard?.pharmacies || 0} icon="pill" color="#D97706" onPress={() => goUsers('pharmacy')} />
-                <StatTile label="المختبرات" value={dashboard?.labs || 0} icon="flask" color="#8B5CF6" onPress={() => goUsers('lab')} />
-                <StatTile label="مراكز الأشعة" value={dashboard?.radiology || 0} icon="radioactive" color="#7C3AED" onPress={() => goUsers('radiology')} />
+                <StatTile label="الأطباء" value={dashboard?.doctors || 0} icon="stethoscope" color="#059669" onPress={() => can('users_feature') ? goHomepage('doctor') : goUsers('doctor')} />
+                <StatTile label="الصيدليات" value={dashboard?.pharmacies || 0} icon="pill" color="#D97706" onPress={() => can('users_feature') ? goHomepage('pharmacy') : goUsers('pharmacy')} />
+                <StatTile label="المختبرات" value={dashboard?.labs || 0} icon="flask" color="#8B5CF6" onPress={() => can('users_feature') ? goHomepage('lab') : goUsers('lab')} />
+                <StatTile label="مراكز الأشعة" value={dashboard?.radiology || 0} icon="radioactive" color="#7C3AED" onPress={() => can('users_feature') ? goHomepage('radiology') : goUsers('radiology')} />
                 <StatTile label="المستودعات" value={dashboard?.warehouses || 0} icon="warehouse" color="#EC4899" onPress={() => goUsers('warehouse')} />
                 <StatTile label="السكرتارية" value={dashboard?.secretaries || 0} icon="account-tie" color="#0EA5E9" onPress={() => goUsers('secretary')} />
                 <StatTile label="المدراء" value={dashboard?.admins || 0} icon="shield-account" color={ADMIN_THEME.primaryDark} onPress={() => goUsers('admin')} />

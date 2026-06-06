@@ -128,14 +128,17 @@ class ApiClient {
     }
 
     // ── Doctors ──────────────────────────────────────────────────────────────
-    getDoctors(specialization?: string, province?: string, district?: string) {
+    getDoctors(opts?: { specialization?: string; province?: string; district?: string; homepage?: boolean }) {
         const params: Record<string, string> = {};
+        const specialization = opts?.specialization;
         if (specialization && specialization !== 'all') params.specialization = specialization;
-        if (province) params.province = province;
-        if (district) params.district = district;
+        if (opts?.province) params.province = opts.province;
+        if (opts?.district) params.district = opts.district;
+        if (opts?.homepage) params.homepage = 'true';
         const q = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
         return this.get<any[]>(`/doctors${q}`);
     }
+    getHomepageDoctors() { return this.getDoctors({ homepage: true }); }
     getDoctor(id: string, patientId?: string) {
         const q = patientId ? `?patient_id=${patientId}` : '';
         return this.get<any>(`/doctors/${id}${q}`);
@@ -182,10 +185,11 @@ class ApiClient {
     }
 
     // ── Pharmacies & Medicines ───────────────────────────────────────────────
-    getPharmacies(params?: { lat?: number; lng?: number; radius_km?: number; province?: string; district?: string; area?: string }) {
+    getPharmacies(params?: { lat?: number; lng?: number; radius_km?: number; province?: string; district?: string; area?: string; homepage?: boolean }) {
         const q = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
         return this.get<any[]>(`/pharmacies${q ? '?' + q : ''}`);
     }
+    getHomepagePharmacies() { return this.getPharmacies({ homepage: true }); }
     getPharmacy(id: string) { return this.get<any>(`/pharmacies/${id}`); }
     getPharmacyAnalytics(id: string) { return this.get<any>(`/pharmacies/${id}/analytics`); }
     getPharmacyMedicines(id: string, category?: string) {
@@ -538,6 +542,10 @@ class ApiClient {
     verifyUser(id: string) { return this.put<any>(`/admin/users/${id}/verify`, {}); }
     toggleUserActive(id: string) { return this.put<any>(`/admin/users/${id}/toggle-active`, {}); }
     toggleUserFeatured(id: string) { return this.put<any>(`/admin/users/${id}/toggle-featured`, {}); }
+    getHomepageFeatured(role: string) { return this.get<any>(`/admin/homepage-featured?role=${encodeURIComponent(role)}`); }
+    updateHomepageFeatured(role: string, orderedIds: string[]) {
+        return this.put<any>('/admin/homepage-featured', { role, ordered_ids: orderedIds });
+    }
     deleteUser(id: string) { return this.delete<any>(`/admin/users/${id}`); }
     createAdminUser(data: any) {
         return this.post<any>('/admin/users', data);

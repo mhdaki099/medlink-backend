@@ -20,6 +20,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     verified = Column(Boolean, default=False)
     is_featured = Column(Boolean, default=False)
+    featured_sort_order = Column(Integer, nullable=True)
     created_at = Column(String) 
 
     # Patient specific

@@ -7,6 +7,7 @@ from db import get_db
 from models import User, LabTest, LabBooking, LabResult, ServiceBooking, Notification
 from auth_utils import get_current_user, require_role
 from utils.helpers import model_to_dict
+from utils.homepage_featured import query_homepage_providers
 
 router = APIRouter()
 
@@ -16,7 +17,9 @@ VALID_TEST_AVAILABILITY = {
 BOOKABLE_TEST_AVAILABILITY = {"available", "limited"}
 
 @router.get("")
-def list_labs(q: str = None, province: str = None, district: str = None, db: Session = Depends(get_db)):
+def list_labs(q: str = None, province: str = None, district: str = None, homepage: bool = False, db: Session = Depends(get_db)):
+    if homepage:
+        return [model_to_dict(l, ["password"]) for l in query_homepage_providers(db, "lab")]
     query = db.query(User).filter(User.role == "lab", User.is_active == True)
     if q:
         query = query.filter(User.name.ilike(f"%{q}%"))
@@ -29,7 +32,9 @@ def list_labs(q: str = None, province: str = None, district: str = None, db: Ses
 
 
 @router.get("/radiology")
-def list_radiology_centers(q: str = None, province: str = None, district: str = None, db: Session = Depends(get_db)):
+def list_radiology_centers(q: str = None, province: str = None, district: str = None, homepage: bool = False, db: Session = Depends(get_db)):
+    if homepage:
+        return [model_to_dict(c, ["password"]) for c in query_homepage_providers(db, "radiology")]
     query = db.query(User).filter(User.role == "radiology", User.is_active == True)
     if q:
         query = query.filter(User.name.ilike(f"%{q}%"))

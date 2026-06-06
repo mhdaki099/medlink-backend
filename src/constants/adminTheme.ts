@@ -24,9 +24,16 @@ export const ADMIN_THEME = {
     headerGradient: ['#0F172A', '#1E3A8A', '#2563EB'] as const,
 };
 
-export const ADMIN_TAB_BAR_HEIGHT = 70;
-export const ADMIN_TAB_BAR_BOTTOM = 20;
-export const ADMIN_TAB_CLEARANCE = ADMIN_TAB_BAR_HEIGHT + ADMIN_TAB_BAR_BOTTOM + (Platform.OS === 'ios' ? 34 : 16) + 16;
+export const ADMIN_TAB_BAR_HEIGHT = 64;
+
+/** Bottom padding for scroll content above the floating admin tab bar */
+export function getAdminTabClearance(bottomInset = 0) {
+    const barBottom = Math.max(bottomInset, 12);
+    return ADMIN_TAB_BAR_HEIGHT + barBottom + 20;
+}
+
+/** @deprecated use getAdminTabClearance(insets.bottom) */
+export const ADMIN_TAB_CLEARANCE = ADMIN_TAB_BAR_HEIGHT + 12 + 20 + (Platform.OS === 'ios' ? 34 : 16);
 
 export const ADMIN_ROLE_META: Record<string, { label: string; icon: string; color: string }> = {
     patient: { label: 'مريض', icon: 'account-heart', color: '#3B82F6' },

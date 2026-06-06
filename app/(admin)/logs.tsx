@@ -75,7 +75,7 @@ export default function AdminLogs() {
                     data={filtered}
                     keyExtractor={(item, i) => item.id || String(i)}
                     style={styles.list}
-                    contentContainerStyle={{ paddingBottom: 120 }}
+                    contentContainerStyle={{ paddingBottom: 140 }}
                     showsVerticalScrollIndicator={false}
                     refreshing={refreshing}
                     onRefresh={() => { setRefreshing(true); loadData(); }}

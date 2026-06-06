@@ -1,17 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
-    TextInput, Modal, ActivityIndicator, Platform,
+    TextInput, Modal, ActivityIndicator, Platform, FlatList, RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../../src/services/api';
 import AdminUserForm, {
     emptyAdminUserForm, adminUserFormFromUser, adminFormToPayload, AdminUserFormData,
 } from '../../src/components/AdminUserForm';
 import AdminShell, { AdminEmptyState, AdminIconButton } from '../../src/components/admin/AdminShell';
-import { ADMIN_THEME, ADMIN_ROLE_META } from '../../src/constants/adminTheme';
+import { ADMIN_THEME, ADMIN_ROLE_META, getAdminTabClearance } from '../../src/constants/adminTheme';
 import { useAdminPermissions } from '../../src/hooks/useAdminPermissions';
+import { isProtectedSuperAdminUser } from '../../src/constants/adminPermissions';
 
 const formatLocation = (u: any) => {
     const parts = [u.country, u.province, u.city].filter(Boolean);
@@ -34,9 +36,130 @@ function StatusBadge({ label, tone }: { label: string; tone: 'success' | 'warn' 
     );
 }
 
+function UserCard({
+    user: u,
+    canEdit,
+    canVerify,
+    canToggle,
+    canFeature,
+    canDelete,
+    onEdit,
+    onVerify,
+    onToggle,
+    onFeature,
+    onDelete,
+}: {
+    user: any;
+    canEdit: boolean;
+    canVerify: boolean;
+    canToggle: boolean;
+    canFeature: boolean;
+    canDelete: boolean;
+    onEdit: () => void;
+    onVerify: () => void;
+    onToggle: () => void;
+    onFeature: () => void;
+    onDelete: () => void;
+}) {
+    const meta = ADMIN_ROLE_META[u.role] || { label: u.role, icon: 'account', color: ADMIN_THEME.accent };
+    const isProtected = isProtectedSuperAdminUser(u);
+    const canOpenEdit = canEdit && !isProtected;
+
+    return (
+        <TouchableOpacity
+            style={styles.userCard}
+            activeOpacity={canOpenEdit ? 0.85 : 1}
+            onPress={canOpenEdit ? onEdit : undefined}
+            disabled={!canOpenEdit}
+        >
+            <View style={styles.userHeader}>
+                <View style={[styles.avatar, { backgroundColor: meta.color + '18' }]}>
+                    <MaterialCommunityIcons name={meta.icon as any} size={24} color={meta.color} />
+                </View>
+                <View style={styles.userMain}>
+                    <View style={styles.nameRow}>
+                        <Text style={styles.userId} selectable>{u.id}</Text>
+                        <Text style={styles.userName}>{u.name}</Text>
+                    </View>
+                    <Text style={styles.userEmail}>{u.email}</Text>
+                    <View style={styles.badgeRow}>
+                        <View style={[styles.rolePill, { backgroundColor: meta.color + '15' }]}>
+                            <Text style={[styles.rolePillText, { color: meta.color }]}>{meta.label}</Text>
+                        </View>
+                        {u.verified ? <StatusBadge label="موثق" tone="success" /> : <StatusBadge label="غير موثق" tone="warn" />}
+                        {!u.is_active ? <StatusBadge label="معطل" tone="danger" /> : null}
+                        {u.is_featured ? <StatusBadge label="مميز" tone="info" /> : null}
+                        {u.rating ? <StatusBadge label={`★ ${Number(u.rating).toFixed(1)}`} tone="info" /> : null}
+                        {isProtected ? <StatusBadge label="مدير رئيسي" tone="info" /> : null}
+                    </View>
+                </View>
+            </View>
+
+            {(u.phone || formatLocation(u) || u.specialization) ? (
+                <View style={styles.metaBox}>
+                    {u.phone ? (
+                        <View style={styles.metaLine}>
+                            <Text style={styles.metaText}>{u.phone}</Text>
+                            <MaterialCommunityIcons name="phone-outline" size={14} color={ADMIN_THEME.textMuted} />
+                        </View>
+                    ) : null}
+                    {formatLocation(u) ? (
+                        <View style={styles.metaLine}>
+                            <Text style={styles.metaText}>{formatLocation(u)}</Text>
+                            <MaterialCommunityIcons name="map-marker-outline" size={14} color={ADMIN_THEME.textMuted} />
+                        </View>
+                    ) : null}
+                    {u.specialization ? (
+                        <View style={styles.metaLine}>
+                            <Text style={styles.metaText}>{u.specialization}</Text>
+                            <MaterialCommunityIcons name="certificate-outline" size={14} color={ADMIN_THEME.textMuted} />
+                        </View>
+                    ) : null}
+                </View>
+            ) : null}
+
+            <View style={styles.actions}>
+                {isProtected ? (
+                    <Text style={styles.protectedNote}>حساب محمي — لا يمكن تعديله أو تعطيله</Text>
+                ) : (
+                    <>
+                        {canEdit ? (
+                            <TouchableOpacity style={styles.actionIcon} onPress={onEdit} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <MaterialCommunityIcons name="pencil-outline" size={18} color={ADMIN_THEME.accent} />
+                            </TouchableOpacity>
+                        ) : null}
+                        {canVerify && !u.verified ? (
+                            <TouchableOpacity style={styles.actionIcon} onPress={onVerify} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <MaterialCommunityIcons name="check-decagram" size={18} color={ADMIN_THEME.success} />
+                            </TouchableOpacity>
+                        ) : null}
+                        {canToggle ? (
+                            <TouchableOpacity style={styles.actionIcon} onPress={onToggle} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <MaterialCommunityIcons name={u.is_active ? 'pause-circle-outline' : 'play-circle-outline'} size={18} color={u.is_active ? ADMIN_THEME.warning : ADMIN_THEME.success} />
+                            </TouchableOpacity>
+                        ) : null}
+                        {canFeature && (u.role === 'doctor' || u.role === 'pharmacy') ? (
+                            <TouchableOpacity style={styles.actionIcon} onPress={onFeature} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <MaterialCommunityIcons name={u.is_featured ? 'star' : 'star-outline'} size={18} color="#F59E0B" />
+                            </TouchableOpacity>
+                        ) : null}
+                        {canDelete ? (
+                            <TouchableOpacity style={styles.actionIcon} onPress={onDelete} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                <MaterialCommunityIcons name="trash-can-outline" size={18} color={ADMIN_THEME.danger} />
+                            </TouchableOpacity>
+                        ) : null}
+                    </>
+                )}
+            </View>
+        </TouchableOpacity>
+    );
+}
+
 export default function AdminUsers() {
     const { can } = useAdminPermissions();
-    const params = useLocalSearchParams<{ role?: string }>();
+    const insets = useSafeAreaInsets();
+    const params = useLocalSearchParams<{ role?: string | string[] }>();
+    const roleParam = Array.isArray(params.role) ? params.role[0] : params.role;
     const [users, setUsers] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -60,13 +183,16 @@ export default function AdminUsers() {
         finally { setLoading(false); setRefreshing(false); }
     };
 
-    useEffect(() => { if (params.role) setRoleFilter(params.role); }, [params.role]);
+    useEffect(() => { if (roleParam) setRoleFilter(roleParam); }, [roleParam]);
     useEffect(() => { setLoading(true); loadData(); }, [roleFilter]);
 
     const openCreate = () => { setForm(emptyAdminUserForm()); setEditingUserId(null); setModalMode('create'); };
     const closeModal = () => { setModalMode(null); setEditingUserId(null); setForm(emptyAdminUserForm()); };
 
     const openEdit = async (user: any) => {
+        if (isProtectedSuperAdminUser(user)) {
+            return Alert.alert('غير مسموح', 'لا يمكن تعديل المدير الرئيسي من هنا');
+        }
         try {
             const detail = await api.getAdminUserDetail(user.id);
             setForm(adminUserFormFromUser(detail));
@@ -99,24 +225,17 @@ export default function AdminUsers() {
         ]);
     };
 
-    const filtered = users.filter(u => {
+    const filtered = useMemo(() => users.filter(u => {
         if (!searchQuery) return true;
         const q = searchQuery.toLowerCase();
         return [u.name, u.email, u.phone, u.city, u.country, u.province, u.id]
             .some((v: string) => v?.toLowerCase?.().includes(q) || v?.includes?.(searchQuery));
-    });
+    }), [users, searchQuery]);
 
     const roleFilters = [{ key: 'all', label: 'الكل' }, ...Object.entries(ADMIN_ROLE_META).map(([k, v]) => ({ key: k, label: v.label }))];
 
-    return (
-        <AdminShell
-            title="المستخدمين"
-            subtitle={`${filtered.length} حساب`}
-            loading={loading}
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); loadData(); }}
-            headerRight={can('users_create') ? <AdminIconButton icon="plus" onPress={openCreate} variant="primary" /> : undefined}
-        >
+    const listHeader = useMemo(() => (
+        <>
             <View style={styles.searchBox}>
                 <TextInput
                     style={styles.searchInput}
@@ -128,8 +247,14 @@ export default function AdminUsers() {
                 />
                 <MaterialCommunityIcons name="magnify" size={20} color={ADMIN_THEME.textMuted} />
             </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filters}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                style={styles.filtersScroll}
+            >
                 {roleFilters.map(f => (
                     <TouchableOpacity
                         key={f.key}
@@ -140,95 +265,54 @@ export default function AdminUsers() {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
+        </>
+    ), [searchQuery, roleFilter, roleFilters]);
 
-            {!loading && filtered.length === 0 ? (
-                <AdminEmptyState icon="account-search-outline" title="لا يوجد مستخدمون" subtitle="جرّب تغيير الفلتر أو البحث" />
-            ) : (
-                filtered.map(u => {
-                    const meta = ADMIN_ROLE_META[u.role] || { label: u.role, icon: 'account', color: ADMIN_THEME.accent };
-                    return (
-                        <View key={u.id} style={styles.userCard}>
-                            <View style={styles.userHeader}>
-                                <View style={[styles.avatar, { backgroundColor: meta.color + '18' }]}>
-                                    <MaterialCommunityIcons name={meta.icon as any} size={24} color={meta.color} />
-                                </View>
-                                <View style={styles.userMain}>
-                                    <View style={styles.nameRow}>
-                                        <Text style={styles.userId} selectable>{u.id}</Text>
-                                        <Text style={styles.userName}>{u.name}</Text>
-                                    </View>
-                                    <Text style={styles.userEmail}>{u.email}</Text>
-                                    <View style={styles.badgeRow}>
-                                        <View style={[styles.rolePill, { backgroundColor: meta.color + '15' }]}>
-                                            <Text style={[styles.rolePillText, { color: meta.color }]}>{meta.label}</Text>
-                                        </View>
-                                        {u.verified ? <StatusBadge label="موثق" tone="success" /> : <StatusBadge label="غير موثق" tone="warn" />}
-                                        {!u.is_active ? <StatusBadge label="معطل" tone="danger" /> : null}
-                                        {u.is_featured ? <StatusBadge label="مميز" tone="info" /> : null}
-                                    </View>
-                                </View>
-                            </View>
+    const renderUser = useCallback(({ item: u }: { item: any }) => (
+        <UserCard
+            user={u}
+            canEdit={can('users_edit')}
+            canVerify={can('users_verify')}
+            canToggle={can('users_toggle_active')}
+            canFeature={can('users_feature')}
+            canDelete={can('users_delete')}
+            onEdit={() => openEdit(u)}
+            onVerify={() => confirm('توثيق', `توثيق ${u.name}؟`, async () => { await api.verifyUser(u.id); loadData(); })}
+            onToggle={() => confirm(u.is_active ? 'تعطيل' : 'تفعيل', `${u.name}؟`, async () => { await api.toggleUserActive(u.id); loadData(); })}
+            onFeature={() => confirm('تمييز', `${u.name}؟`, async () => { await api.toggleUserFeatured(u.id); loadData(); })}
+            onDelete={() => confirm('تعطيل الحساب', `تعطيل ${u.name}؟`, async () => { await api.deleteUser(u.id); loadData(); }, true)}
+        />
+    ), [can, confirm, loadData, openEdit]);
 
-                            {(u.phone || formatLocation(u)) ? (
-                                <View style={styles.metaBox}>
-                                    {u.phone ? (
-                                        <View style={styles.metaLine}>
-                                            <Text style={styles.metaText}>{u.phone}</Text>
-                                            <MaterialCommunityIcons name="phone-outline" size={14} color={ADMIN_THEME.textMuted} />
-                                        </View>
-                                    ) : null}
-                                    {formatLocation(u) ? (
-                                        <View style={styles.metaLine}>
-                                            <Text style={styles.metaText}>{formatLocation(u)}</Text>
-                                            <MaterialCommunityIcons name="map-marker-outline" size={14} color={ADMIN_THEME.textMuted} />
-                                        </View>
-                                    ) : null}
-                                    {u.specialization ? (
-                                        <View style={styles.metaLine}>
-                                            <Text style={styles.metaText}>{u.specialization}</Text>
-                                            <MaterialCommunityIcons name="certificate-outline" size={14} color={ADMIN_THEME.textMuted} />
-                                        </View>
-                                    ) : null}
-                                </View>
-                            ) : null}
-
-                            <View style={styles.actions}>
-                                {can('users_edit') ? (
-                                    <TouchableOpacity style={styles.actionIcon} onPress={() => openEdit(u)}>
-                                        <MaterialCommunityIcons name="pencil-outline" size={18} color={ADMIN_THEME.accent} />
-                                    </TouchableOpacity>
-                                ) : null}
-                                {can('users_verify') && !u.verified ? (
-                                    <TouchableOpacity style={styles.actionIcon} onPress={() => confirm('توثيق', `توثيق ${u.name}؟`, async () => { await api.verifyUser(u.id); loadData(); })}>
-                                        <MaterialCommunityIcons name="check-decagram" size={18} color={ADMIN_THEME.success} />
-                                    </TouchableOpacity>
-                                ) : null}
-                                {can('users_toggle_active') ? (
-                                    <TouchableOpacity
-                                        style={styles.actionIcon}
-                                        onPress={() => confirm(u.is_active ? 'تعطيل' : 'تفعيل', `${u.name}؟`, async () => { await api.toggleUserActive(u.id); loadData(); })}
-                                    >
-                                        <MaterialCommunityIcons name={u.is_active ? 'pause-circle-outline' : 'play-circle-outline'} size={18} color={u.is_active ? ADMIN_THEME.warning : ADMIN_THEME.success} />
-                                    </TouchableOpacity>
-                                ) : null}
-                                {can('users_feature') && (u.role === 'doctor' || u.role === 'pharmacy') ? (
-                                    <TouchableOpacity style={styles.actionIcon} onPress={() => confirm('تمييز', `${u.name}؟`, async () => { await api.toggleUserFeatured(u.id); loadData(); })}>
-                                        <MaterialCommunityIcons name={u.is_featured ? 'star' : 'star-outline'} size={18} color="#F59E0B" />
-                                    </TouchableOpacity>
-                                ) : null}
-                                {can('users_delete') ? (
-                                    <TouchableOpacity
-                                        style={styles.actionIcon}
-                                        onPress={() => confirm('تعطيل الحساب', `تعطيل ${u.name}؟`, async () => { await api.deleteUser(u.id); loadData(); }, true)}
-                                    >
-                                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={ADMIN_THEME.danger} />
-                                    </TouchableOpacity>
-                                ) : null}
-                            </View>
-                        </View>
-                    );
-                })
-            )}
+    return (
+        <AdminShell
+            title="المستخدمين"
+            subtitle={`${filtered.length} حساب`}
+            loading={loading}
+            scroll={false}
+            headerRight={can('users_create') ? <AdminIconButton icon="plus" onPress={openCreate} variant="primary" /> : undefined}
+        >
+            <FlatList
+                style={{ flex: 1 }}
+                data={filtered}
+                keyExtractor={u => u.id}
+                renderItem={renderUser}
+                ListHeaderComponent={listHeader}
+                ListEmptyComponent={!loading ? (
+                    <AdminEmptyState icon="account-search-outline" title="لا يوجد مستخدمون" subtitle="جرّب تغيير الفلتر أو البحث" />
+                ) : null}
+                contentContainerStyle={{ paddingBottom: getAdminTabClearance(insets.bottom), flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                refreshControl={(
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={() => { setRefreshing(true); loadData(); }}
+                        tintColor={ADMIN_THEME.accent}
+                    />
+                )}
+            />
 
             <Modal visible={modalMode !== null} animationType="slide" presentationStyle="pageSheet">
                 <View style={styles.modal}>
@@ -240,7 +324,12 @@ export default function AdminUsers() {
                         <Text style={styles.modalTitle}>{modalMode === 'create' ? 'مستخدم جديد' : 'تعديل المستخدم'}</Text>
                         <View style={{ width: 40 }} />
                     </View>
-                    <ScrollView style={styles.modalScroll} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                        style={styles.modalScroll}
+                        contentContainerStyle={{ paddingBottom: 40 }}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    >
                         <AdminUserForm form={form} onChange={setForm} mode={modalMode || 'create'} doctors={doctors} />
                     </ScrollView>
                     <View style={styles.modalFooter}>
@@ -270,6 +359,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     searchInput: { flex: 1, fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: ADMIN_THEME.text },
+    filtersScroll: { flexGrow: 0, marginBottom: 4 },
     filters: { flexDirection: 'row-reverse', gap: 8, paddingBottom: 14 },
     filterChip: {
         paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
@@ -336,6 +426,13 @@ const styles = StyleSheet.create({
         width: 40, height: 40, borderRadius: 12,
         backgroundColor: ADMIN_THEME.surfaceMuted,
         justifyContent: 'center', alignItems: 'center',
+    },
+    protectedNote: {
+        flex: 1,
+        fontFamily: 'Cairo_600SemiBold',
+        fontSize: 11,
+        color: ADMIN_THEME.textMuted,
+        textAlign: 'right',
     },
     modal: { flex: 1, backgroundColor: ADMIN_THEME.bg },
     modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: ADMIN_THEME.border, alignSelf: 'center', marginTop: 10 },

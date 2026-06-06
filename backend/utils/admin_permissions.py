@@ -73,6 +73,12 @@ def is_super_admin(admin: Optional[User]) -> bool:
     return (admin.admin_tier or "super_admin") == "super_admin"
 
 
+def assert_not_protected_super_admin(user: User):
+    """Block edit/delete/toggle on the main super admin account."""
+    if is_super_admin(user):
+        raise HTTPException(403, "لا يمكن تعديل أو تعطيل المدير الرئيسي")
+
+
 def get_effective_permissions(admin: User) -> dict:
     if not admin or admin.role != "admin":
         return {}

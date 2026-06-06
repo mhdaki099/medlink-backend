@@ -14,12 +14,19 @@ from models import (
 )
 from auth_utils import get_current_user, hash_password
 from utils.helpers import model_to_dict
+from utils.homepage_featured import (
+    HOMEPAGE_LIMITS,
+    HOMEPAGE_ROLE_LABELS_AR,
+    HOMEPAGE_ROLES,
+    apply_homepage_order,
+)
 from utils.admin_permissions import (
     require_admin_permission,
     require_super_admin,
     require_admin_access,
     get_admin_user,
     is_super_admin,
+    assert_not_protected_super_admin,
     get_effective_permissions,
     parse_permissions_payload,
     ALL_ADMIN_PERMISSIONS,
@@ -40,7 +47,8 @@ ADMIN_USER_FIELDS = frozenset({
     "price_per_session", "experience_years", "available_hours", "working_hours",
     "open_hours", "license_no", "association_no", "supervisor_id",
     "consultation_duration", "buffer_minutes", "verified", "is_active",
-    "is_featured", "has_home_service", "home_service_fee",
+    "is_featured", "featured_sort_order", "has_home_service", "home_service_fee",
+    "rating", "total_reviews",
 })
 
 
@@ -142,7 +150,13 @@ def list_users(
         )
 
     users = query.order_by(User.created_at.desc()).all()
-    return [model_to_dict(u, ["password"]) for u in users]
+    result = []
+    for u in users:
+        row = model_to_dict(u, ["password"])
+        if u.role == "admin":
+            row["is_super_admin"] = is_super_admin(u)
+        result.append(row)
+    return result
 
 
 @router.post("/users")
@@ -227,6 +241,8 @@ def get_user_detail(
         raise HTTPException(404, "المستخدم غير موجود")
 
     result = model_to_dict(user, ["password"])
+    if user.role == "admin":
+        result["is_super_admin"] = is_super_admin(user)
 
     if user.role == "patient":
         result["appointment_count"] = db.query(Appointment).filter(Appointment.patient_id == user_id).count()
@@ -252,6 +268,8 @@ def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
+
+    assert_not_protected_super_admin(user)
 
     if user.role == "admin":
         require_super_admin(db, current_user)
@@ -297,6 +315,7 @@ def toggle_user_active(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
+    assert_not_protected_super_admin(user)
     user.is_active = not user.is_active
     action = "admin_activate_user" if user.is_active else "admin_deactivate_user"
     _log_admin_action(db, current_user["sub"], action, user_id)
@@ -314,12 +333,84 @@ def toggle_user_featured(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
-    if user.role not in ("doctor", "pharmacy"):
-        raise HTTPException(400, "التمييز متاح للأطباء والصيدليات فقط")
-    user.is_featured = not user.is_featured
+    if user.role not in HOMEPAGE_ROLES:
+        raise HTTPException(400, "التمييز متاح للأطباء والصيدليات والمختبرات ومراكز الأشعة فقط")
+    if not user.is_featured:
+        current_count = db.query(User).filter(User.role == user.role, User.is_featured == True).count()
+        if current_count >= HOMEPAGE_LIMITS.get(user.role, 0):
+            raise HTTPException(400, f"الحد الأقصى {HOMEPAGE_LIMITS[user.role]} — أزل عنصراً من الصفحة الرئيسية أولاً")
+        user.is_featured = True
+        user.featured_sort_order = current_count
+    else:
+        user.is_featured = False
+        user.featured_sort_order = None
+        remaining = (
+            db.query(User)
+            .filter(User.role == user.role, User.is_featured == True, User.id != user_id)
+            .order_by(User.featured_sort_order.asc().nulls_last())
+            .all()
+        )
+        for idx, row in enumerate(remaining):
+            row.featured_sort_order = idx
     _log_admin_action(db, current_user["sub"], "admin_toggle_featured", f"{user_id} -> {user.is_featured}")
     db.commit()
     return model_to_dict(user, ["password"])
+
+
+@router.get("/homepage-featured")
+def get_homepage_featured(
+    role: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_admin_permission(db, current_user, "users_feature")
+    if role not in HOMEPAGE_ROLES:
+        raise HTTPException(400, "نوع غير مدعوم")
+    limit = HOMEPAGE_LIMITS[role]
+    base = db.query(User).filter(User.role == role, User.is_active == True)
+    featured = (
+        base.filter(User.is_featured == True)
+        .order_by(User.featured_sort_order.asc().nulls_last(), User.name.asc())
+        .all()
+    )
+    featured_ids = {u.id for u in featured}
+    available_query = base
+    if featured_ids:
+        available_query = available_query.filter(~User.id.in_(featured_ids))
+    available = available_query.order_by(User.name.asc()).all()
+    return {
+        "role": role,
+        "role_label": HOMEPAGE_ROLE_LABELS_AR[role],
+        "limit": limit,
+        "count": len(featured),
+        "featured": [model_to_dict(u, ["password"]) for u in featured],
+        "available": [model_to_dict(u, ["password"]) for u in available],
+    }
+
+
+@router.put("/homepage-featured")
+def update_homepage_featured(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_admin_permission(db, current_user, "users_feature")
+    role = data.get("role")
+    ordered_ids = data.get("ordered_ids") or []
+    if role not in HOMEPAGE_ROLES:
+        raise HTTPException(400, "نوع غير مدعوم")
+    limit = HOMEPAGE_LIMITS[role]
+    if len(ordered_ids) > limit:
+        raise HTTPException(400, f"الحد الأقصى {limit} عناصر")
+    if len(ordered_ids) != len(set(ordered_ids)):
+        raise HTTPException(400, "قائمة مكررة")
+    saved = apply_homepage_order(db, role, ordered_ids)
+    _log_admin_action(
+        db, current_user["sub"], "admin_homepage_featured",
+        f"{role}: {ordered_ids}",
+    )
+    db.commit()
+    return {"message": "تم حفظ عرض الصفحة الرئيسية", "count": saved, "limit": limit}
 
 
 @router.delete("/users/{user_id}")
@@ -333,8 +424,9 @@ def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
+    assert_not_protected_super_admin(user)
     if user.role == "admin":
-        raise HTTPException(403, "لا يمكن تعطيل حسابات المدراء من هنا")
+        raise HTTPException(403, "لا يمكن تعطيل حسابات المدراء من هنا — استخدم قسم المدراء الفرعيين")
 
     user.is_active = False
     _log_admin_action(db, current_user["sub"], "admin_delete_user", user_id)

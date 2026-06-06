@@ -33,6 +33,8 @@ export type AdminUserFormData = {
     association_no: string;
     supervisor_id: string;
     verified: boolean;
+    rating: string;
+    is_featured: boolean;
 };
 
 const KNOWN_COUNTRIES = COUNTRIES.filter(c => c !== 'أخرى');
@@ -43,6 +45,7 @@ export const emptyAdminUserForm = (): AdminUserFormData => ({
     gender: '', dob: '', specialization: '', clinic_name: '', clinic_address: '',
     price_per_session: '', experience_years: '', available_hours: '', open_hours: '',
     license_no: '', association_no: '', supervisor_id: '', verified: true,
+    rating: '', is_featured: false,
 });
 
 export const adminUserFormFromUser = (user: any): AdminUserFormData => ({
@@ -70,6 +73,8 @@ export const adminUserFormFromUser = (user: any): AdminUserFormData => ({
     association_no: user?.association_no || '',
     supervisor_id: user?.supervisor_id || '',
     verified: user?.verified !== false,
+    rating: user?.rating != null ? String(user.rating) : '',
+    is_featured: !!user?.is_featured,
 });
 
 const ROLES: Record<string, string> = {
@@ -340,6 +345,24 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
                     </View>
                     <Text style={styles.label}>ساعات العمل</Text>
                     <TextInput style={styles.input} value={form.available_hours} onChangeText={t => set({ available_hours: t })} placeholder="09:00 - 17:00" textAlign="right" />
+                    <View style={styles.row}>
+                        <View style={styles.half}>
+                            <Text style={styles.label}>التقييم (0–5)</Text>
+                            <TextInput style={styles.input} value={form.rating} onChangeText={t => set({ rating: t })} keyboardType="decimal-pad" placeholder="4.8" textAlign="right" />
+                        </View>
+                        <View style={[styles.half, styles.featuredToggle]}>
+                            <Text style={styles.label}>طبيب مميز</Text>
+                            <TouchableOpacity
+                                style={[styles.featuredBtn, form.is_featured && styles.featuredBtnOn]}
+                                onPress={() => set({ is_featured: !form.is_featured })}
+                            >
+                                <MaterialCommunityIcons name={form.is_featured ? 'star' : 'star-outline'} size={20} color={form.is_featured ? '#F59E0B' : ADMIN_THEME.textMuted} />
+                                <Text style={[styles.featuredBtnText, form.is_featured && styles.featuredBtnTextOn]}>
+                                    {form.is_featured ? 'مميز' : 'غير مميز'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
                 </>
             ) : null}
 
@@ -438,6 +461,8 @@ export function adminFormToPayload(form: AdminUserFormData, mode: 'create' | 'ed
     };
     if (form.price_per_session) payload.price_per_session = parseFloat(form.price_per_session) || 0;
     if (form.experience_years) payload.experience_years = parseInt(form.experience_years, 10) || 0;
+    if (form.rating) payload.rating = Math.min(5, Math.max(0, parseFloat(form.rating) || 0));
+    if (form.role === 'doctor' || form.role === 'pharmacy') payload.is_featured = form.is_featured;
     if (form.password) payload.password = form.password;
     if (mode === 'create' && !form.password) payload.password = '123456';
     return payload;
@@ -476,4 +501,13 @@ const styles = StyleSheet.create({
     pickerItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: ADMIN_THEME.borderLight },
     pickerItemText: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: ADMIN_THEME.textSecondary, textAlign: 'right' },
     pickerOtherText: { color: ADMIN_THEME.accent, fontFamily: 'Cairo_700Bold' },
+    featuredToggle: { justifyContent: 'flex-end' },
+    featuredBtn: {
+        flexDirection: 'row-reverse', alignItems: 'center', gap: 6,
+        backgroundColor: ADMIN_THEME.surface, borderRadius: 12, paddingHorizontal: 14, height: 46,
+        borderWidth: 1, borderColor: ADMIN_THEME.border, marginBottom: 12,
+    },
+    featuredBtnOn: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+    featuredBtnText: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: ADMIN_THEME.textMuted },
+    featuredBtnTextOn: { color: '#B45309' },
 });

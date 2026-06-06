@@ -70,6 +70,8 @@ export default function PatientHome() {
     const { user } = useAuth();
     const router = useRouter();
     const [allDoctors, setAllDoctors] = useState<any[]>([]);
+    const [homepageDoctors, setHomepageDoctors] = useState<any[]>([]);
+    const [homepagePharmacies, setHomepagePharmacies] = useState<any[]>([]);
     const [popularDoctors, setPopularDoctors] = useState<any[]>([]);
     const [popularPharmacies, setPopularPharmacies] = useState<any[]>([]);
     const [categories, setCategories] = useState<any[]>([]);
@@ -97,23 +99,22 @@ export default function PatientHome() {
     const load = async () => {
         try {
             if (user?.id) {
-                const [docs, farms, specs, prescs] = await Promise.all([
+                const [docs, homepageDocs, farms, homepageFarms, specs, prescs] = await Promise.all([
                     api.getDoctors(),
+                    api.getHomepageDoctors(),
                     api.getPharmacies(),
+                    api.getHomepagePharmacies(),
                     api.getSpecializations(),
                     api.getPatientPrescriptions(user.id)
                 ]);
                 setAllDoctors(docs);
                 setPrescriptions(prescs);
                 await loadAppointments();
-                
-                // Prioritize featured doctors, fallback to first 3
-                const featuredDocs = docs.filter((d: any) => d.is_featured);
-                setPopularDoctors(featuredDocs.length > 0 ? featuredDocs.slice(0, 3) : docs.slice(0, 3));
-                
-                // Prioritize featured pharmacies, fallback to first 4
-                const featuredFarms = farms.filter((f: any) => f.is_featured);
-                setPopularPharmacies(featuredFarms.length > 0 ? featuredFarms.slice(0, 4) : farms.slice(0, 4));
+
+                setHomepageDoctors(homepageDocs);
+                setHomepagePharmacies(homepageFarms);
+                setPopularDoctors(homepageDocs.length > 0 ? homepageDocs : docs.slice(0, 3));
+                setPopularPharmacies(homepageFarms.length > 0 ? homepageFarms : farms.slice(0, 4));
                 
                 setCategories(specs);
             }
@@ -272,9 +273,7 @@ export default function PatientHome() {
 
     useEffect(() => {
         if (!search) {
-            // Re-apply featured filter when search is cleared
-            const featuredDocs = allDoctors.filter((d: any) => d.is_featured);
-            setPopularDoctors(featuredDocs.length > 0 ? featuredDocs.slice(0, 3) : allDoctors.slice(0, 3));
+            setPopularDoctors(homepageDoctors.length > 0 ? homepageDoctors : allDoctors.slice(0, 3));
             return;
         }
         const q = search.toLowerCase();
@@ -282,7 +281,7 @@ export default function PatientHome() {
             d.name?.toLowerCase().includes(q) || d.specialization?.toLowerCase().includes(q)
         ).slice(0, 3);
         setPopularDoctors(filtered);
-    }, [search, allDoctors]);
+    }, [search, allDoctors, homepageDoctors]);
 
     const getPhotoUrl = (path: string) => {
         if (!path) return 'https://i.pravatar.cc/300';

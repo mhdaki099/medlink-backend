@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ADMIN_THEME, ADMIN_TAB_CLEARANCE } from '../../constants/adminTheme';
+import { ADMIN_THEME, getAdminTabClearance } from '../../constants/adminTheme';
 
 type Props = {
     title: string;
@@ -59,7 +59,7 @@ export default function AdminShell({
     contentStyle,
 }: Props) {
     const insets = useSafeAreaInsets();
-    const bottomPad = ADMIN_TAB_CLEARANCE + insets.bottom * 0;
+    const bottomPad = getAdminTabClearance(insets.bottom);
 
     const body = loading ? (
         <View style={shellStyles.loader}>
@@ -93,6 +93,8 @@ export default function AdminShell({
                     style={shellStyles.scroll}
                     contentContainerStyle={{ paddingBottom: bottomPad }}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
                     refreshControl={
                         onRefresh ? (
                             <RefreshControl
@@ -106,7 +108,7 @@ export default function AdminShell({
                     {body}
                 </ScrollView>
             ) : (
-                <View style={[shellStyles.scroll, { paddingBottom: bottomPad }]}>{body}</View>
+                <View style={[shellStyles.scroll, shellStyles.noScrollBody, { paddingBottom: bottomPad }]}>{body}</View>
             )}
         </View>
     );
@@ -167,7 +169,8 @@ const shellStyles = StyleSheet.create({
         marginTop: 4,
     },
     scroll: { flex: 1 },
-    body: { paddingHorizontal: 16, paddingTop: 16 },
+    noScrollBody: { flex: 1 },
+    body: { paddingHorizontal: 16, paddingTop: 16, flex: 1 },
     loader: { alignItems: 'center', paddingTop: 80, gap: 12 },
     loaderText: { fontFamily: 'Cairo_600SemiBold', color: ADMIN_THEME.textMuted, fontSize: 14 },
     card: {

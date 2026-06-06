@@ -40,6 +40,7 @@ MIGRATIONS = {
         "open_hours": "TEXT",
         "license_no": "TEXT",
         "is_featured": "BOOLEAN DEFAULT 0",
+        "featured_sort_order": "INTEGER",
         "blood_type": "TEXT",
         "allergies": "JSON",
         "chronic_conditions": "JSON",
