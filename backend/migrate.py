@@ -15,6 +15,7 @@ MIGRATIONS = {
         "home_service_fee": "FLOAT DEFAULT 0",
         "has_home_service": "BOOLEAN DEFAULT 0",
         "address": "TEXT",
+        "country": "TEXT DEFAULT 'سوريا'",
         "province": "TEXT",
         "district": "TEXT",
         "area": "TEXT",

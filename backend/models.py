@@ -14,6 +14,7 @@ class User(Base):
     dob = Column(String, nullable=True) 
     gender = Column(String, nullable=True)
     city = Column(String)
+    country = Column(String, nullable=True, default="سوريا")
     address = Column(String)
     photo = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)

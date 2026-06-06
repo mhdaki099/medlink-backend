@@ -121,13 +121,26 @@ export default function AdminDashboard() {
     }, []);
 
     const statBoxes = [
-        { label: 'إجمالي المستخدمين', val: dashboard?.total_users || 0, icon: 'account-group', color: PREMIUM_COLORS.primary },
-        { label: 'المرضى', val: dashboard?.patients || 0, icon: 'account-heart', color: PREMIUM_COLORS.stats.patients },
-        { label: 'الأطباء', val: dashboard?.doctors || 0, icon: 'doctor', color: PREMIUM_COLORS.stats.doctors },
-        { label: 'الصيدليات', val: dashboard?.pharmacies || 0, icon: 'pill', color: PREMIUM_COLORS.stats.pharmacies },
-        { label: 'المختبرات', val: dashboard?.labs || 0, icon: 'flask', color: PREMIUM_COLORS.stats.labs },
-        { label: 'المستودعات', val: dashboard?.warehouses || 0, icon: 'warehouse', color: PREMIUM_COLORS.stats.warehouses },
-        { label: 'المواعيد', val: dashboard?.total_appointments || 0, icon: 'calendar-check', color: PREMIUM_COLORS.stats.appointments },
+        { label: 'إجمالي المستخدمين', val: dashboard?.total_users || 0, icon: 'account-group', color: PREMIUM_COLORS.primary, role: null },
+        { label: 'المرضى', val: dashboard?.patients || 0, icon: 'account-heart', color: PREMIUM_COLORS.stats.patients, role: 'patient' },
+        { label: 'الأطباء', val: dashboard?.doctors || 0, icon: 'doctor', color: PREMIUM_COLORS.stats.doctors, role: 'doctor' },
+        { label: 'الصيدليات', val: dashboard?.pharmacies || 0, icon: 'pill', color: PREMIUM_COLORS.stats.pharmacies, role: 'pharmacy' },
+        { label: 'المختبرات', val: dashboard?.labs || 0, icon: 'flask', color: PREMIUM_COLORS.stats.labs, role: 'lab' },
+        { label: 'مراكز الأشعة', val: dashboard?.radiology || 0, icon: 'radioactive', color: '#7C3AED', role: 'radiology' },
+        { label: 'المستودعات', val: dashboard?.warehouses || 0, icon: 'warehouse', color: PREMIUM_COLORS.stats.warehouses, role: 'warehouse' },
+        { label: 'السكرتارية', val: dashboard?.secretaries || 0, icon: 'account-tie', color: '#0EA5E9', role: 'secretary' },
+        { label: 'المواعيد', val: dashboard?.total_appointments || 0, icon: 'calendar-check', color: PREMIUM_COLORS.stats.appointments, role: null },
+        { label: 'مواعيد اليوم', val: dashboard?.today_appointments || 0, icon: 'calendar-today', color: '#14B8A6', role: null },
+        { label: 'طلبات التسجيل', val: dashboard?.pending_registrations || 0, icon: 'account-clock', color: '#F59E0B', role: 'pending' },
+        { label: 'الطلبات / الأدوية', val: dashboard?.total_orders || 0, icon: 'cart', color: '#EC4899', role: null },
+        { label: 'الوصفات', val: dashboard?.total_prescriptions || 0, icon: 'file-document', color: '#8B5CF6', role: null },
+        { label: 'حجوزات الخدمات', val: dashboard?.total_service_bookings || 0, icon: 'clipboard-list', color: '#F97316', role: null },
+    ];
+
+    const quickActions = [
+        { label: 'إدارة المستخدمين', icon: 'account-cog', route: '/(admin)/users', color: PREMIUM_COLORS.primary },
+        { label: 'طلبات جديدة', icon: 'account-plus', route: '/(admin)/new-accounts', color: '#F59E0B', badge: dashboard?.pending_registrations },
+        { label: 'سجل النشاط', icon: 'history', route: '/(admin)/logs', color: '#6366F1' },
     ];
 
     return (
@@ -162,25 +175,61 @@ export default function AdminDashboard() {
                 ) : (
                     <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY }] }]}>
 
+                        {/* Platform alerts */}
+                        {(dashboard?.pending_registrations > 0 || dashboard?.unverified_users > 0) ? (
+                            <View style={styles.alertBanner}>
+                                <MaterialCommunityIcons name="alert-circle-outline" size={22} color="#B45309" />
+                                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                    {dashboard?.pending_registrations > 0 ? (
+                                        <Text style={styles.alertText}>
+                                            {dashboard.pending_registrations} طلب تسجيل بانتظار الموافقة
+                                        </Text>
+                                    ) : null}
+                                    {dashboard?.unverified_users > 0 ? (
+                                        <Text style={styles.alertText}>
+                                            {dashboard.unverified_users} مستخدم غير موثق
+                                        </Text>
+                                    ) : null}
+                                </View>
+                            </View>
+                        ) : null}
+
+                        {/* Quick actions */}
+                        <View style={styles.quickActionsRow}>
+                            {quickActions.map((action, i) => (
+                                <TouchableOpacity
+                                    key={i}
+                                    style={styles.quickActionCard}
+                                    onPress={() => router.push(action.route as any)}
+                                >
+                                    <View style={[styles.quickActionIcon, { backgroundColor: action.color + '18' }]}>
+                                        <MaterialCommunityIcons name={action.icon as any} size={22} color={action.color} />
+                                        {action.badge > 0 ? (
+                                            <View style={styles.quickBadge}>
+                                                <Text style={styles.quickBadgeText}>{action.badge}</Text>
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                    <Text style={styles.quickActionLabel}>{action.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
                         {/* Quick Stats Grid */}
+                        <Text style={styles.sectionTitle}>إحصائيات المنصة</Text>
                         <View style={styles.statsGrid}>
                             {statBoxes.map((stat, i) => {
-                                const isClickable = ['المرضى', 'الأطباء', 'الصيدليات', 'المختبرات', 'المستودعات'].includes(stat.label);
-                                const roleMap: Record<string, string> = {
-                                    'المرضى': 'patient', 'الأطباء': 'doctor', 'الصيدليات': 'pharmacy',
-                                    'المختبرات': 'lab', 'المستودعات': 'warehouse'
-                                };
-                                
+                                const isClickable = !!stat.role;
                                 return (
                                     <TouchableOpacity 
                                         key={i} 
                                         style={styles.statCard}
                                         activeOpacity={isClickable ? 0.7 : 1}
                                         onPress={() => {
-                                            if (isClickable) {
-                                                const role = roleMap[stat.label];
-                                                // @ts-ignore
-                                                router.push({ pathname: '/(admin)/users', params: { role } });
+                                            if (stat.role === 'pending') {
+                                                router.push('/(admin)/new-accounts' as any);
+                                            } else if (stat.role) {
+                                                router.push({ pathname: '/(admin)/users', params: { role: stat.role } } as any);
                                             }
                                         }}
                                     >
@@ -195,9 +244,26 @@ export default function AdminDashboard() {
                         </View>
 
                         {/* Chart Area */}
-                        {dashboard?.daily_appointments && (
+                        {dashboard?.daily_appointments ? (
                             <CustomChart data={dashboard.daily_appointments} />
-                        )}
+                        ) : null}
+
+                        {/* Platform summary */}
+                        <View style={styles.summaryCard}>
+                            <Text style={styles.summaryTitle}>ملخص المنصة</Text>
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryVal}>{dashboard?.total_medical_records || 0}</Text>
+                                <Text style={styles.summaryLabel}>سجلات طبية</Text>
+                            </View>
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryVal}>{dashboard?.inactive_users || 0}</Text>
+                                <Text style={styles.summaryLabel}>حسابات معطلة</Text>
+                            </View>
+                            <View style={styles.summaryRow}>
+                                <Text style={styles.summaryVal}>{dashboard?.admins || 0}</Text>
+                                <Text style={styles.summaryLabel}>مدراء النظام</Text>
+                            </View>
+                        </View>
 
                         {/* Recent Activity Log */}
                         {dashboard?.recent_activity?.length > 0 && (
@@ -432,5 +498,88 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: PREMIUM_COLORS.primary,
         marginTop: 2,
-    }
+    },
+    alertBanner: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: '#FFFBEB',
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 16,
+    },
+    alertText: {
+        fontFamily: 'Cairo_600SemiBold',
+        fontSize: 13,
+        color: '#92400E',
+        textAlign: 'right',
+    },
+    quickActionsRow: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        gap: 10,
+        marginBottom: 18,
+    },
+    quickActionCard: {
+        flex: 1,
+        backgroundColor: PREMIUM_COLORS.cardLight,
+        borderRadius: 16,
+        padding: 12,
+        alignItems: 'center',
+        elevation: 2,
+    },
+    quickActionIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8,
+        position: 'relative',
+    },
+    quickBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#EF4444',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+    },
+    quickBadgeText: { color: '#FFF', fontSize: 10, fontFamily: 'Cairo_700Bold' },
+    quickActionLabel: {
+        fontFamily: 'Cairo_600SemiBold',
+        fontSize: 11,
+        color: PREMIUM_COLORS.text,
+        textAlign: 'center',
+    },
+    summaryCard: {
+        backgroundColor: PREMIUM_COLORS.cardLight,
+        borderRadius: 20,
+        padding: 18,
+        marginBottom: 20,
+        elevation: 2,
+    },
+    summaryTitle: {
+        fontFamily: 'Cairo_700Bold',
+        fontSize: 16,
+        color: PREMIUM_COLORS.text,
+        textAlign: 'right',
+        marginBottom: 12,
+    },
+    summaryRow: {
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    summaryLabel: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: PREMIUM_COLORS.textMuted },
+    summaryVal: { fontFamily: 'Cairo_800ExtraBold', fontSize: 16, color: PREMIUM_COLORS.primary },
 });

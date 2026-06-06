@@ -534,6 +534,7 @@ class ApiClient {
         return this.get<any[]>(`/admin/users${q}`);
     }
     getAdminUserDetail(id: string) { return this.get<any>(`/admin/users/${id}`); }
+    updateAdminUser(id: string, data: any) { return this.put<any>(`/admin/users/${id}`, data); }
     verifyUser(id: string) { return this.put<any>(`/admin/users/${id}/verify`, {}); }
     toggleUserActive(id: string) { return this.put<any>(`/admin/users/${id}/toggle-active`, {}); }
     toggleUserFeatured(id: string) { return this.put<any>(`/admin/users/${id}/toggle-featured`, {}); }
@@ -541,9 +542,10 @@ class ApiClient {
     createAdminUser(data: any) {
         return this.post<any>('/admin/users', data);
     }
-    getAuditLogs(params?: { user_id?: string; action?: string; limit?: number }) {
+    async getAuditLogs(params?: { user_id?: string; action?: string; limit?: number }) {
         const q = params ? new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : '';
-        return this.get<any[]>(`/admin/audit-logs${q ? '?' + q : ''}`);
+        const res = await this.get<any>(`/admin/audit-logs${q ? '?' + q : ''}`);
+        return Array.isArray(res) ? res : (res?.logs || []);
     }
     getAdminStats() { return this.get<any>('/admin/stats'); }
 
