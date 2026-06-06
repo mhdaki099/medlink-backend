@@ -291,6 +291,14 @@ class ApiClient {
     getWarehouseOrderInvoice(orderId: string) { return this.get<any>(`/orders/warehouse/${orderId}/invoice`); }
     updateWarehouseOrderInvoice(orderId: string, data: any) { return this.put<any>(`/orders/warehouse/${orderId}/invoice`, data); }
     getWarehousePromoters() { return this.get<any[]>('/warehouses/promoters'); }
+    getWarehousePromoterCommissions(year?: number, month?: number, promoterId?: string) {
+        const q = new URLSearchParams();
+        if (year) q.set('year', String(year));
+        if (month) q.set('month', String(month));
+        if (promoterId) q.set('promoter_id', promoterId);
+        const qs = q.toString();
+        return this.get<any>(`/warehouses/promoters/commissions${qs ? '?' + qs : ''}`);
+    }
     createWarehousePromoter(data: { name: string; phone?: string; commission_percent: number }) {
         return this.post<any>('/warehouses/promoters', data);
     }

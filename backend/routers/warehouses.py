@@ -77,6 +77,113 @@ def list_warehouse_promoters(current_user: dict = Depends(require_role("warehous
     return [model_to_dict(r) for r in rows]
 
 
+@router.get("/promoters/commissions")
+def get_promoter_commissions(
+    year: int = Query(None),
+    month: int = Query(None),
+    promoter_id: str = Query(None),
+    current_user: dict = Depends(require_role("warehouse", "admin")),
+    db: Session = Depends(get_db),
+):
+    warehouse_id = current_user.get("sub")
+    if current_user.get("role") != "warehouse":
+        raise HTTPException(403, "للمستودع فقط")
+    now = datetime.now(timezone.utc)
+    y = int(year or now.year)
+    m = int(month or now.month)
+    if m < 1 or m > 12:
+        raise HTTPException(400, "الشهر غير صالح")
+    month_key = f"{y:04d}-{m:02d}"
+
+    promoter_rows = {
+        p.id: model_to_dict(p)
+        for p in db.query(WarehousePromoter).filter(WarehousePromoter.warehouse_id == warehouse_id).all()
+    }
+
+    orders = db.query(WarehouseOrder).filter(
+        WarehouseOrder.warehouse_id == warehouse_id,
+        WarehouseOrder.status.in_(("shipped", "delivered")),
+    ).all()
+
+    by_promoter: dict = {}
+    for order in orders:
+        inv = order.invoice if isinstance(order.invoice, dict) else {}
+        promo = inv.get("promoter") or {}
+        pid = promo.get("id")
+        if not pid and not promo.get("name"):
+            continue
+        if promoter_id and pid != promoter_id:
+            continue
+
+        inv_date = (inv.get("date") or order.created_at or "")[:7]
+        if inv_date != month_key:
+            continue
+
+        total_inv = float(inv.get("total") or order.total or 0)
+        pct = float(promo.get("commission_percent") or 0)
+        amount = float(promo.get("commission_amount") or 0)
+        if not amount and pct:
+            amount = round(total_inv * pct / 100, 2)
+
+        ph = db.query(User).filter(User.id == order.pharmacy_id).first()
+        order_row = {
+            "order_id": order.id,
+            "purchase_order_number": order.purchase_order_number,
+            "invoice_number": inv.get("number"),
+            "invoice_date": inv.get("date"),
+            "pharmacy_name": ph.name if ph else "صيدلية",
+            "invoice_total": round(total_inv, 2),
+            "commission_percent": pct,
+            "commission_amount": round(amount, 2),
+            "order_status": order.status,
+        }
+
+        key = pid or f"name:{promo.get('name')}"
+        if key not in by_promoter:
+            db_promo = promoter_rows.get(pid) if pid else None
+            by_promoter[key] = {
+                "promoter_id": pid,
+                "promoter_name": promo.get("name") or (db_promo or {}).get("name", "مندوب"),
+                "default_percent": (db_promo or {}).get("commission_percent"),
+                "orders_count": 0,
+                "total_sales": 0.0,
+                "total_commission": 0.0,
+                "orders": [],
+            }
+        bucket = by_promoter[key]
+        bucket["orders_count"] += 1
+        bucket["total_sales"] = round(bucket["total_sales"] + total_inv, 2)
+        bucket["total_commission"] = round(bucket["total_commission"] + amount, 2)
+        bucket["orders"].append(order_row)
+
+    for pid, prow in promoter_rows.items():
+        if pid in by_promoter or (promoter_id and promoter_id != pid):
+            continue
+        by_promoter[pid] = {
+            "promoter_id": pid,
+            "promoter_name": prow.get("name"),
+            "default_percent": prow.get("commission_percent"),
+            "orders_count": 0,
+            "total_sales": 0.0,
+            "total_commission": 0.0,
+            "orders": [],
+        }
+
+    summary = sorted(by_promoter.values(), key=lambda x: x["total_commission"], reverse=True)
+    if promoter_id:
+        summary = [s for s in summary if s.get("promoter_id") == promoter_id]
+
+    return {
+        "month": month_key,
+        "year": y,
+        "month_num": m,
+        "summary": summary,
+        "grand_total_commission": round(sum(s["total_commission"] for s in summary), 2),
+        "grand_total_sales": round(sum(s["total_sales"] for s in summary), 2),
+        "orders_with_promoter": sum(s["orders_count"] for s in summary),
+    }
+
+
 @router.post("/promoters")
 def create_warehouse_promoter(body: dict, current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
     warehouse_id = current_user.get("sub")
