@@ -151,7 +151,10 @@ export default function AdminUsers() {
                                     <MaterialCommunityIcons name={meta.icon as any} size={24} color={meta.color} />
                                 </View>
                                 <View style={styles.userMain}>
-                                    <Text style={styles.userName}>{u.name}</Text>
+                                    <View style={styles.nameRow}>
+                                        <Text style={styles.userId} selectable>{u.id}</Text>
+                                        <Text style={styles.userName}>{u.name}</Text>
+                                    </View>
                                     <Text style={styles.userEmail}>{u.email}</Text>
                                     <View style={styles.badgeRow}>
                                         <View style={[styles.rolePill, { backgroundColor: meta.color + '15' }]}>
@@ -282,7 +285,27 @@ const styles = StyleSheet.create({
     userHeader: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 12 },
     avatar: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     userMain: { flex: 1, alignItems: 'flex-end' },
+    nameRow: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
+        width: '100%',
+    },
     userName: { fontFamily: 'Cairo_800ExtraBold', fontSize: 15, color: ADMIN_THEME.text },
+    userId: {
+        fontFamily: 'Cairo_600SemiBold',
+        fontSize: 11,
+        color: ADMIN_THEME.textMuted,
+        backgroundColor: ADMIN_THEME.surfaceMuted,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: ADMIN_THEME.border,
+        overflow: 'hidden',
+    },
     userEmail: { fontFamily: 'Cairo_500Medium', fontSize: 12, color: ADMIN_THEME.textMuted, marginTop: 2 },
     badgeRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: 8 },
     rolePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
