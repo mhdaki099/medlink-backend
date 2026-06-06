@@ -50,7 +50,11 @@ export default function WarehouseOrders() {
             await api.updateWarehouseOrderStatus(id, status);
             load();
             if (status === 'shipped') {
-                const inv = await api.getWarehouseOrderInvoice(id);
+                const [inv, promos] = await Promise.all([
+                    api.getWarehouseOrderInvoice(id),
+                    api.getWarehousePromoters().catch(() => []),
+                ]);
+                if (promos.length) setPromoters(promos);
                 setInvoiceData(inv);
                 setInvoiceEdit(true);
             }
@@ -60,7 +64,11 @@ export default function WarehouseOrders() {
 
     const openInvoice = async (orderId: string, editable: boolean) => {
         try {
-            const inv = await api.getWarehouseOrderInvoice(orderId);
+            const [inv, promos] = await Promise.all([
+                api.getWarehouseOrderInvoice(orderId),
+                editable ? api.getWarehousePromoters().catch(() => []) : Promise.resolve([]),
+            ]);
+            if (promos.length) setPromoters(promos);
             setInvoiceData(inv);
             setInvoiceEdit(editable);
         } catch (e: any) { Alert.alert('خطأ', e.message); }

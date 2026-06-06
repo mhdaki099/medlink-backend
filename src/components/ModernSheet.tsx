@@ -25,11 +25,13 @@ type Props = {
     iconColors?: [string, string];
     children?: React.ReactNode;
     actions?: Action[];
+    bodyMaxHeight?: number;
 };
 
 export default function ModernSheet({
     visible, onClose, title, subtitle, icon = 'information-outline',
     iconColors = ['#1E88E5', '#43A047'], children, actions = [],
+    bodyMaxHeight = 280,
 }: Props) {
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -42,7 +44,12 @@ export default function ModernSheet({
                     <Text style={styles.title}>{title}</Text>
                     {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
                     {children ? (
-                        <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+                        <ScrollView
+                            style={[styles.body, { maxHeight: bodyMaxHeight }]}
+                            showsVerticalScrollIndicator
+                            nestedScrollEnabled
+                            keyboardShouldPersistTaps="handled"
+                        >
                             {children}
                         </ScrollView>
                     ) : null}
