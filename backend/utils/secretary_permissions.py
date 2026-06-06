@@ -23,7 +23,18 @@ SECRETARY_PERMISSION_KEYS = [
     "analysis_view",
     "photos_view",
     "call_patient",
+    "clinic_edit",
 ]
+
+SECRETARY_CLINIC_FIELDS = frozenset({
+    "clinic_name",
+    "clinic_address",
+    "phone",
+    "available_hours",
+    "working_hours",
+    "consultation_duration",
+    "buffer_minutes",
+})
 
 ALL_SECRETARY_PERMISSIONS = {k: True for k in SECRETARY_PERMISSION_KEYS}
 
@@ -45,6 +56,7 @@ PERMISSION_LABELS_AR = {
     "analysis_view": "عرض التحاليل والأشعة",
     "photos_view": "عرض الصور والمرفقات",
     "call_patient": "الاتصال بالمريض",
+    "clinic_edit": "تعديل معلومات العيادة وساعات العمل",
 }
 
 

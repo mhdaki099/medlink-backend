@@ -132,6 +132,26 @@ def _create_prescription_for_appointment(
     return presc
 
 
+def _normalize_attachments(raw) -> list:
+    if not raw or not isinstance(raw, list):
+        return []
+    normalized = []
+    for item in raw:
+        if not isinstance(item, dict) or not item.get("url"):
+            continue
+        url = str(item.get("url", "")).strip()
+        file_type = item.get("type") or ("pdf" if url.lower().endswith(".pdf") else "photo")
+        normalized.append({
+            "id": item.get("id") or f"att_{uuid.uuid4().hex[:8]}",
+            "name": item.get("name") or ("ملف PDF" if file_type == "pdf" else "صورة"),
+            "url": url,
+            "type": file_type,
+            "mime_type": item.get("mime_type"),
+            "uploaded_at": item.get("uploaded_at") or datetime.now(timezone.utc).isoformat(),
+        })
+    return normalized
+
+
 def _report_payload(db: Session, report: ConsultationReport) -> dict:
     result = model_to_dict(report)
     requests = db.query(ServiceRequest).filter(
@@ -175,6 +195,8 @@ def create_consultation_report(data: dict, current_user: dict = Depends(require_
         existing.is_healthy = bool(data.get("is_healthy", existing.is_healthy))
         existing.notes = data.get("notes", existing.notes)
         existing.follow_up = data.get("follow_up", existing.follow_up)
+        if "attachments" in data:
+            existing.attachments = _normalize_attachments(data.get("attachments"))
         report = existing
     else:
         report_id = f"cr_{uuid.uuid4().hex[:8]}"
@@ -187,6 +209,7 @@ def create_consultation_report(data: dict, current_user: dict = Depends(require_
             is_healthy=bool(data.get("is_healthy", False)),
             notes=data.get("notes", ""),
             follow_up=data.get("follow_up", ""),
+            attachments=_normalize_attachments(data.get("attachments")),
             created_at=now.isoformat(),
         )
         db.add(report)

@@ -739,6 +739,22 @@ export default function StaffPatientsScreen({
                                                                 ملاحظات: {visit.consultation_report.notes}
                                                             </Text>
                                                         ) : null}
+                                                        {can('photos_view') && visit.consultation_report.attachments?.length > 0 ? (
+                                                            <View style={styles.attachmentsRow}>
+                                                                {visit.consultation_report.attachments.map((att: any) => (
+                                                                    <View key={att.id} style={styles.attachmentPill}>
+                                                                        <MaterialCommunityIcons
+                                                                            name={att.type === 'pdf' ? 'file-pdf-box' : 'image-outline'}
+                                                                            size={14}
+                                                                            color={att.type === 'pdf' ? '#DC2626' : '#1E88E5'}
+                                                                        />
+                                                                        <Text style={styles.attachmentPillText} numberOfLines={1}>
+                                                                            {att.name || (att.type === 'pdf' ? 'PDF' : 'صورة')}
+                                                                        </Text>
+                                                                    </View>
+                                                                ))}
+                                                            </View>
+                                                        ) : null}
                                                     </View>
                                                 ) : null}
 
@@ -1171,6 +1187,18 @@ const styles = StyleSheet.create({
     visitReportBox: { backgroundColor: '#DBEAFE', padding: 10, borderRadius: 10, marginBottom: 8 },
     visitReportLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#1E40AF', marginBottom: 4 },
     visitReportText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#1E3A8A', textAlign: 'right' },
+    attachmentsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+    attachmentPill: {
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        maxWidth: '48%',
+    },
+    attachmentPillText: { fontSize: 10, fontFamily: 'Cairo_600SemiBold', color: '#1E40AF', flex: 1 },
     visitPrescBox: { backgroundColor: '#F3E8FF', padding: 10, borderRadius: 10, marginBottom: 8 },
     visitPrescLabel: { fontSize: 11, fontFamily: 'Cairo_700Bold', color: '#6B21A8', marginBottom: 4 },
     visitMedText: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#581C87', textAlign: 'right', marginTop: 2 },

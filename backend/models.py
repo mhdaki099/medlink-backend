@@ -429,6 +429,7 @@ class ConsultationReport(Base):
     is_healthy = Column(Boolean, default=False)
     notes = Column(Text, nullable=True)
     follow_up = Column(Text, nullable=True)
+    attachments = Column(JSON, nullable=True)  # [{id, name, url, type: photo|pdf, mime_type, uploaded_at}]
     created_at = Column(String)
 
 

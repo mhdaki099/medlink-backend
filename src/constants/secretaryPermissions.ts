@@ -15,7 +15,8 @@ export type SecretaryPermissionKey =
     | 'notes_create'
     | 'analysis_view'
     | 'photos_view'
-    | 'call_patient';
+    | 'call_patient'
+    | 'clinic_edit';
 
 export type SecretaryPermissions = Record<SecretaryPermissionKey, boolean>;
 
@@ -58,6 +59,12 @@ export const SECRETARY_PERMISSION_GROUPS: {
             { key: 'analysis_view', label: 'عرض التحاليل والأشعة' },
             { key: 'photos_view', label: 'عرض الصور والمرفقات' },
             { key: 'call_patient', label: 'الاتصال بالمريض' },
+        ],
+    },
+    {
+        title: 'العيادة',
+        permissions: [
+            { key: 'clinic_edit', label: 'تعديل معلومات العيادة وساعات العمل' },
         ],
     },
 ];

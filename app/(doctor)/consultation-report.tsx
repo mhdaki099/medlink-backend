@@ -2,12 +2,15 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, Alert, ActivityIndicator, Platform, Switch, Modal, KeyboardAvoidingView,
+    Image, Linking,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { api } from '../../src/services/api';
+import { api, BASE_URL } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import {
     LAB_EXAM_OPTIONS,
@@ -30,6 +33,22 @@ type PendingServiceRequest = {
 type PendingPrescription = {
     medications: MedRow[];
     notes: string;
+};
+
+type ReportAttachment = {
+    id: string;
+    name: string;
+    url: string;
+    type: 'photo' | 'pdf';
+    mime_type?: string;
+    uploaded_at?: string;
+};
+
+const getFullUrl = (path?: string) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    const root = BASE_URL.replace('/api', '');
+    return `${root}${path}`;
 };
 
 export default function ConsultationReportScreen() {
@@ -73,6 +92,8 @@ export default function ConsultationReportScreen() {
     const [loadingReport, setLoadingReport] = useState(true);
     const [showSavedSummary, setShowSavedSummary] = useState(false);
     const [editingServiceType, setEditingServiceType] = useState<'lab' | 'radiology' | null>(null);
+    const [attachments, setAttachments] = useState<ReportAttachment[]>([]);
+    const [uploadingFile, setUploadingFile] = useState(false);
 
     const examOptions = serviceType === 'lab' ? LAB_EXAM_OPTIONS : RADIOLOGY_EXAM_OPTIONS;
 
@@ -102,6 +123,75 @@ export default function ConsultationReportScreen() {
             setSavedPrescription(report.prescription);
             setPendingPrescription(null);
         }
+        if (report.attachments?.length) {
+            setAttachments(report.attachments);
+        }
+    };
+
+    const pickPhoto = async () => {
+        try {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!perm.granted) {
+                Alert.alert('تنبيه', 'يرجى السماح بالوصول للصور');
+                return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images' as any,
+                quality: 0.85,
+            });
+            if (result.canceled || !result.assets?.[0]) return;
+            const asset = result.assets[0];
+            setUploadingFile(true);
+            const uploaded = await api.uploadFile(asset.uri, 'photo');
+            setAttachments(prev => [...prev, {
+                id: `att_${Date.now()}`,
+                name: asset.fileName || 'صورة مرفقة',
+                url: uploaded.url,
+                type: 'photo',
+                mime_type: asset.mimeType || 'image/jpeg',
+                uploaded_at: new Date().toISOString(),
+            }]);
+        } catch (e: any) {
+            Alert.alert('خطأ', e.message || 'فشل رفع الصورة');
+        } finally {
+            setUploadingFile(false);
+        }
+    };
+
+    const pickPdf = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'image/*'],
+                copyToCacheDirectory: true,
+            });
+            if (result.canceled || !result.assets?.[0]) return;
+            const asset = result.assets[0];
+            const isPdf = (asset.mimeType || '').includes('pdf') || asset.name?.toLowerCase().endsWith('.pdf');
+            setUploadingFile(true);
+            const uploaded = await api.uploadFile(asset.uri, isPdf ? 'document' : 'photo');
+            setAttachments(prev => [...prev, {
+                id: `att_${Date.now()}`,
+                name: asset.name || (isPdf ? 'ملف PDF' : 'صورة مرفقة'),
+                url: uploaded.url,
+                type: isPdf ? 'pdf' : 'photo',
+                mime_type: asset.mimeType,
+                uploaded_at: new Date().toISOString(),
+            }]);
+        } catch (e: any) {
+            Alert.alert('خطأ', e.message || 'فشل رفع الملف');
+        } finally {
+            setUploadingFile(false);
+        }
+    };
+
+    const removeAttachment = (id: string) => {
+        setAttachments(prev => prev.filter(a => a.id !== id));
+    };
+
+    const openAttachment = (att: ReportAttachment) => {
+        const url = getFullUrl(att.url);
+        if (!url) return;
+        Linking.openURL(url).catch(() => Alert.alert('تنبيه', 'تعذر فتح الملف'));
     };
 
     const loadExistingReport = useCallback(async () => {
@@ -239,6 +329,7 @@ export default function ConsultationReportScreen() {
                 is_healthy: isHealthy,
                 notes,
                 follow_up: followUp,
+                attachments,
             };
             if (pendingPrescription?.medications?.length) {
                 payload.medications = pendingPrescription.medications.map(m => ({
@@ -381,6 +472,9 @@ export default function ConsultationReportScreen() {
                                 رمز {sr.request_type === 'lab' ? 'تحليل' : 'أشعة'}: {sr.reference_code}
                             </Text>
                         ))}
+                        {attachments.length > 0 ? (
+                            <Text style={styles.codeLine}>مرفقات: {attachments.length} ملف</Text>
+                        ) : null}
                     </View>
                 )}
 
@@ -443,6 +537,61 @@ export default function ConsultationReportScreen() {
                         onChangeText={setFollowUp}
                         textAlign="right"
                     />
+                </View>
+
+                <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>مرفقات (اختياري)</Text>
+                    <Text style={styles.stepHint}>أضف صوراً أو ملفات PDF للتقرير — يمكن للمريض والطبيب الاطلاع عليها لاحقاً</Text>
+                    <View style={styles.attachActions}>
+                        <TouchableOpacity
+                            style={[styles.attachBtn, uploadingFile && { opacity: 0.6 }]}
+                            onPress={pickPhoto}
+                            disabled={uploadingFile}
+                        >
+                            <MaterialCommunityIcons name="image-plus" size={22} color="#1E88E5" />
+                            <Text style={styles.attachBtnText}>صورة</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.attachBtn, uploadingFile && { opacity: 0.6 }]}
+                            onPress={pickPdf}
+                            disabled={uploadingFile}
+                        >
+                            <MaterialCommunityIcons name="file-pdf-box" size={22} color="#DC2626" />
+                            <Text style={styles.attachBtnText}>PDF / ملف</Text>
+                        </TouchableOpacity>
+                    </View>
+                    {uploadingFile ? (
+                        <View style={styles.uploadingRow}>
+                            <ActivityIndicator size="small" color="#1E88E5" />
+                            <Text style={styles.uploadingText}>جاري رفع الملف...</Text>
+                        </View>
+                    ) : null}
+                    {attachments.length > 0 ? (
+                        <View style={styles.attachList}>
+                            {attachments.map(att => (
+                                <View key={att.id} style={styles.attachItem}>
+                                    <TouchableOpacity onPress={() => removeAttachment(att.id)} style={styles.attachRemove}>
+                                        <Ionicons name="close-circle" size={20} color="#EF4444" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.attachPreview} onPress={() => openAttachment(att)}>
+                                        {att.type === 'photo' ? (
+                                            <Image source={{ uri: getFullUrl(att.url) }} style={styles.attachThumb} />
+                                        ) : (
+                                            <View style={styles.pdfThumb}>
+                                                <MaterialCommunityIcons name="file-pdf-box" size={28} color="#DC2626" />
+                                            </View>
+                                        )}
+                                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                            <Text style={styles.attachName} numberOfLines={1}>{att.name}</Text>
+                                            <Text style={styles.attachType}>{att.type === 'pdf' ? 'PDF' : 'صورة'}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <Text style={styles.attachEmpty}>لا توجد مرفقات بعد</Text>
+                    )}
                 </View>
 
                 <View style={styles.card}>
@@ -877,4 +1026,46 @@ const styles = StyleSheet.create({
     savedSummaryHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 12 },
     savedSummaryTitle: { fontSize: 17, fontFamily: 'Cairo_700Bold', color: '#15803D' },
     savedSummaryText: { fontSize: 14, fontFamily: 'Cairo_400Regular', color: '#1E293B', textAlign: 'right', lineHeight: 22, marginBottom: 8 },
+    attachActions: { flexDirection: 'row-reverse', gap: 10, marginBottom: 12 },
+    attachBtn: {
+        flex: 1,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    attachBtnText: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#374151' },
+    uploadingRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 10 },
+    uploadingText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: '#1E88E5' },
+    attachList: { gap: 10 },
+    attachItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+    attachRemove: { padding: 4 },
+    attachPreview: {
+        flex: 1,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    attachThumb: { width: 48, height: 48, borderRadius: 8, backgroundColor: '#E2E8F0' },
+    pdfThumb: {
+        width: 48,
+        height: 48,
+        borderRadius: 8,
+        backgroundColor: '#FEE2E2',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    attachName: { fontSize: 13, fontFamily: 'Cairo_600SemiBold', color: '#1E293B', maxWidth: 180 },
+    attachType: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#64748B', marginTop: 2 },
+    attachEmpty: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: '#94A3B8', textAlign: 'center', paddingVertical: 8 },
 });

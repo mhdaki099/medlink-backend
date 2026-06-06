@@ -55,6 +55,9 @@ MIGRATIONS = {
         "experience_years": "INTEGER",
         "specialization": "TEXT",
     },
+    "consultation_reports": {
+        "attachments": "JSON",
+    },
     "medicines": {
         "strength": "VARCHAR",
         "barcode": "VARCHAR",

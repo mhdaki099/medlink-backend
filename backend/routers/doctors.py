@@ -11,6 +11,8 @@ from utils.secretary_permissions import (
     parse_permissions_payload,
     get_effective_permissions,
     require_secretary_permission,
+    get_secretary_user,
+    SECRETARY_CLINIC_FIELDS,
 )
 
 router = APIRouter()
@@ -405,8 +407,19 @@ def add_review(doctor_id: str, req: ReviewRequest, current_user: dict = Depends(
     return {"message": "تمت إضافة التقييم", "new_rating": doc.rating, "total_reviews": doc.total_reviews}
 
 @router.put("/{doctor_id}/profile")
-def update_doctor_profile(doctor_id: str, updates: dict, current_user: dict = Depends(require_role("doctor", "admin")), db: Session = Depends(get_db)):
-    if current_user["role"] == "doctor" and current_user["sub"] != doctor_id:
+def update_doctor_profile(doctor_id: str, updates: dict, current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    role = current_user.get("role")
+    if role == "doctor" and current_user["sub"] != doctor_id:
+        raise HTTPException(403, "ليس لديك صلاحية")
+    if role == "secretary":
+        sec = get_secretary_user(db, current_user["sub"])
+        if not sec or sec.supervisor_id != doctor_id:
+            raise HTTPException(403, "ليس لديك صلاحية")
+        require_secretary_permission(db, current_user, "clinic_edit")
+        updates = {k: v for k, v in updates.items() if k in SECRETARY_CLINIC_FIELDS}
+        if not updates:
+            raise HTTPException(400, "لا توجد حقول مسموحة للتحديث")
+    elif role not in ("doctor", "admin"):
         raise HTTPException(403, "ليس لديك صلاحية")
     doc = db.query(User).filter(User.id == doctor_id).first()
     if not doc:
