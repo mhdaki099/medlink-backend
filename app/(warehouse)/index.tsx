@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import ModernSheet from '../../src/components/ModernSheet';
 import { Colors, BorderRadius, Shadow } from '../../src/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ export default function WarehouseDashboard() {
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
 
     const load = async () => {
         if (!user?.id) return;
@@ -35,7 +37,8 @@ export default function WarehouseDashboard() {
             const deliveryTime = status === 'processing' ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined;
             await api.updateWarehouseOrderStatus(id, status, deliveryTime);
             load();
-            Alert.alert('✅ تم', `تم تحديث حالة الطلب`);
+            const labels: Record<string, string> = { processing: 'قُبل الطلب وبدأ التجهيز', shipped: 'تم شحن الطلب للصيدلية وخصم المخزون' };
+            setStatusSuccess(labels[status] || 'تم تحديث حالة الطلب');
         } catch (e: any) { Alert.alert('خطأ', e.message); }
     };
 
@@ -47,6 +50,7 @@ export default function WarehouseDashboard() {
     const STATUS_LABELS: Record<string, string> = { pending: 'جديد', processing: 'قيد التجهيز', shipped: 'تم الشحن', delivered: 'مُستلم', cancelled: 'ملغى' };
 
     return (
+        <View style={{ flex: 1 }}>
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: bottomPad }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}>
@@ -140,6 +144,17 @@ export default function WarehouseDashboard() {
             </View>
 
         </ScrollView>
+
+        <ModernSheet
+            visible={!!statusSuccess}
+            onClose={() => setStatusSuccess(null)}
+            title="تم بنجاح"
+            subtitle={statusSuccess || ''}
+            icon="check-decagram"
+            iconColors={['#10B981', '#059669']}
+            actions={[{ label: 'حسناً', onPress: () => setStatusSuccess(null), variant: 'primary' }]}
+        />
+        </View>
     );
 }
 

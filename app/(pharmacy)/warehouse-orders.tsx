@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useSubscreenBottomPadding } from '../../src/constants/layout';
+import ModernSheet from '../../src/components/ModernSheet';
 
 const C = {
     primary: '#1E88E5', accent: '#43A047', success: '#27AE60', danger: '#E74C3C',
@@ -31,13 +32,6 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 const ACTIVE_STATUSES = new Set(['pending', 'processing', 'shipped']);
 
-function formatStockMessage(updates: any[]): string {
-    if (!updates?.length) return 'تم تأكيد استلام الشحنة.';
-    const lines = updates.slice(0, 3).map((u: any) => `• ${u.name}: +${u.added} (المجموع ${u.total})`);
-    const extra = updates.length > 3 ? `\n(+${updates.length - 3} أصناف أخرى)` : '';
-    return `تم تأكيد الاستلام وإضافة الأدوية للمخزون:\n${lines.join('\n')}${extra}`;
-}
-
 export default function PharmacyWarehouseOrders() {
     const { user } = useAuth();
     const router = useRouter();
@@ -48,6 +42,9 @@ export default function PharmacyWarehouseOrders() {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [filter, setFilter] = useState<FilterKey>('all');
     const [confirmingId, setConfirmingId] = useState<string | null>(null);
+    const [pendingOrder, setPendingOrder] = useState<any | null>(null);
+    const [successData, setSuccessData] = useState<{ stockUpdates: any[]; warehouseName: string } | null>(null);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     const load = async () => {
         if (!user?.id) return;
@@ -73,28 +70,26 @@ export default function PharmacyWarehouseOrders() {
 
     const awaitingConfirm = orders.filter(o => o.status === 'shipped').length;
 
-    const confirmReceipt = (ord: any) => {
-        Alert.alert('تأكيد الاستلام', `هل استلمت شحنة "${ord.warehouse?.name || 'المستودع'}" بالكامل؟\n\nسيتم إضافة الكميات إلى مخزون الصيدلية.`, [
-            { text: 'ليس بعد', style: 'cancel' },
-            {
-                text: 'نعم، استلمت', onPress: async () => {
-                    setConfirmingId(ord.id);
-                    try {
-                        const updated = await api.confirmPharmacyWarehouseOrder(ord.id);
-                        setOrders(prev => {
-                            const next = prev.map(o => o.id === updated.id ? { ...o, ...updated } : o);
-                            if (!next.some(o => o.id === updated.id)) next.unshift(updated);
-                            return next.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
-                        });
-                        Alert.alert('✅ تم', formatStockMessage(updated.stock_updates));
-                    } catch (e: any) {
-                        Alert.alert('خطأ', e.message || 'تعذر تأكيد الاستلام');
-                    } finally {
-                        setConfirmingId(null);
-                    }
-                },
-            },
-        ]);
+    const handleConfirm = async () => {
+        if (!pendingOrder) return;
+        setConfirmingId(pendingOrder.id);
+        try {
+            const updated = await api.confirmPharmacyWarehouseOrder(pendingOrder.id);
+            setOrders(prev => {
+                const next = prev.map(o => o.id === updated.id ? { ...o, ...updated } : o);
+                if (!next.some(o => o.id === updated.id)) next.unshift(updated);
+                return next.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+            });
+            setPendingOrder(null);
+            setSuccessData({
+                stockUpdates: updated.stock_updates || [],
+                warehouseName: updated.warehouse?.name || pendingOrder.warehouse?.name || 'المستودع',
+            });
+        } catch (e: any) {
+            setErrorMsg(e.message || 'تعذر تأكيد الاستلام');
+        } finally {
+            setConfirmingId(null);
+        }
     };
 
     const renderOrderCard = (ord: any) => (
@@ -116,7 +111,10 @@ export default function PharmacyWarehouseOrders() {
             )}
             <View style={styles.itemsBox}>
                 {(ord.items || []).map((item: any, i: number) => (
-                    <Text key={i} style={styles.itemLine}>• {item.name || item.item_id} × {item.qty}</Text>
+                    <View key={i} style={styles.itemRow}>
+                        <Text style={styles.itemQty}>×{item.qty}</Text>
+                        <Text style={styles.itemLine}>{item.name || item.item_id}</Text>
+                    </View>
                 ))}
             </View>
             <View style={styles.footer}>
@@ -124,17 +122,11 @@ export default function PharmacyWarehouseOrders() {
                 {ord.status === 'shipped' && (
                     <TouchableOpacity
                         style={[styles.confirmBtn, confirmingId === ord.id && { opacity: 0.7 }]}
-                        onPress={() => confirmReceipt(ord)}
-                        disabled={confirmingId === ord.id}
+                        onPress={() => setPendingOrder(ord)}
+                        disabled={!!confirmingId}
                     >
-                        {confirmingId === ord.id ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                        ) : (
-                            <>
-                                <MaterialCommunityIcons name="check-circle" size={18} color="#FFF" />
-                                <Text style={styles.confirmText}>تأكيد الاستلام</Text>
-                            </>
-                        )}
+                        <MaterialCommunityIcons name="check-circle" size={18} color="#FFF" />
+                        <Text style={styles.confirmText}>تأكيد الاستلام</Text>
                     </TouchableOpacity>
                 )}
             </View>
@@ -214,6 +206,84 @@ export default function PharmacyWarehouseOrders() {
                         </>
                     )}
             </ScrollView>
+
+            <ModernSheet
+                visible={!!pendingOrder}
+                onClose={() => !confirmingId && setPendingOrder(null)}
+                title="تأكيد استلام الشحنة"
+                subtitle={`هل استلمت شحنة «${pendingOrder?.warehouse?.name || 'المستودع'}» بالكامل؟\nسيتم إضافة الكميات تلقائياً إلى مخزون الصيدلية.`}
+                icon="package-variant-closed-check"
+                iconColors={['#EA580C', '#F59E0B']}
+                actions={[
+                    { label: 'ليس بعد', onPress: () => setPendingOrder(null), variant: 'secondary' },
+                    { label: 'نعم، استلمت الشحنة', onPress: handleConfirm, variant: 'primary', loading: !!confirmingId },
+                ]}
+            >
+                <View style={styles.sheetItems}>
+                    {(pendingOrder?.items || []).map((item: any, i: number) => (
+                        <View key={i} style={styles.sheetItem}>
+                            <View style={styles.sheetItemIcon}>
+                                <MaterialCommunityIcons name="pill" size={16} color="#EA580C" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.sheetItemName}>{item.name || item.item_id}</Text>
+                                <Text style={styles.sheetItemMeta}>
+                                    الكمية: {item.qty} {item.unit || 'وحدة'}
+                                    {item.units_per_pack ? ` • ${item.units_per_pack} وحدة/حزمة` : ''}
+                                </Text>
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            </ModernSheet>
+
+            <ModernSheet
+                visible={!!successData}
+                onClose={() => setSuccessData(null)}
+                title="تم الاستلام بنجاح"
+                subtitle={`أُضيفت الأدوية إلى مخزون الصيدلية من ${successData?.warehouseName || 'المستودع'}`}
+                icon="check-decagram"
+                iconColors={['#10B981', '#059669']}
+                actions={[
+                    { label: 'إغلاق', onPress: () => setSuccessData(null), variant: 'secondary' },
+                    {
+                        label: 'عرض مخزون الأدوية',
+                        onPress: () => { setSuccessData(null); router.push('/(pharmacy)/medicines' as any); },
+                        variant: 'primary',
+                    },
+                ]}
+            >
+                {successData?.stockUpdates?.length ? (
+                    <View style={styles.stockList}>
+                        {successData.stockUpdates.map((u: any) => (
+                            <View key={u.medicine_id} style={styles.stockRow}>
+                                <View style={styles.stockAdded}>
+                                    <Text style={styles.stockAddedText}>+{u.added}</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.stockName}>{u.name}</Text>
+                                    <Text style={styles.stockTotal}>المجموع الآن: {u.total} وحدة</Text>
+                                </View>
+                                {u.created && (
+                                    <View style={styles.newBadge}><Text style={styles.newBadgeText}>جديد</Text></View>
+                                )}
+                            </View>
+                        ))}
+                    </View>
+                ) : (
+                    <Text style={styles.noStockText}>تم تأكيد الاستلام. تحقق من قائمة الأدوية.</Text>
+                )}
+            </ModernSheet>
+
+            <ModernSheet
+                visible={!!errorMsg}
+                onClose={() => setErrorMsg(null)}
+                title="تعذر التأكيد"
+                subtitle={errorMsg || ''}
+                icon="alert-circle-outline"
+                iconColors={['#EF4444', '#DC2626']}
+                actions={[{ label: 'حسناً', onPress: () => setErrorMsg(null), variant: 'primary' }]}
+            />
         </View>
     );
 }
@@ -248,9 +318,25 @@ const styles = StyleSheet.create({
     deliveredNote: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success + '12', borderRadius: 10, padding: 8, marginBottom: 8 },
     deliveredNoteText: { fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: C.success },
     itemsBox: { backgroundColor: C.bg, borderRadius: 12, padding: 10, marginBottom: 10 },
-    itemLine: { fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right', marginBottom: 2 },
+    itemRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 4 },
+    itemLine: { flex: 1, fontSize: 12, fontFamily: 'Cairo_400Regular', color: C.textSec, textAlign: 'right' },
+    itemQty: { fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#EA580C' },
     footer: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderTopColor: C.border },
     total: { fontSize: 16, fontFamily: 'Cairo_700Bold', color: '#EA580C' },
-    confirmBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8, minWidth: 130, justifyContent: 'center' },
+    confirmBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: C.success, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
     confirmText: { color: '#FFF', fontSize: 13, fontFamily: 'Cairo_700Bold' },
+    sheetItems: { gap: 8 },
+    sheetItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+    sheetItemIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#EA580C18', justifyContent: 'center', alignItems: 'center' },
+    sheetItemName: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#0F172A', textAlign: 'right' },
+    sheetItemMeta: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'right', marginTop: 2 },
+    stockList: { gap: 8 },
+    stockRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: '#F0FDF4', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#BBF7D0' },
+    stockAdded: { backgroundColor: '#10B981', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+    stockAddedText: { color: '#FFF', fontFamily: 'Cairo_700Bold', fontSize: 13 },
+    stockName: { fontSize: 13, fontFamily: 'Cairo_700Bold', color: '#0F172A', textAlign: 'right' },
+    stockTotal: { fontSize: 11, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'right' },
+    newBadge: { backgroundColor: '#DBEAFE', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+    newBadgeText: { fontSize: 10, fontFamily: 'Cairo_700Bold', color: '#2563EB' },
+    noStockText: { fontSize: 13, fontFamily: 'Cairo_400Regular', color: '#64748B', textAlign: 'center' },
 });

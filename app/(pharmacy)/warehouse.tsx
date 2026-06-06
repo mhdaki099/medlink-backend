@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import ModernSheet from '../../src/components/ModernSheet';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -22,6 +23,8 @@ export default function PharmacyWarehouse() {
     const [selectedWh, setSelectedWh] = useState<string | null>(null);
     const [cart, setCart] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
+    const [orderSuccess, setOrderSuccess] = useState(false);
+    const [placing, setPlacing] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -59,14 +62,13 @@ export default function PharmacyWarehouse() {
             return { item_id: iid, qty, name: item?.name, bulk_price: item?.bulk_price };
         });
         const total = items.reduce((s, row) => s + (row.bulk_price || 0) * row.qty, 0);
+        setPlacing(true);
         try {
             await api.createWarehouseOrder({ pharmacy_id: user.id, warehouse_id: selectedWh, items, total });
             setCart({});
-            Alert.alert('✅ تم الطلب!', 'تم إرسال الطلب للمستودع — ستؤكد الاستلام عند وصول الشحنة', [
-                { text: 'متابعة', style: 'cancel' },
-                { text: 'طلباتي', onPress: () => router.push('/(pharmacy)/warehouse-orders' as any) },
-            ]);
+            setOrderSuccess(true);
         } catch (e: any) { Alert.alert('خطأ', e.message); }
+        finally { setPlacing(false); }
     };
 
     const cartCount = Object.values(cart).reduce((a, b) => a + b, 0);
@@ -139,11 +141,24 @@ export default function PharmacyWarehouse() {
             </ScrollView>
 
             {cartCount > 0 && (
-                <TouchableOpacity style={[styles.orderBar, { bottom: orderBarBottom }]} onPress={placeOrder} activeOpacity={0.88}>
+                <TouchableOpacity style={[styles.orderBar, { bottom: orderBarBottom }]} onPress={placeOrder} activeOpacity={0.88} disabled={placing}>
                     <Text style={styles.orderBarText}>{cartCount} أصناف</Text>
-                    <Text style={styles.orderBarBtn}>إرسال الطلب للمستودع ←</Text>
+                    <Text style={styles.orderBarBtn}>{placing ? 'جاري الإرسال...' : 'إرسال الطلب للمستودع ←'}</Text>
                 </TouchableOpacity>
             )}
+
+            <ModernSheet
+                visible={orderSuccess}
+                onClose={() => setOrderSuccess(false)}
+                title="تم إرسال الطلب"
+                subtitle="سيُجهّز المستودع طلبك ويشحنه — عند وصول الشحنة أكّد الاستلام لإضافة الأدوية لمخزونك."
+                icon="truck-check"
+                iconColors={['#EA580C', '#F59E0B']}
+                actions={[
+                    { label: 'متابعة التسوق', onPress: () => setOrderSuccess(false), variant: 'secondary' },
+                    { label: 'متابعة طلباتي', onPress: () => { setOrderSuccess(false); router.push('/(pharmacy)/warehouse-orders' as any); }, variant: 'primary' },
+                ]}
+            />
         </View>
     );
 }

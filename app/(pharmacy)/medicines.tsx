@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal, Platform, Dimensions, Switch } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { api } from '../../src/services/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
@@ -53,6 +53,10 @@ export default function PharmacyMedicines() {
     };
 
     useEffect(() => { load(); }, [user]);
+
+    useFocusEffect(useCallback(() => {
+        if (user?.id) load();
+    }, [user?.id]));
 
     const openAdd = () => {
         setEditingId(null);

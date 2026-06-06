@@ -25,6 +25,15 @@ def _enrich_warehouse_order_items(db: Session, raw_items: list) -> list:
             row["unit"] = inv.unit
             if row.get("bulk_price") is None:
                 row["bulk_price"] = inv.bulk_price
+            if not row.get("category"):
+                row["category"] = inv.category
+            if not row.get("strength"):
+                row["strength"] = inv.strength
+        full_name = row.get("name") or ""
+        if full_name and not row.get("base_name"):
+            row["base_name"] = _normalize_warehouse_med_name(full_name) or full_name
+        if full_name and not row.get("units_per_pack"):
+            row["units_per_pack"] = _units_per_bulk_pack(full_name, row.get("unit") or "")
         enriched.append(row)
     return enriched
 
@@ -104,8 +113,9 @@ def _apply_warehouse_delivery_to_pharmacy(db: Session, order: WarehouseOrder) ->
     for item in enriched_items:
         qty_packs = _order_item_qty(item)
         full_name = item.get("name") or ""
-        base_name = _normalize_warehouse_med_name(full_name) or full_name
-        units = qty_packs * _units_per_bulk_pack(full_name, item.get("unit") or "")
+        base_name = item.get("base_name") or _normalize_warehouse_med_name(full_name) or full_name
+        pack_units = int(item.get("units_per_pack") or _units_per_bulk_pack(full_name, item.get("unit") or "") or 1)
+        units = qty_packs * max(1, pack_units)
         med = _find_pharmacy_medicine(db, order.pharmacy_id, base_name)
         if med:
             med.quantity = (med.quantity or 0) + units

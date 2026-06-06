@@ -11,6 +11,38 @@ from utils.helpers import model_to_dict
 router = APIRouter()
 
 
+def _order_item_qty(item: dict) -> int:
+    return max(1, int(item.get("qty") or item.get("quantity") or 1))
+
+
+def _deduct_warehouse_inventory(db: Session, raw_items: list) -> None:
+    enriched = _enrich_warehouse_order_items(db, raw_items)
+    for item in enriched:
+        item_id = item.get("item_id")
+        if not item_id:
+            continue
+        inv = db.query(WarehouseInventory).filter(WarehouseInventory.id == item_id).first()
+        if not inv:
+            continue
+        qty = _order_item_qty(item)
+        available = inv.stock or 0
+        if available < qty:
+            raise HTTPException(400, f"مخزون غير كافٍ للصنف {inv.name} (متوفر: {available})")
+        inv.stock = available - qty
+
+
+def _restore_warehouse_inventory(db: Session, raw_items: list) -> None:
+    enriched = _enrich_warehouse_order_items(db, raw_items)
+    for item in enriched:
+        item_id = item.get("item_id")
+        if not item_id:
+            continue
+        inv = db.query(WarehouseInventory).filter(WarehouseInventory.id == item_id).first()
+        if not inv:
+            continue
+        inv.stock = (inv.stock or 0) + _order_item_qty(item)
+
+
 def _enrich_warehouse_order_items(db: Session, raw_items: list) -> list:
     enriched = []
     for item in raw_items or []:
@@ -53,6 +85,11 @@ def update_order_status(order_id: str, status_update: dict, current_user: dict =
     if new_status == "cancelled" and order.status not in ("pending", "processing"):
         raise HTTPException(400, "لا يمكن إلغاء هذا الطلب")
     now = datetime.now(timezone.utc).isoformat()
+    old_status = order.status
+    if new_status == "shipped" and old_status == "processing":
+        _deduct_warehouse_inventory(db, order.items or [])
+    if new_status == "cancelled" and old_status == "processing":
+        _restore_warehouse_inventory(db, order.items or [])
     order.status = new_status
     if "delivery_time" in status_update:
         order.delivery_time = status_update["delivery_time"]
