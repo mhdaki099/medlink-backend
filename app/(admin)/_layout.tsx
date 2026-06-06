@@ -1,73 +1,104 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
-
-const PREMIUM_COLORS = {
-    primary: '#2563EB',
-    textMuted: '#9CA3AF',
-    white: '#FFFFFF',
-    border: '#F3F4F6'
-};
+import { Platform, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ADMIN_THEME, ADMIN_TAB_BAR_HEIGHT } from '../../src/constants/adminTheme';
 
 export default function AdminLayout() {
+    const insets = useSafeAreaInsets();
+
     return (
         <Tabs
             screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: PREMIUM_COLORS.primary,
-                tabBarInactiveTintColor: PREMIUM_COLORS.textMuted,
+                tabBarActiveTintColor: ADMIN_THEME.accent,
+                tabBarInactiveTintColor: ADMIN_THEME.textMuted,
                 tabBarStyle: {
                     position: 'absolute',
-                    bottom: 25,
-                    left: 20,
-                    right: 20,
-                    backgroundColor: PREMIUM_COLORS.white,
+                    bottom: Math.max(insets.bottom, 12),
+                    left: 16,
+                    right: 16,
+                    height: ADMIN_TAB_BAR_HEIGHT,
+                    backgroundColor: ADMIN_THEME.surface,
                     borderRadius: 20,
-                    height: 70,
-                    elevation: 10,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 10 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 15,
                     borderTopWidth: 0,
-                    paddingBottom: Platform.OS === 'ios' ? 0 : 10,
-                    paddingTop: 10,
+                    paddingTop: 8,
+                    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
+                    ...Platform.select({
+                        ios: {
+                            shadowColor: ADMIN_THEME.shadow,
+                            shadowOffset: { width: 0, height: 8 },
+                            shadowOpacity: 0.12,
+                            shadowRadius: 16,
+                        },
+                        android: { elevation: 12 },
+                    }),
                 },
-                tabBarLabelStyle: { 
-                    fontFamily: 'Cairo_700Bold', 
+                tabBarLabelStyle: {
+                    fontFamily: 'Cairo_700Bold',
                     fontSize: 10,
-                    marginBottom: 5
+                    marginTop: 2,
                 },
+                tabBarItemStyle: { paddingVertical: 4 },
             }}
         >
-            <Tabs.Screen 
-                name="index" 
-                options={{ 
-                    title: 'لوحة القيادة', 
-                    tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="view-dashboard-outline" size={size} color={color} /> 
-                }} 
+            <Tabs.Screen
+                name="index"
+                options={{
+                    title: 'الرئيسية',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+                            <MaterialCommunityIcons name={focused ? 'view-dashboard' : 'view-dashboard-outline'} size={22} color={color} />
+                        </View>
+                    ),
+                }}
             />
-            <Tabs.Screen 
-                name="users" 
-                options={{ 
-                    title: 'المستخدمين', 
-                    tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="account-group-outline" size={size} color={color} /> 
-                }} 
+            <Tabs.Screen
+                name="users"
+                options={{
+                    title: 'المستخدمين',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+                            <MaterialCommunityIcons name={focused ? 'account-group' : 'account-group-outline'} size={22} color={color} />
+                        </View>
+                    ),
+                }}
             />
-            <Tabs.Screen 
-                name="new-accounts" 
-                options={{ 
-                    title: 'طلبات جديدة', 
-                    tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="account-clock-outline" size={size} color={color} /> 
-                }} 
+            <Tabs.Screen
+                name="new-accounts"
+                options={{
+                    title: 'الطلبات',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+                            <MaterialCommunityIcons name={focused ? 'account-clock' : 'account-clock-outline'} size={22} color={color} />
+                        </View>
+                    ),
+                }}
             />
-            <Tabs.Screen 
-                name="logs" 
-                options={{ 
-                    title: 'النشاطات', 
-                    tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="history" size={size} color={color} /> 
-                }} 
+            <Tabs.Screen
+                name="logs"
+                options={{
+                    title: 'السجل',
+                    tabBarIcon: ({ color, focused }) => (
+                        <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+                            <MaterialCommunityIcons name={focused ? 'history' : 'history'} size={22} color={color} />
+                        </View>
+                    ),
+                }}
             />
         </Tabs>
     );
 }
+
+const styles = StyleSheet.create({
+    iconWrap: {
+        width: 36,
+        height: 28,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    iconWrapActive: {
+        backgroundColor: ADMIN_THEME.infoBg,
+    },
+});

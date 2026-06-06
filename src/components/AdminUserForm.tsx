@@ -5,6 +5,7 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SYRIA_GOVERNORATES } from '../data/syriaLocations';
 import { COUNTRIES } from '../constants/countries';
+import { ADMIN_THEME } from '../constants/adminTheme';
 
 export type AdminUserFormData = {
     name: string;
@@ -365,46 +366,49 @@ export function adminFormToPayload(form: AdminUserFormData, mode: 'create' | 'ed
 
 const styles = StyleSheet.create({
     sectionTitle: {
-        fontSize: 14,
-        fontFamily: 'Cairo_800ExtraBold',
-        color: '#2563EB',
+        fontSize: 13,
+        fontFamily: 'Cairo_700Bold',
+        color: ADMIN_THEME.accent,
         textAlign: 'right',
-        marginTop: 12,
+        marginTop: 16,
         marginBottom: 10,
+        paddingBottom: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: ADMIN_THEME.borderLight,
     },
-    label: { textAlign: 'right', fontSize: 12, fontFamily: 'Cairo_700Bold', color: '#1F2937', marginBottom: 6 },
+    label: { textAlign: 'right', fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: ADMIN_THEME.textSecondary, marginBottom: 6 },
     input: {
-        backgroundColor: '#F3F4F6',
+        backgroundColor: ADMIN_THEME.surface,
         borderRadius: 12,
         paddingHorizontal: 14,
         minHeight: 46,
         fontSize: 14,
-        fontFamily: 'Cairo_600SemiBold',
+        fontFamily: 'Cairo_400Regular',
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
-        color: '#1F2937',
+        borderColor: ADMIN_THEME.border,
+        color: ADMIN_THEME.text,
     },
     selectBtn: {
         flexDirection: 'row-reverse',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#F3F4F6',
+        backgroundColor: ADMIN_THEME.surface,
         borderRadius: 12,
         paddingHorizontal: 14,
         height: 46,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#E5E7EB',
+        borderColor: ADMIN_THEME.border,
     },
     selectDisabled: { opacity: 0.5 },
-    selectText: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: '#1F2937' },
+    selectText: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: ADMIN_THEME.text },
     row: { flexDirection: 'row-reverse', gap: 10 },
     half: { flex: 1 },
-    pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    pickerSheet: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', padding: 16 },
+    pickerOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
+    pickerSheet: { backgroundColor: ADMIN_THEME.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', padding: 16 },
     pickerHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    pickerTitle: { fontFamily: 'Cairo_800ExtraBold', fontSize: 18, color: '#1F2937' },
-    pickerItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    pickerItemText: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: '#374151', textAlign: 'right' },
+    pickerTitle: { fontFamily: 'Cairo_700Bold', fontSize: 18, color: ADMIN_THEME.text },
+    pickerItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: ADMIN_THEME.borderLight },
+    pickerItemText: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: ADMIN_THEME.textSecondary, textAlign: 'right' },
 });
