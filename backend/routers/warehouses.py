@@ -66,28 +66,13 @@ def list_warehouses(db: Session = Depends(get_db)):
     return [model_to_dict(w, ["password"]) for w in warehouses]
 
 
-@router.get("/promoters")
-def list_warehouse_promoters(current_user: dict = Depends(require_role("warehouse", "admin")), db: Session = Depends(get_db)):
-    warehouse_id = current_user.get("sub")
-    if current_user.get("role") != "warehouse":
-        raise HTTPException(403, "للمستودع فقط")
-    rows = db.query(WarehousePromoter).filter(
-        WarehousePromoter.warehouse_id == warehouse_id,
-    ).order_by(WarehousePromoter.name).all()
-    return [model_to_dict(r) for r in rows]
-
-
-@router.get("/promoter-commissions")
-def get_promoter_commissions(
-    year: int = Query(None),
-    month: int = Query(None),
-    promoter_id: str = Query(None),
-    current_user: dict = Depends(require_role("warehouse", "admin")),
-    db: Session = Depends(get_db),
-):
-    warehouse_id = current_user.get("sub")
-    if current_user.get("role") != "warehouse":
-        raise HTTPException(403, "للمستودع فقط")
+def _build_promoter_commissions_report(
+    db: Session,
+    warehouse_id: str,
+    year: int = None,
+    month: int = None,
+    promoter_id: str = None,
+) -> dict:
     now = datetime.now(timezone.utc)
     y = int(year or now.year)
     m = int(month or now.month)
@@ -182,6 +167,26 @@ def get_promoter_commissions(
         "grand_total_sales": round(sum(s["total_sales"] for s in summary), 2),
         "orders_with_promoter": sum(s["orders_count"] for s in summary),
     }
+
+
+@router.get("/promoters")
+def list_warehouse_promoters(
+    view: str = Query(None),
+    year: int = Query(None),
+    month: int = Query(None),
+    promoter_id: str = Query(None),
+    current_user: dict = Depends(require_role("warehouse", "admin")),
+    db: Session = Depends(get_db),
+):
+    warehouse_id = current_user.get("sub")
+    if current_user.get("role") != "warehouse":
+        raise HTTPException(403, "للمستودع فقط")
+    if view == "commissions":
+        return _build_promoter_commissions_report(db, warehouse_id, year, month, promoter_id)
+    rows = db.query(WarehousePromoter).filter(
+        WarehousePromoter.warehouse_id == warehouse_id,
+    ).order_by(WarehousePromoter.name).all()
+    return [model_to_dict(r) for r in rows]
 
 
 @router.post("/promoters")
