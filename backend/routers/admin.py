@@ -12,8 +12,19 @@ from models import (
     User, RegistrationRequest, Appointment, AuditLog,
     ServiceBooking, Order, Prescription, MedicalRecord,
 )
-from auth_utils import require_role, hash_password
+from auth_utils import get_current_user, hash_password
 from utils.helpers import model_to_dict
+from utils.admin_permissions import (
+    require_admin_permission,
+    require_super_admin,
+    require_admin_access,
+    get_admin_user,
+    is_super_admin,
+    get_effective_permissions,
+    parse_permissions_payload,
+    ALL_ADMIN_PERMISSIONS,
+    ADMIN_PERMISSION_KEYS,
+)
 
 router = APIRouter()
 
@@ -58,7 +69,8 @@ def _count_users(db: Session, role: str) -> int:
 
 
 @router.get("/dashboard")
-def get_dashboard_stats(current_user: dict = Depends(require_role("admin")), db: Session = Depends(get_db)):
+def get_dashboard_stats(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_admin_permission(db, current_user, "dashboard_view")
     """Get admin dashboard statistics."""
     user_counts = {role: _count_users(db, role) for role in ALL_ROLES}
     total_users = db.query(User).filter(User.is_active == True).count()
@@ -106,11 +118,15 @@ def list_users(
     role: str = Query(None),
     verified: bool = Query(None),
     search: str = Query(None),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_view")
     """List all users with optional filters."""
     query = db.query(User)
+    caller = get_admin_user(db, current_user["sub"])
+    if caller and not is_super_admin(caller):
+        query = query.filter(User.role != "admin")
 
     if role:
         query = query.filter(User.role == role)
@@ -132,9 +148,10 @@ def list_users(
 @router.post("/users")
 def create_user(
     data: dict,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_create")
     """Create a new user from admin panel."""
     name = (data.get("name") or "").strip()
     email = (data.get("email") or "").strip().lower()
@@ -144,6 +161,8 @@ def create_user(
         raise HTTPException(400, "الاسم والبريد الإلكتروني مطلوبان")
     if role not in ALL_ROLES:
         raise HTTPException(400, "دور غير صالح")
+    if role == "admin":
+        raise HTTPException(403, "إنشاء حسابات المدراء يتم من قسم المدراء الفرعيين فقط")
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(400, "البريد الإلكتروني مستخدم مسبقاً")
 
@@ -198,9 +217,10 @@ def create_user(
 @router.get("/users/{user_id}")
 def get_user_detail(
     user_id: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_view")
     """Get detailed user information."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -224,13 +244,20 @@ def get_user_detail(
 def update_user(
     user_id: str,
     updates: dict,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_edit")
     """Update user information."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
+
+    if user.role == "admin":
+        require_super_admin(db, current_user)
+        updates = {k: v for k, v in updates.items() if k not in ("admin_tier", "created_by_admin_id")}
+        if "admin_permissions" in updates:
+            updates["admin_permissions"] = parse_permissions_payload(updates)
 
     if updates.get("email"):
         existing = db.query(User).filter(User.email == updates["email"], User.id != user_id).first()
@@ -247,9 +274,10 @@ def update_user(
 @router.put("/users/{user_id}/verify")
 def verify_user(
     user_id: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_verify")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
@@ -262,9 +290,10 @@ def verify_user(
 @router.put("/users/{user_id}/toggle-active")
 def toggle_user_active(
     user_id: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_toggle_active")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
@@ -278,9 +307,10 @@ def toggle_user_active(
 @router.put("/users/{user_id}/toggle-featured")
 def toggle_user_featured(
     user_id: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_feature")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
@@ -295,13 +325,16 @@ def toggle_user_featured(
 @router.delete("/users/{user_id}")
 def delete_user(
     user_id: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "users_delete")
     """Soft delete a user by setting is_active to False."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
+    if user.role == "admin":
+        raise HTTPException(403, "لا يمكن تعطيل حسابات المدراء من هنا")
 
     user.is_active = False
     _log_admin_action(db, current_user["sub"], "admin_delete_user", user_id)
@@ -313,9 +346,10 @@ def delete_user(
 @router.get("/registration-requests")
 def list_registration_requests(
     status: str = Query(None),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "registrations_view")
     """List registration requests."""
     query = db.query(RegistrationRequest)
     if status:
@@ -328,9 +362,10 @@ def list_registration_requests(
 @router.post("/registration-requests/{request_id}/approve")
 def approve_registration(
     request_id: str,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "registrations_approve")
     """Approve a registration request and create the user."""
     req = db.query(RegistrationRequest).filter(RegistrationRequest.id == request_id).first()
     if not req:
@@ -402,9 +437,10 @@ def approve_registration(
 def reject_registration(
     request_id: str,
     reason: Optional[dict] = None,
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "registrations_reject")
     """Reject a registration request."""
     req = db.query(RegistrationRequest).filter(RegistrationRequest.id == request_id).first()
     if not req:
@@ -431,9 +467,10 @@ def get_audit_logs(
     end_date: str = Query(None),
     limit: int = Query(100),
     offset: int = Query(0),
-    current_user: dict = Depends(require_role("admin")),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_admin_permission(db, current_user, "logs_view")
     """Get audit logs with filters."""
     query = db.query(AuditLog)
 
@@ -455,3 +492,129 @@ def get_audit_logs(
         "limit": limit,
         "logs": [model_to_dict(log) for log in logs],
     }
+
+
+def _admin_public_dict(admin: User) -> dict:
+    data = model_to_dict(admin, ["password"])
+    data["admin_permissions"] = get_effective_permissions(admin)
+    data["is_super_admin"] = is_super_admin(admin)
+    return data
+
+
+@router.get("/me")
+def get_admin_profile(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_admin_access(db, current_user)
+    admin = get_admin_user(db, current_user["sub"])
+    if not admin:
+        raise HTTPException(404, "حساب المدير غير موجود")
+    return _admin_public_dict(admin)
+
+
+@router.get("/sub-admins")
+def list_sub_admins(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_super_admin(db, current_user)
+    admins = db.query(User).filter(
+        User.role == "admin",
+        User.admin_tier == "sub_admin",
+    ).order_by(User.created_at.desc()).all()
+    return [_admin_public_dict(a) for a in admins]
+
+
+@router.post("/sub-admins")
+def create_sub_admin(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_super_admin(db, current_user)
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    if not name or not email:
+        raise HTTPException(400, "الاسم والبريد الإلكتروني مطلوبان")
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(400, "البريد الإلكتروني مستخدم مسبقاً")
+
+    permissions = parse_permissions_payload(data)
+    if not any(permissions.values()):
+        raise HTTPException(400, "يجب تحديد صلاحية واحدة على الأقل")
+
+    new_id = f"adm_{uuid.uuid4().hex[:8]}"
+    password = data.get("password") or "123456"
+    admin = User(
+        id=new_id,
+        role="admin",
+        name=name,
+        email=email,
+        password=hash_password(password),
+        phone=data.get("phone", ""),
+        city=data.get("city", "دمشق"),
+        country=data.get("country", "سوريا"),
+        admin_tier="sub_admin",
+        admin_permissions=permissions,
+        created_by_admin_id=current_user["sub"],
+        is_active=True,
+        verified=True,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+    db.add(admin)
+    _log_admin_action(db, current_user["sub"], "admin_create_sub_admin", f"{new_id} ({email})")
+    db.commit()
+    db.refresh(admin)
+    return _admin_public_dict(admin)
+
+
+@router.put("/sub-admins/{admin_id}")
+def update_sub_admin(
+    admin_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_super_admin(db, current_user)
+    admin = db.query(User).filter(User.id == admin_id, User.role == "admin").first()
+    if not admin:
+        raise HTTPException(404, "المدير غير موجود")
+    if is_super_admin(admin):
+        raise HTTPException(403, "لا يمكن تعديل المدير الرئيسي من هنا")
+
+    if data.get("name"):
+        admin.name = data["name"].strip()
+    if data.get("email"):
+        email = data["email"].strip().lower()
+        if db.query(User).filter(User.email == email, User.id != admin_id).first():
+            raise HTTPException(400, "البريد الإلكتروني مستخدم مسبقاً")
+        admin.email = email
+    if data.get("phone") is not None:
+        admin.phone = data["phone"]
+    if data.get("password"):
+        admin.password = hash_password(data["password"])
+    if "permissions" in data or "admin_permissions" in data:
+        perms = parse_permissions_payload(data)
+        if not any(perms.values()):
+            raise HTTPException(400, "يجب تحديد صلاحية واحدة على الأقل")
+        admin.admin_permissions = perms
+    if "is_active" in data:
+        admin.is_active = bool(data["is_active"])
+
+    _log_admin_action(db, current_user["sub"], "admin_update_sub_admin", admin_id)
+    db.commit()
+    db.refresh(admin)
+    return _admin_public_dict(admin)
+
+
+@router.delete("/sub-admins/{admin_id}")
+def deactivate_sub_admin(
+    admin_id: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_super_admin(db, current_user)
+    admin = db.query(User).filter(User.id == admin_id, User.role == "admin").first()
+    if not admin:
+        raise HTTPException(404, "المدير غير موجود")
+    if is_super_admin(admin):
+        raise HTTPException(403, "لا يمكن تعطيل المدير الرئيسي")
+    admin.is_active = False
+    _log_admin_action(db, current_user["sub"], "admin_deactivate_sub_admin", admin_id)
+    db.commit()
+    return {"message": "تم تعطيل المدير الفرعي"}

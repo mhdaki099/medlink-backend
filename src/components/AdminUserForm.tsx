@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal,
 } from 'react-native';
@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SYRIA_GOVERNORATES } from '../data/syriaLocations';
 import { COUNTRIES } from '../constants/countries';
 import { ADMIN_THEME } from '../constants/adminTheme';
+import { withOtherOption, isOtherSelection } from '../constants/locationPicker';
 
 export type AdminUserFormData = {
     name: string;
@@ -34,31 +35,14 @@ export type AdminUserFormData = {
     verified: boolean;
 };
 
+const KNOWN_COUNTRIES = COUNTRIES.filter(c => c !== 'أخرى');
+
 export const emptyAdminUserForm = (): AdminUserFormData => ({
-    name: '',
-    email: '',
-    password: '',
-    phone: '',
-    role: 'patient',
-    country: 'سوريا',
-    province: '',
-    district: '',
-    area: '',
-    city: '',
-    address: '',
-    gender: '',
-    dob: '',
-    specialization: '',
-    clinic_name: '',
-    clinic_address: '',
-    price_per_session: '',
-    experience_years: '',
-    available_hours: '',
-    open_hours: '',
-    license_no: '',
-    association_no: '',
-    supervisor_id: '',
-    verified: true,
+    name: '', email: '', password: '', phone: '', role: 'patient',
+    country: 'سوريا', province: '', district: '', area: '', city: '', address: '',
+    gender: '', dob: '', specialization: '', clinic_name: '', clinic_address: '',
+    price_per_session: '', experience_years: '', available_hours: '', open_hours: '',
+    license_no: '', association_no: '', supervisor_id: '', verified: true,
 });
 
 export const adminUserFormFromUser = (user: any): AdminUserFormData => ({
@@ -89,15 +73,12 @@ export const adminUserFormFromUser = (user: any): AdminUserFormData => ({
 });
 
 const ROLES: Record<string, string> = {
-    patient: 'مريض',
-    doctor: 'طبيب',
-    pharmacy: 'صيدلية',
-    lab: 'مختبر',
-    radiology: 'أشعة',
-    warehouse: 'مستودع',
-    secretary: 'سكرتاريا',
-    admin: 'مدير',
+    patient: 'مريض', doctor: 'طبيب', pharmacy: 'صيدلية', lab: 'مختبر',
+    radiology: 'أشعة', warehouse: 'مستودع', secretary: 'سكرتاريا',
 };
+
+type LocationField = 'country' | 'province' | 'district' | 'area';
+type PickerType = LocationField | 'role' | 'gender' | 'doctor';
 
 type Props = {
     form: AdminUserFormData;
@@ -106,35 +87,120 @@ type Props = {
     doctors?: { id: string; name: string }[];
 };
 
+function isKnownCountry(v: string) {
+    return !v || KNOWN_COUNTRIES.includes(v as typeof KNOWN_COUNTRIES[number]);
+}
+function isKnownProvince(v: string) {
+    return !v || SYRIA_GOVERNORATES.some(g => g.name === v);
+}
+
 export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Props) {
-    const [picker, setPicker] = useState<'country' | 'province' | 'district' | 'area' | 'role' | 'gender' | 'doctor' | null>(null);
+    const [picker, setPicker] = useState<PickerType | null>(null);
+    const [customFields, setCustomFields] = useState<Partial<Record<LocationField, boolean>>>({});
 
     const set = (patch: Partial<AdminUserFormData>) => onChange({ ...form, ...patch });
+
+    useEffect(() => {
+        const next: Partial<Record<LocationField, boolean>> = {};
+        if (form.country && !isKnownCountry(form.country)) next.country = true;
+        if (form.province && !isKnownProvince(form.province)) next.province = true;
+        if (form.district && form.province && !isKnownProvince(form.province)) next.district = true;
+        else if (form.district && form.province) {
+            const gov = SYRIA_GOVERNORATES.find(g => g.name === form.province);
+            if (gov && !gov.districts.some(d => d.name === form.district)) next.district = true;
+        }
+        if (form.area && form.province && form.district) {
+            const gov = SYRIA_GOVERNORATES.find(g => g.name === form.province);
+            const dist = gov?.districts.find(d => d.name === form.district);
+            if (dist && form.area && !dist.subDistricts.some(s => s.name === form.area)) next.area = true;
+        }
+        setCustomFields(next);
+    }, []);
 
     const selectedGov = SYRIA_GOVERNORATES.find(g => g.name === form.province);
     const districts = selectedGov?.districts || [];
     const selectedDistrict = districts.find(d => d.name === form.district);
     const subDistricts = selectedDistrict?.subDistricts || [];
 
-    const isSyria = form.country === 'سوريا';
-    const isDoctor = form.role === 'doctor';
-    const isProvider = ['pharmacy', 'lab', 'radiology', 'warehouse'].includes(form.role);
-    const isSecretary = form.role === 'secretary';
-    const isPatient = form.role === 'patient';
+    const showSyriaHierarchy = form.country === 'سوريا' && !customFields.country;
+    const provinceCustom = !!customFields.province;
+    const districtCustom = !!customFields.district || provinceCustom;
+    const areaCustom = !!customFields.area || districtCustom;
 
-    const openPicker = (type: typeof picker) => setPicker(type);
+    const openCustom = (field: LocationField) => {
+        setCustomFields(prev => {
+            const next = { ...prev, [field]: true };
+            if (field === 'country') return { country: true };
+            if (field === 'province') return { ...next, district: false, area: false };
+            if (field === 'district') return { ...next, area: false };
+            return next;
+        });
+        const patch: Partial<AdminUserFormData> = { [field]: '' };
+        if (field === 'country') Object.assign(patch, { province: '', district: '', area: '' });
+        if (field === 'province') Object.assign(patch, { district: '', area: '' });
+        if (field === 'district') Object.assign(patch, { area: '' });
+        set(patch);
+        setPicker(null);
+    };
+
+    const renderLocationField = (
+        field: LocationField,
+        label: string,
+        placeholder: string,
+        canPick: boolean,
+        isCustom: boolean,
+        onOpenPicker: () => void,
+    ) => (
+        <View key={field}>
+            <Text style={styles.label}>{label}</Text>
+            {isCustom ? (
+                <View style={styles.customRow}>
+                    <TouchableOpacity
+                        style={styles.backToListBtn}
+                        onPress={() => {
+                            setCustomFields(prev => ({ ...prev, [field]: false }));
+                            set({ [field]: '' });
+                        }}
+                    >
+                        <MaterialCommunityIcons name="format-list-bulleted" size={18} color={ADMIN_THEME.accent} />
+                    </TouchableOpacity>
+                    <TextInput
+                        style={[styles.input, styles.customInput]}
+                        value={form[field]}
+                        onChangeText={t => set({ [field]: t })}
+                        placeholder={placeholder}
+                        textAlign="right"
+                    />
+                </View>
+            ) : canPick ? (
+                <TouchableOpacity style={styles.selectBtn} onPress={onOpenPicker}>
+                    <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
+                    <Text style={styles.selectText}>{form[field] || placeholder}</Text>
+                </TouchableOpacity>
+            ) : (
+                <TextInput
+                    style={styles.input}
+                    value={form[field]}
+                    onChangeText={t => set({ [field]: t })}
+                    placeholder={placeholder}
+                    textAlign="right"
+                />
+            )}
+        </View>
+    );
 
     const renderPickerModal = (
         title: string,
         items: { label: string; value: string }[],
         onSelect: (value: string) => void,
+        onOther?: () => void,
     ) => (
         <Modal visible={picker !== null} transparent animationType="slide">
             <View style={styles.pickerOverlay}>
                 <View style={styles.pickerSheet}>
                     <View style={styles.pickerHeader}>
                         <TouchableOpacity onPress={() => setPicker(null)}>
-                            <MaterialCommunityIcons name="close" size={24} color="#1F2937" />
+                            <MaterialCommunityIcons name="close" size={24} color={ADMIN_THEME.text} />
                         </TouchableOpacity>
                         <Text style={styles.pickerTitle}>{title}</Text>
                     </View>
@@ -143,9 +209,21 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
                             <TouchableOpacity
                                 key={item.value + item.label}
                                 style={styles.pickerItem}
-                                onPress={() => { onSelect(item.value); setPicker(null); }}
+                                onPress={() => {
+                                    if (isOtherSelection(item.value) && onOther) {
+                                        onOther();
+                                    } else {
+                                        onSelect(item.value);
+                                        setPicker(null);
+                                    }
+                                }}
                             >
-                                <Text style={styles.pickerItemText}>{item.label}</Text>
+                                <Text style={[
+                                    styles.pickerItemText,
+                                    isOtherSelection(item.value) && styles.pickerOtherText,
+                                ]}>
+                                    {item.label}
+                                </Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -153,6 +231,11 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
             </View>
         </Modal>
     );
+
+    const isDoctor = form.role === 'doctor';
+    const isProvider = ['pharmacy', 'lab', 'radiology', 'warehouse'].includes(form.role);
+    const isSecretary = form.role === 'secretary';
+    const isPatient = form.role === 'patient';
 
     return (
         <View>
@@ -176,7 +259,7 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
             <TextInput style={styles.input} value={form.password} onChangeText={t => set({ password: t })} secureTextEntry textAlign="right" />
 
             <Text style={styles.label}>الدور *</Text>
-            <TouchableOpacity style={styles.selectBtn} onPress={() => openPicker('role')} disabled={mode === 'edit'}>
+            <TouchableOpacity style={styles.selectBtn} onPress={() => setPicker('role')} disabled={mode === 'edit'}>
                 <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
                 <Text style={styles.selectText}>{ROLES[form.role] || form.role}</Text>
             </TouchableOpacity>
@@ -185,41 +268,30 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
             <TextInput style={styles.input} value={form.phone} onChangeText={t => set({ phone: t })} keyboardType="phone-pad" textAlign="right" />
 
             <Text style={styles.sectionTitle}>الموقع</Text>
-            <Text style={styles.label}>الدولة *</Text>
-            <TouchableOpacity style={styles.selectBtn} onPress={() => openPicker('country')}>
-                <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
-                <Text style={styles.selectText}>{form.country || 'اختر الدولة'}</Text>
-            </TouchableOpacity>
+            {renderLocationField('country', 'الدولة *', 'اختر الدولة', true, !!customFields.country, () => setPicker('country'))}
 
-            {isSyria ? (
+            {showSyriaHierarchy ? (
                 <>
-                    <Text style={styles.label}>المحافظة</Text>
-                    <TouchableOpacity style={styles.selectBtn} onPress={() => openPicker('province')}>
-                        <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
-                        <Text style={styles.selectText}>{form.province || 'اختر المحافظة'}</Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.label}>المنطقة</Text>
-                    <TouchableOpacity
-                        style={[styles.selectBtn, !form.province && styles.selectDisabled]}
-                        onPress={() => form.province && openPicker('district')}
-                        disabled={!form.province}
-                    >
-                        <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
-                        <Text style={styles.selectText}>{form.district || 'اختر المنطقة'}</Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.label}>الناحية / الحي</Text>
-                    <TouchableOpacity
-                        style={[styles.selectBtn, !form.district && styles.selectDisabled]}
-                        onPress={() => form.district && openPicker('area')}
-                        disabled={!form.district}
-                    >
-                        <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
-                        <Text style={styles.selectText}>{form.area || 'اختر الناحية'}</Text>
-                    </TouchableOpacity>
+                    {renderLocationField(
+                        'province', 'المحافظة', 'اختر المحافظة',
+                        true, provinceCustom, () => setPicker('province'),
+                    )}
+                    {renderLocationField(
+                        'district', 'المنطقة', 'اختر المنطقة',
+                        !!form.province && !provinceCustom, districtCustom, () => setPicker('district'),
+                    )}
+                    {renderLocationField(
+                        'area', 'الناحية / الحي', 'اختر الناحية',
+                        !!form.district && !districtCustom, areaCustom, () => setPicker('area'),
+                    )}
                 </>
-            ) : null}
+            ) : (
+                <>
+                    {renderLocationField('province', 'المحافظة / الولاية', 'أدخل المحافظة', false, false, () => {})}
+                    {renderLocationField('district', 'المنطقة', 'أدخل المنطقة', false, false, () => {})}
+                    {renderLocationField('area', 'الحي / الناحية', 'أدخل الحي', false, false, () => {})}
+                </>
+            )}
 
             <Text style={styles.label}>المدينة</Text>
             <TextInput style={styles.input} value={form.city} onChangeText={t => set({ city: t })} textAlign="right" placeholder="دمشق" />
@@ -238,9 +310,9 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
                 <>
                     <Text style={styles.sectionTitle}>بيانات المريض</Text>
                     <Text style={styles.label}>الجنس</Text>
-                    <TouchableOpacity style={styles.selectBtn} onPress={() => openPicker('gender')}>
+                    <TouchableOpacity style={styles.selectBtn} onPress={() => setPicker('gender')}>
                         <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
-                        <Text style={styles.selectText}>{form.gender || 'اختر'}</Text>
+                        <Text style={styles.selectText}>{form.gender === 'male' ? 'ذكر' : form.gender === 'female' ? 'أنثى' : 'اختر'}</Text>
                     </TouchableOpacity>
                     <Text style={styles.label}>تاريخ الميلاد</Text>
                     <TextInput style={styles.input} value={form.dob} onChangeText={t => set({ dob: t })} placeholder="YYYY-MM-DD" textAlign="right" />
@@ -287,7 +359,7 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
                 <>
                     <Text style={styles.sectionTitle}>السكرتارية</Text>
                     <Text style={styles.label}>الطبيب المشرف *</Text>
-                    <TouchableOpacity style={styles.selectBtn} onPress={() => openPicker('doctor')}>
+                    <TouchableOpacity style={styles.selectBtn} onPress={() => setPicker('doctor')}>
                         <MaterialCommunityIcons name="chevron-down" size={20} color="#6B7280" />
                         <Text style={styles.selectText}>
                             {doctors.find(d => d.id === form.supervisor_id)?.name || 'اختر الطبيب'}
@@ -296,23 +368,29 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
                 </>
             ) : null}
 
-            {picker === 'country' && renderPickerModal('اختر الدولة', COUNTRIES.map(c => ({ label: c, value: c })), v => {
-                set({ country: v, province: '', district: '', area: '' });
-            })}
+            {picker === 'country' && renderPickerModal(
+                'اختر الدولة',
+                withOtherOption(KNOWN_COUNTRIES.map(c => ({ label: c, value: c }))),
+                v => set({ country: v, province: '', district: '', area: '' }),
+                () => openCustom('country'),
+            )}
             {picker === 'province' && renderPickerModal(
                 'اختر المحافظة',
-                SYRIA_GOVERNORATES.map(g => ({ label: g.name, value: g.name })),
+                withOtherOption(SYRIA_GOVERNORATES.map(g => ({ label: g.name, value: g.name }))),
                 v => set({ province: v, district: '', area: '' }),
+                () => openCustom('province'),
             )}
             {picker === 'district' && renderPickerModal(
                 'اختر المنطقة',
-                districts.map(d => ({ label: d.name, value: d.name })),
+                withOtherOption(districts.map(d => ({ label: d.name, value: d.name }))),
                 v => set({ district: v, area: '' }),
+                () => openCustom('district'),
             )}
             {picker === 'area' && renderPickerModal(
                 'اختر الناحية',
-                subDistricts.map(s => ({ label: s.name, value: s.name })),
+                withOtherOption(subDistricts.map(s => ({ label: s.name, value: s.name }))),
                 v => set({ area: v }),
+                () => openCustom('area'),
             )}
             {picker === 'role' && renderPickerModal(
                 'اختر الدور',
@@ -329,6 +407,7 @@ export default function AdminUserForm({ form, onChange, mode, doctors = [] }: Pr
                 doctors.map(d => ({ label: d.name, value: d.id })),
                 v => set({ supervisor_id: v }),
             )}
+
         </View>
     );
 }
@@ -366,42 +445,27 @@ export function adminFormToPayload(form: AdminUserFormData, mode: 'create' | 'ed
 
 const styles = StyleSheet.create({
     sectionTitle: {
-        fontSize: 13,
-        fontFamily: 'Cairo_700Bold',
-        color: ADMIN_THEME.accent,
-        textAlign: 'right',
-        marginTop: 16,
-        marginBottom: 10,
-        paddingBottom: 6,
-        borderBottomWidth: 1,
-        borderBottomColor: ADMIN_THEME.borderLight,
+        fontSize: 13, fontFamily: 'Cairo_700Bold', color: ADMIN_THEME.accent,
+        textAlign: 'right', marginTop: 16, marginBottom: 10,
+        paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: ADMIN_THEME.borderLight,
     },
     label: { textAlign: 'right', fontSize: 12, fontFamily: 'Cairo_600SemiBold', color: ADMIN_THEME.textSecondary, marginBottom: 6 },
     input: {
-        backgroundColor: ADMIN_THEME.surface,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        minHeight: 46,
-        fontSize: 14,
-        fontFamily: 'Cairo_400Regular',
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: ADMIN_THEME.border,
-        color: ADMIN_THEME.text,
+        backgroundColor: ADMIN_THEME.surface, borderRadius: 12, paddingHorizontal: 14, minHeight: 46,
+        fontSize: 14, fontFamily: 'Cairo_400Regular', marginBottom: 12,
+        borderWidth: 1, borderColor: ADMIN_THEME.border, color: ADMIN_THEME.text,
+    },
+    customRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginBottom: 12 },
+    customInput: { flex: 1, marginBottom: 0 },
+    backToListBtn: {
+        width: 46, height: 46, borderRadius: 12, backgroundColor: ADMIN_THEME.infoBg,
+        justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: ADMIN_THEME.border,
     },
     selectBtn: {
-        flexDirection: 'row-reverse',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: ADMIN_THEME.surface,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        height: 46,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: ADMIN_THEME.border,
+        flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between',
+        backgroundColor: ADMIN_THEME.surface, borderRadius: 12, paddingHorizontal: 14, height: 46,
+        marginBottom: 12, borderWidth: 1, borderColor: ADMIN_THEME.border,
     },
-    selectDisabled: { opacity: 0.5 },
     selectText: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: ADMIN_THEME.text },
     row: { flexDirection: 'row-reverse', gap: 10 },
     half: { flex: 1 },
@@ -411,4 +475,5 @@ const styles = StyleSheet.create({
     pickerTitle: { fontFamily: 'Cairo_700Bold', fontSize: 18, color: ADMIN_THEME.text },
     pickerItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: ADMIN_THEME.borderLight },
     pickerItemText: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: ADMIN_THEME.textSecondary, textAlign: 'right' },
+    pickerOtherText: { color: ADMIN_THEME.accent, fontFamily: 'Cairo_700Bold' },
 });

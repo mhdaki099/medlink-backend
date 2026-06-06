@@ -308,6 +308,7 @@ USERS: List[Dict[str, Any]] = [
         "phone": "+963-911-000000",
         "city": "دمشق", "address": "المقر الرئيسي للمنصة",
         "photo": "https://i.pravatar.cc/150?img=68",
+        "admin_tier": "super_admin",
         "is_active": True, "verified": True,
         "created_at": "2023-01-01T00:00:00"
     },

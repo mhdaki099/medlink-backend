@@ -11,6 +11,7 @@ from models import User, RegistrationRequest
 from auth_utils import create_access_token, verify_password, hash_password, get_current_user
 from utils.helpers import model_to_dict
 from utils.secretary_permissions import get_effective_permissions
+from utils.admin_permissions import get_effective_permissions as get_admin_effective_permissions, is_super_admin
 from .doctors import SPEC_AR_TO_EN
 
 router = APIRouter()
@@ -71,7 +72,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     user_data = model_to_dict(user, ["password"])
     if user.role == "secretary":
         user_data["secretary_permissions"] = get_effective_permissions(user)
-    
+    if user.role == "admin":
+        user_data["admin_permissions"] = get_admin_effective_permissions(user)
+        user_data["admin_tier"] = user.admin_tier or "super_admin"
+        user_data["is_super_admin"] = is_super_admin(user)
+
     token = create_access_token({"sub": user.id, "role": user.role, "email": user.email})
     return {"access_token": token, "token_type": "bearer", "user": user_data}
 

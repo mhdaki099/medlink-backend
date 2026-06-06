@@ -75,6 +75,11 @@ class User(Base):
     supervisor_id = Column(String, ForeignKey("users.id"), nullable=True) # For Secretary -> Doctor link
     secretary_permissions = Column(JSON, nullable=True)  # Granular access for secretary accounts
 
+    # Admin hierarchy: super_admin (main) | sub_admin (delegated)
+    admin_tier = Column(String, nullable=True)  # super_admin | sub_admin
+    admin_permissions = Column(JSON, nullable=True)
+    created_by_admin_id = Column(String, ForeignKey("users.id"), nullable=True)
+
 
 class MedicalHistoryRequest(Base):
     __tablename__ = "medical_history_requests"

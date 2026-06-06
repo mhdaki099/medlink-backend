@@ -559,6 +559,12 @@ class ApiClient {
     rejectRegistration(id: string) {
         return this.post<any>(`/admin/registration-requests/${id}/reject`, {});
     }
+
+    getAdminProfile() { return this.get<any>('/admin/me'); }
+    getSubAdmins() { return this.get<any[]>('/admin/sub-admins'); }
+    createSubAdmin(data: any) { return this.post<any>('/admin/sub-admins', data); }
+    updateSubAdmin(id: string, data: any) { return this.put<any>(`/admin/sub-admins/${id}`, data); }
+    deleteSubAdmin(id: string) { return this.delete<any>(`/admin/sub-admins/${id}`); }
 }
 
 export const api = new ApiClient();

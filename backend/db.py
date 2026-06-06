@@ -31,6 +31,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     ensure_sqlite_columns()
     ensure_demo_secretary()
+    ensure_super_admin()
     ensure_demo_radiology_centers()
     ensure_provider_catalog()
     ensure_demo_core_users()
@@ -182,6 +183,24 @@ def ensure_demo_secretary():
             )
         )
         db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_super_admin():
+    """Promote main admin@medlink.sy account to super_admin tier."""
+    from models import User
+
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.email == "admin@medlink.sy", User.role == "admin").first()
+        if not admin:
+            return
+        if admin.admin_tier != "super_admin":
+            admin.admin_tier = "super_admin"
+            db.commit()
     except Exception:
         db.rollback()
     finally:

@@ -7,8 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { api, BASE_URL } from '../../src/services/api';
 import AdminShell, { AdminEmptyState } from '../../src/components/admin/AdminShell';
 import { ADMIN_THEME, ADMIN_ROLE_META } from '../../src/constants/adminTheme';
+import { useAdminPermissions } from '../../src/hooks/useAdminPermissions';
 
 export default function NewAccounts() {
+    const { can } = useAdminPermissions();
     const [requests, setRequests] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -109,17 +111,23 @@ export default function NewAccounts() {
                                 </View>
                             ) : null}
 
-                            <View style={styles.actions}>
-                                <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(r.id, fullName)}>
-                                    <Text style={styles.rejectText}>رفض</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprove(r.id, fullName)}>
-                                    <LinearGradient colors={[ADMIN_THEME.success, '#047857']} style={styles.approveGrad}>
-                                        <MaterialCommunityIcons name="check" size={18} color="#FFF" />
-                                        <Text style={styles.approveText}>قبول وتفعيل</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            </View>
+                            {(can('registrations_approve') || can('registrations_reject')) ? (
+                                <View style={styles.actions}>
+                                    {can('registrations_reject') ? (
+                                        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(r.id, fullName)}>
+                                            <Text style={styles.rejectText}>رفض</Text>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    {can('registrations_approve') ? (
+                                        <TouchableOpacity style={[styles.approveBtn, !can('registrations_reject') && { flex: 1 }]} onPress={() => handleApprove(r.id, fullName)}>
+                                            <LinearGradient colors={[ADMIN_THEME.success, '#047857']} style={styles.approveGrad}>
+                                                <MaterialCommunityIcons name="check" size={18} color="#FFF" />
+                                                <Text style={styles.approveText}>قبول وتفعيل</Text>
+                                            </LinearGradient>
+                                        </TouchableOpacity>
+                                    ) : null}
+                                </View>
+                            ) : null}
                         </View>
                     );
                 })

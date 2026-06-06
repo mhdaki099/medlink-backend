@@ -23,6 +23,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { SYRIA_GOVERNORATES, getGovernorates, getDistricts, getSubDistricts } from '../../src/data/syriaLocations';
+import LocationOtherFooter from '../../src/components/LocationOtherFooter';
 
 const { width, height } = Dimensions.get('window');
 
@@ -549,6 +550,17 @@ export default function RegisterScreen() {
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
+                            ListFooterComponent={
+                                <LocationOtherFooter
+                                    placeholder="أدخل اسم المحافظة"
+                                    onConfirm={(v) => {
+                                        update('province', v);
+                                        update('district', '');
+                                        update('area', '');
+                                        setGovernorateModalVisible(false);
+                                    }}
+                                />
+                            }
                         />
                     </View>
                 </View>
@@ -581,6 +593,16 @@ export default function RegisterScreen() {
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
+                            ListFooterComponent={
+                                <LocationOtherFooter
+                                    placeholder="أدخل اسم المنطقة"
+                                    onConfirm={(v) => {
+                                        update('district', v);
+                                        update('area', '');
+                                        setDistrictModalVisible(false);
+                                    }}
+                                />
+                            }
                         />
                     </View>
                 </View>
@@ -612,6 +634,15 @@ export default function RegisterScreen() {
                                 </TouchableOpacity>
                             )}
                             ItemSeparatorComponent={() => <View style={styles.modalDivider} />}
+                            ListFooterComponent={
+                                <LocationOtherFooter
+                                    placeholder="أدخل اسم الناحية أو الحي"
+                                    onConfirm={(v) => {
+                                        update('area', v);
+                                        setAreaModalVisible(false);
+                                    }}
+                                />
+                            }
                         />
                     </View>
                 </View>

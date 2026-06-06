@@ -11,6 +11,7 @@ import AdminUserForm, {
 } from '../../src/components/AdminUserForm';
 import AdminShell, { AdminEmptyState, AdminIconButton } from '../../src/components/admin/AdminShell';
 import { ADMIN_THEME, ADMIN_ROLE_META } from '../../src/constants/adminTheme';
+import { useAdminPermissions } from '../../src/hooks/useAdminPermissions';
 
 const formatLocation = (u: any) => {
     const parts = [u.country, u.province, u.city].filter(Boolean);
@@ -34,6 +35,7 @@ function StatusBadge({ label, tone }: { label: string; tone: 'success' | 'warn' 
 }
 
 export default function AdminUsers() {
+    const { can } = useAdminPermissions();
     const params = useLocalSearchParams<{ role?: string }>();
     const [users, setUsers] = useState<any[]>([]);
     const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
@@ -113,7 +115,7 @@ export default function AdminUsers() {
             loading={loading}
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); loadData(); }}
-            headerRight={<AdminIconButton icon="plus" onPress={openCreate} variant="primary" />}
+            headerRight={can('users_create') ? <AdminIconButton icon="plus" onPress={openCreate} variant="primary" /> : undefined}
         >
             <View style={styles.searchBox}>
                 <TextInput
@@ -191,31 +193,37 @@ export default function AdminUsers() {
                             ) : null}
 
                             <View style={styles.actions}>
-                                <TouchableOpacity style={styles.actionIcon} onPress={() => openEdit(u)}>
-                                    <MaterialCommunityIcons name="pencil-outline" size={18} color={ADMIN_THEME.accent} />
-                                </TouchableOpacity>
-                                {!u.verified ? (
+                                {can('users_edit') ? (
+                                    <TouchableOpacity style={styles.actionIcon} onPress={() => openEdit(u)}>
+                                        <MaterialCommunityIcons name="pencil-outline" size={18} color={ADMIN_THEME.accent} />
+                                    </TouchableOpacity>
+                                ) : null}
+                                {can('users_verify') && !u.verified ? (
                                     <TouchableOpacity style={styles.actionIcon} onPress={() => confirm('توثيق', `توثيق ${u.name}؟`, async () => { await api.verifyUser(u.id); loadData(); })}>
                                         <MaterialCommunityIcons name="check-decagram" size={18} color={ADMIN_THEME.success} />
                                     </TouchableOpacity>
                                 ) : null}
-                                <TouchableOpacity
-                                    style={styles.actionIcon}
-                                    onPress={() => confirm(u.is_active ? 'تعطيل' : 'تفعيل', `${u.name}؟`, async () => { await api.toggleUserActive(u.id); loadData(); })}
-                                >
-                                    <MaterialCommunityIcons name={u.is_active ? 'pause-circle-outline' : 'play-circle-outline'} size={18} color={u.is_active ? ADMIN_THEME.warning : ADMIN_THEME.success} />
-                                </TouchableOpacity>
-                                {(u.role === 'doctor' || u.role === 'pharmacy') ? (
+                                {can('users_toggle_active') ? (
+                                    <TouchableOpacity
+                                        style={styles.actionIcon}
+                                        onPress={() => confirm(u.is_active ? 'تعطيل' : 'تفعيل', `${u.name}؟`, async () => { await api.toggleUserActive(u.id); loadData(); })}
+                                    >
+                                        <MaterialCommunityIcons name={u.is_active ? 'pause-circle-outline' : 'play-circle-outline'} size={18} color={u.is_active ? ADMIN_THEME.warning : ADMIN_THEME.success} />
+                                    </TouchableOpacity>
+                                ) : null}
+                                {can('users_feature') && (u.role === 'doctor' || u.role === 'pharmacy') ? (
                                     <TouchableOpacity style={styles.actionIcon} onPress={() => confirm('تمييز', `${u.name}؟`, async () => { await api.toggleUserFeatured(u.id); loadData(); })}>
                                         <MaterialCommunityIcons name={u.is_featured ? 'star' : 'star-outline'} size={18} color="#F59E0B" />
                                     </TouchableOpacity>
                                 ) : null}
-                                <TouchableOpacity
-                                    style={styles.actionIcon}
-                                    onPress={() => confirm('تعطيل الحساب', `تعطيل ${u.name}؟`, async () => { await api.deleteUser(u.id); loadData(); }, true)}
-                                >
-                                    <MaterialCommunityIcons name="trash-can-outline" size={18} color={ADMIN_THEME.danger} />
-                                </TouchableOpacity>
+                                {can('users_delete') ? (
+                                    <TouchableOpacity
+                                        style={styles.actionIcon}
+                                        onPress={() => confirm('تعطيل الحساب', `تعطيل ${u.name}؟`, async () => { await api.deleteUser(u.id); loadData(); }, true)}
+                                    >
+                                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={ADMIN_THEME.danger} />
+                                    </TouchableOpacity>
+                                ) : null}
                             </View>
                         </View>
                     );

@@ -7,6 +7,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 import { api } from '../../src/services/api';
 import AdminShell, { AdminCard, AdminSectionTitle, AdminIconButton } from '../../src/components/admin/AdminShell';
 import { ADMIN_THEME } from '../../src/constants/adminTheme';
+import { useAdminPermissions } from '../../src/hooks/useAdminPermissions';
 
 const { width } = Dimensions.get('window');
 const STAT_W = (width - 48) / 2;
@@ -61,7 +62,8 @@ function ChartBlock({ data }: { data: Record<string, number> }) {
 }
 
 export default function AdminDashboard() {
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
+    const { can, isSuperAdmin } = useAdminPermissions();
     const router = useRouter();
     const [dashboard, setDashboard] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -82,15 +84,16 @@ export default function AdminDashboard() {
     };
 
     const quickLinks = [
-        { label: 'المستخدمين', icon: 'account-cog', color: ADMIN_THEME.accent, route: '/(admin)/users' },
-        { label: 'طلبات التسجيل', icon: 'account-plus', color: ADMIN_THEME.warning, route: '/(admin)/new-accounts', badge: dashboard?.pending_registrations },
-        { label: 'سجل النشاط', icon: 'history', color: ADMIN_THEME.info, route: '/(admin)/logs' },
-    ];
+        can('users_view') ? { label: 'المستخدمين', icon: 'account-cog', color: ADMIN_THEME.accent, route: '/(admin)/users' } : null,
+        can('registrations_view') ? { label: 'طلبات التسجيل', icon: 'account-plus', color: ADMIN_THEME.warning, route: '/(admin)/new-accounts', badge: dashboard?.pending_registrations } : null,
+        isSuperAdmin ? { label: 'المدراء الفرعيون', icon: 'shield-account', color: '#F59E0B', route: '/(admin)/sub-admins' } : null,
+        can('logs_view') ? { label: 'سجل النشاط', icon: 'history', color: ADMIN_THEME.info, route: '/(admin)/logs' } : null,
+    ].filter(Boolean) as { label: string; icon: string; color: string; route: string; badge?: number }[];
 
     return (
         <AdminShell
             title="لوحة الإدارة"
-            subtitle="MedLink Syria"
+            subtitle={isSuperAdmin ? 'المدير الرئيسي · MedLink' : `${user?.name || 'مدير'} · MedLink`}
             loading={loading}
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); loadData(); }}
