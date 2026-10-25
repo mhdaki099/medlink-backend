@@ -7,7 +7,7 @@
 | **API (Render free)** | https://medlink-backend-2e7a.onrender.com/api |
 | **Web app (GitHub Pages)** | https://mhdaki099.github.io/medlink-backend/ |
 | **Web download hub** | https://mhdaki099.github.io/medlink-backend/download.html |
-| **Android APK** | GitHub Actions → **Deploy Test (Web + Android APK)** or **Build APK (fast)** → Artifacts → `medlink-debug.apk` |
+| **Android APK (download)** | After a successful **Build APK (fast)** run: [Releases](https://github.com/mhdaki099/medlink-backend/releases) or Actions → Artifacts → `medlink-debug.apk` |
 | **Expo builds (optional EAS)** | https://expo.dev/accounts/mohamad_ani/projects/meddling/builds |
 
 First API request after idle may take **~30–60s** (Render free cold start).
