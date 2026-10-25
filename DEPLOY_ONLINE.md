@@ -5,7 +5,8 @@
 | What | URL |
 |------|-----|
 | **API (Render free)** | https://medlink-backend-2e7a.onrender.com/api |
-| **Web app (iPhone + Android + desktop)** | https://mhdaki099.github.io/medlink-backend/ |
+| **Web app (recommended — iPhone/Android)** | https://dist-two-mu-55.vercel.app/ |
+| **Web (GitHub Pages mirror)** | https://mhdaki099.github.io/medlink-backend/ |
 | **Download hub** | https://mhdaki099.github.io/medlink-backend/download.html |
 | **Android APK (download)** | https://github.com/mhdaki099/medlink-backend/releases/latest |
 | **Expo builds (optional EAS)** | https://expo.dev/accounts/mohamad_ani/projects/meddling/builds |
