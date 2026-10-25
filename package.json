@@ -12,7 +12,8 @@
     "build:apk": "eas build --platform android --profile apk --non-interactive",
     "build:apk:wait": "eas build --platform android --profile apk --non-interactive --wait",
     "build:apk:cancel": "node scripts/cancel-queued-apk-builds.mjs",
-    "build:apk:list": "eas build:list --platform android --profile apk --limit 10 --non-interactive"
+    "build:apk:list": "eas build:list --platform android --profile apk --limit 10 --non-interactive",
+    "export:web": "EXPO_PUBLIC_API_URL=https://medlink-backend-2e7a.onrender.com/api expo export -p web"
   },
   "dependencies": {
     "@expo-google-fonts/cairo": "^0.4.2",

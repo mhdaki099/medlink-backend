@@ -9,6 +9,7 @@ backend/medlink.db
 backend/backend_stderr.log
 backend/backend_stdout.log
 node_modules/
+dist/
 .expo/
 
 # Debug artifacts — should never be committed
