@@ -5,6 +5,10 @@ name: Build APK (fast, no EAS queue)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  actions: read
+
 env:
   EXPO_PUBLIC_API_URL: https://medlink-backend-2e7a.onrender.com/api
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
