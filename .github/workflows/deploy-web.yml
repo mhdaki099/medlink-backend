@@ -1,0 +1,89 @@
+# Free public web app (iPhone Safari + Android browser + desktop).
+name: Deploy Web App (GitHub Pages)
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "src/**"
+      - "assets/**"
+      - "package.json"
+      - "package-lock.json"
+      - "app.json"
+      - ".github/workflows/deploy-web.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  EXPO_PUBLIC_API_URL: https://medlink-backend-2e7a.onrender.com/api
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export web bundle
+        run: npx expo export -p web
+
+      - name: Add download landing page
+        run: |
+          cat > dist/download.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>MedLink — تحميل التطبيق للاختبار</title>
+            <style>
+              body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+              a.btn { display: block; margin: 0.75rem 0; padding: 0.85rem 1rem; background: #0A84FF; color: #fff; text-decoration: none; border-radius: 10px; text-align: center; }
+              a.secondary { background: #43A047; }
+              code { background: #f3f4f6; padding: 0.15rem 0.35rem; border-radius: 4px; }
+            </style>
+          </head>
+          <body>
+            <h1>MedLink — روابط الاختبار (مجاني)</h1>
+            <p><strong>الويب (آيفون / أندرويد / كمبيوتر):</strong></p>
+            <a class="btn" href="./index.html">فتح تطبيق MedLink على الويب</a>
+            <p><strong>أندرويد (APK):</strong> من GitHub → Actions → <code>Build APK (fast, no EAS queue)</code> → آخر تشغيل → Artifacts → <code>medlink-debug.apk</code></p>
+            <p><strong>API:</strong> <code>https://medlink-backend-2e7a.onrender.com/api</code></p>
+            <p>تسجيل تجريبي: كلمة المرور <code>123456</code> — مثال: <code>ahmed@medlink.sy</code></p>
+          </body>
+          </html>
+          HTML
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

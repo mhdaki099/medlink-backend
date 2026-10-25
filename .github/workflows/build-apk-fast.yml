@@ -27,8 +27,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK (runner image)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install dependencies
         run: npm ci
@@ -44,4 +47,15 @@ jobs:
         with:
           name: medlink-debug.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
+          retention-days: 30
+
+      - name: Publish APK to GitHub Releases (public download)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-apk-${{ github.run_number }}
+          name: MedLink Test APK #${{ github.run_number }}
+          body: |
+            Free test build. API: https://medlink-backend-2e7a.onrender.com/api
+            Demo password: `123456` (e.g. ahmed@medlink.sy)
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
